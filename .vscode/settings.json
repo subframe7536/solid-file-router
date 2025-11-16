@@ -1,0 +1,13 @@
+{
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "editor.codeActionsOnSave": {
+    "source.fixAll.oxc": "always",
+  },
+  "editor.formatOnSave": true,
+  "oxc.fmt.experimental": true,
+}

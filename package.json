@@ -1,0 +1,61 @@
+{
+  "name": "solid-file-router",
+  "version": "0.0.0",
+  "description": "Type safe file router for solid.js",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/subframe7536/solid-file-router#readme",
+  "bugs": {
+    "url": "https://github.com/subframe7536/solid-file-router/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/subframe7536/solid-file-router.git"
+  },
+  "author": "subframe7536",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "vite serve playground",
+    "test": "vite build playground",
+    "typecheck": "tsc --noEmit",
+    "release": "bumpp && bun publish",
+    "prepublishOnly": "bun run build"
+  },
+  "peerDependencies": {
+    "solid-js": "^1.6",
+    "tinyglobby": "*",
+    "@babel/core": "^7",
+    "@solidjs/router": "^0.10",
+    "vite": "^3 || ^4 || ^5 || ^6 || ^7"
+  },
+  "devDependencies": {
+    "@solidjs/router": "^0.15.4",
+    "@types/node": "^24.10.1",
+    "bumpp": "^10.3.1",
+    "bun-types": "^1.3.2",
+    "eslint-plugin-solid": "^0.14.5",
+    "oxlint": "^1.28.0",
+    "solid-js": "^1.9.10",
+    "tinyglobby": "*",
+    "tsdown": "^0.16.4",
+    "typescript": "^5.9.3",
+    "vite": "npm:rolldown-vite@latest",
+    "vite-plugin-solid": "^2.11.10"
+  },
+  "overrides": {
+    "vite": "npm:rolldown-vite@latest"
+  }
+}
