@@ -1,3 +1,5 @@
+import { logger } from '../const'
+
 export const patterns = {
   optional: [/^-(:?[\w-]+|\*)/, '$1?'],
   param: [/\[([^\]]+)]/g, ':$1'],
@@ -121,13 +123,18 @@ export async function generateRegularRoutes(
   }
 
   const notFoundPath = files.find((key) => key.endsWith('404.tsx'))
-  if (!notFoundPath) {
-    throw new Error('No `404.tsx` found')
+  if (notFoundPath) {
+    imports.push(
+      `import __404_comp from '${notFoundPath}?comp'`,
+      `import __404_meta from '${notFoundPath}?meta'`,
+    )
+  } else {
+    logger.warn('No `404.tsx` found, fallback to `() => null`')
+    imports.push(
+      `const __404_comp = () => null`,
+      `const __404_meta = undefined`,
+    )
   }
-  imports.push(
-    `import __404_comp from '${notFoundPath}?comp'`,
-    `import __404_meta from '${notFoundPath}?meta'`,
-  )
   regularRoutes.push({
     id: '*',
     path: '*',
