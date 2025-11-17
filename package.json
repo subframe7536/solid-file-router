@@ -36,6 +36,8 @@
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
+    "test": "vitest --run",
+    "test:dev": "vitest",
     "play": "cd ./playground && bun run dev",
     "typecheck": "oxlint && tsc --noEmit",
     "release": "bumpp && bun publish",
@@ -61,7 +63,8 @@
     "tsdown": "^0.16.4",
     "typescript": "^5.9.3",
     "vite": "npm:rolldown-vite@latest",
-    "vite-plugin-solid": "^2.11.10"
+    "vite-plugin-solid": "^2.11.10",
+    "vitest": "^4.0.10"
   },
   "overrides": {
     "vite": "npm:rolldown-vite@latest"

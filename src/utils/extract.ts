@@ -11,6 +11,78 @@ type State = Omit<Babel.PluginPass, 'opts'> & {
   hasExport: boolean
 }
 
+interface TransformContext {
+  t: typeof Babel.types
+  entryFn: string
+  pick: string[]
+  targetFn?: string
+}
+
+/**
+ * Validates a call expression matches the expected function and arguments
+ */
+function validateCallExpression(callExpr: any, ctx: TransformContext): void {
+  const { t, entryFn } = ctx
+
+  if (!t.isIdentifier(callExpr.callee) || callExpr.callee.name !== entryFn) {
+    throw new Error(
+      `Expected function name to be "${entryFn}", but got "${
+        callExpr.callee.name || 'unknown'
+      }"`,
+    )
+  }
+
+  if (
+    callExpr.arguments.length !== 1 ||
+    !t.isObjectExpression(callExpr.arguments[0])
+  ) {
+    throw new Error(`Expected exactly one object argument for "${entryFn}"`)
+  }
+}
+
+/**
+ * Extracts and filters properties from an object expression
+ */
+function extractFilteredProperties(objExpr: any, ctx: TransformContext): any[] {
+  const { t, pick, entryFn } = ctx
+
+  // Ban spread at top level
+  const hasSpread = objExpr.properties.some((prop: any) =>
+    t.isSpreadElement(prop),
+  )
+  if (hasSpread) {
+    throw new Error(
+      `Spread expressions at the top level of ${entryFn}'s parameter will prevent treeshaking`,
+    )
+  }
+
+  // Pick specified properties (shallow only)
+  return objExpr.properties.filter((prop: any) => {
+    if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
+      const key = prop.key
+      if (t.isIdentifier(key)) {
+        return pick.includes(key.name)
+      }
+    }
+    return false
+  })
+}
+
+/**
+ * Creates the transformed node, optionally wrapped with targetFn
+ */
+function createTransformedNode(
+  filteredProperties: any[],
+  ctx: TransformContext,
+): any {
+  const { t, targetFn } = ctx
+
+  const newNode = t.objectExpression(filteredProperties)
+  return targetFn
+    ? t.callExpression(t.identifier(targetFn), [newNode])
+    : newNode
+}
+
 export function extractPlugin({
   types: t,
 }: typeof Babel): Babel.PluginObj<State> {
@@ -22,6 +94,44 @@ export function extractPlugin({
       }
     },
     visitor: {
+      ExportNamedDeclaration(path, state) {
+        const { entryFn, pick, targetFn } = state.opts
+
+        // Check for export { x as default }
+        const defaultSpec = path.node.specifiers.find(
+          (spec) =>
+            t.isExportSpecifier(spec) &&
+            t.isIdentifier(spec.exported) &&
+            spec.exported.name === 'default',
+        )
+
+        if (!defaultSpec || !t.isExportSpecifier(defaultSpec)) {
+          return
+        }
+
+        const localName = (defaultSpec as any).local.name
+        const binding = path.scope.getBinding(localName)
+
+        if (binding && t.isVariableDeclarator(binding.path.node)) {
+          const init = binding.path.node.init
+          if (!t.isCallExpression(init)) {
+            return
+          }
+
+          state.hasExport = true
+
+          const ctx = { t, entryFn, pick, targetFn }
+          validateCallExpression(init, ctx)
+          const filteredProperties = extractFilteredProperties(
+            init.arguments[0],
+            ctx,
+          )
+          const targetNode = createTransformedNode(filteredProperties, ctx)
+
+          // Update the variable declarator
+          binding.path.node.init = targetNode
+        }
+      },
       ExportDefaultDeclaration(path, state) {
         const { entryFn, pick, targetFn } = state.opts
 
@@ -43,16 +153,6 @@ export function extractPlugin({
               updatePath = binding.path
             }
           }
-        } else {
-          // Case 3: export { <identifier> as default } (where identifier is assigned to a call expression)
-          const binding = path.scope.getBinding('default')
-          if (binding && t.isVariableDeclarator(binding.path.node)) {
-            const init = binding.path.node.init
-            if (t.isCallExpression(init)) {
-              callExpr = init
-              updatePath = binding.path
-            }
-          }
         }
 
         // Transform if we found a call expression
@@ -61,57 +161,14 @@ export function extractPlugin({
         }
 
         state.hasExport = true
-        // Validate function name
-        if (
-          !t.isIdentifier(callExpr.callee) ||
-          callExpr.callee.name !== entryFn
-        ) {
-          throw new Error(
-            `Expected function name to be "${entryFn}", but got "${
-              (callExpr.callee as any).name || 'unknown'
-            }"`,
-          )
-        }
 
-        // Validate single object argument
-        if (
-          callExpr.arguments.length !== 1 ||
-          !t.isObjectExpression(callExpr.arguments[0])
-        ) {
-          throw new Error(
-            `Expected exactly one object argument for "${entryFn}"`,
-          )
-        }
-
-        const objExpr = callExpr.arguments[0]
-
-        // Ban spread at top level
-        const hasSpread = objExpr.properties.some((prop) =>
-          t.isSpreadElement(prop),
+        const ctx = { t, entryFn, pick, targetFn }
+        validateCallExpression(callExpr, ctx)
+        const filteredProperties = extractFilteredProperties(
+          callExpr.arguments[0],
+          ctx,
         )
-        if (hasSpread) {
-          throw new Error(
-            `Spread expressions at the top level of ${entryFn}'s parameter will prevent treeshaking`,
-          )
-        }
-
-        // Pick specified properties (shallow only)
-        const filteredProperties = objExpr.properties.filter((prop) => {
-          if (t.isObjectProperty(prop) || t.isObjectMethod(prop)) {
-            const key = prop.key
-            if (t.isIdentifier(key)) {
-              return pick.includes(key.name)
-            }
-          }
-          return false
-        })
-
-        // Create the new object with filtered properties
-        const newNode = t.objectExpression(filteredProperties)
-        // Wrap in finalFunctionName if provided, otherwise return plain object
-        const targetNode = targetFn
-          ? t.callExpression(t.identifier(targetFn), [newNode])
-          : newNode
+        const targetNode = createTransformedNode(filteredProperties, ctx)
 
         // Update the appropriate node
         if (updatePath === path) {

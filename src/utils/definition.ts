@@ -165,6 +165,6 @@ export const FileRouter = (props) => createComponent(Router, {
     return fileRoutes
   }
 })
-  `
+`
   return result
 }
