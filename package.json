@@ -22,7 +22,10 @@
   "exports": {
     ".": "./dist/index.mjs",
     "./plugin": "./dist/plugin.mjs",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./client": {
+      "types": "./client.d.ts"
+    }
   },
   "publishConfig": {
     "access": "public"
@@ -35,7 +38,8 @@
     "dev": "tsdown --watch",
     "play": "cd ./playground && bun run dev",
     "typecheck": "oxlint && tsc --noEmit",
-    "release": "bumpp && bun publish"
+    "release": "bumpp && bun publish",
+    "init": "bun link && bun i && bun run build"
   },
   "peerDependencies": {
     "solid-js": "^1.6",

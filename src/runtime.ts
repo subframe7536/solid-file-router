@@ -41,15 +41,21 @@ export function generatePath<T extends keyof FileRouteInfo.Path & string>(
     return path
   }
   let result = path as string
-  const searchParam = new URLSearchParams()
+  let searchParam: URLSearchParams | undefined
   for (const [k, v] of Object.entries(params)) {
     if (k.startsWith('$')) {
       result = result.replace(':' + k.slice(1), v as string)
-      console.log(result)
     } else {
+      if (!searchParam) {
+        searchParam = new URLSearchParams()
+      }
       searchParam.append(k, v as string)
     }
   }
 
-  return result + searchParam.toString()
+  if (searchParam) {
+    result += '?' + searchParam.toString()
+  }
+
+  return result
 }
