@@ -1,6 +1,6 @@
 {
   "name": "solid-file-router",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Type safe file router for solid.js",
   "type": "module",
   "license": "MIT",
