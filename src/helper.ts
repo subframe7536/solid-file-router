@@ -8,20 +8,23 @@ import { ErrorBoundary, Show, Suspense } from 'solid-js';
 export default function (config) {
   return (props) => {
     const load = config.loadingComponent ? createComponent(config.loadingComponent, props) : null;
-    const Catch = config.errorComponent || (props => (import.meta.env.DEV && console.error(props), null));
-    const comp = createComponent(ErrorBoundary, {
-      fallback: (error, reset) => createComponent(Catch, { error, reset }),
+    const Catch = config.errorComponent || (props => (import.meta.env.DEV && console.error(props.error), null));
+    const comp = createComponent(config.component, props);
+    return createComponent(ErrorBoundary, {
+      fallback: (error, reset) => createComponent(Catch, {
+        error: error,
+        reset: reset
+      }),
       get children() {
-        return createComponent(config.component, props);
-      }
-    });
-    return createComponent(Show, {
-      when: load,
-      fallback: comp,
-      get children() {
-        return createComponent(Suspense, {
-          fallback: load,
-          children: comp
+        return createComponent(Show, {
+          when: load,
+          fallback: comp,
+          get children() {
+            return createComponent(Suspense, {
+              fallback: load,
+              children: comp
+            });
+          }
         });
       }
     });

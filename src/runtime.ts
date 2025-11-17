@@ -27,24 +27,27 @@ export function createRoute<T>(config: RouteConfig<T>): RouteConfig<T> {
   return config
 }
 
-export interface RoutePath {}
+export namespace FileRouteInfo {
+  export interface Path {}
+}
 
-export function generatePath<T extends keyof RoutePath & string>(
+export function generatePath<T extends keyof FileRouteInfo.Path & string>(
   path: T,
-  params: RoutePath[T] extends never
+  params: FileRouteInfo.Path[T] extends never
     ? Record<string, unknown>
-    : RoutePath[T] & Record<string, unknown>,
+    : FileRouteInfo.Path[T] & Record<string, unknown>,
 ): string {
   if (!params) {
     return path
   }
   let result = path as string
   const searchParam = new URLSearchParams()
-  for (const [k, v] of Object.keys(params)) {
+  for (const [k, v] of Object.entries(params)) {
     if (k.startsWith('$')) {
-      result = result.replace(k, v)
+      result = result.replace(':' + k.slice(1), v as string)
+      console.log(result)
     } else {
-      searchParam.append(k, v)
+      searchParam.append(k, v as string)
     }
   }
 

@@ -1,5 +1,5 @@
 import { onMount } from 'solid-js'
-import { createRoute, generatePath } from '../../../src/runtime'
+import { createRoute, generatePath } from 'solid-file-router'
 import { useNavigate } from '@solidjs/router'
 
 export default createRoute({
@@ -7,7 +7,7 @@ export default createRoute({
     const nav = useNavigate()
     onMount(() => {
       setTimeout(() => {
-        nav(generatePath())
+        nav(generatePath('/nest/:id', { $id: '1' }))
       }, 2000)
     })
     return <div>404</div>

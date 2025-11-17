@@ -1,19 +1,8 @@
 import { defineConfig } from 'tsdown'
-// import solid from 'vite-plugin-solid'
-
-// export both js and jsx
-// export default defineConfig([
-//   {
-//     // use the solid plugin to handle jsx
-//     plugins: [solid()],
-//   },
-//   {
-//     outExtensions: () => ({ js: '.jsx' }),
-//   },
-// ])
 
 export default defineConfig({
-  entry: ['./src/index.ts'],
-  external: ['@babel/core'],
+  entry: { plugin: './src/index.ts', index: './src/runtime.ts' },
+  external: ['@babel/core', 'vite'],
   exports: true,
+  ignoreWatch: ['./playground'],
 })

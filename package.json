@@ -21,28 +21,32 @@
   "types": "./dist/index.d.mts",
   "exports": {
     ".": "./dist/index.mjs",
+    "./plugin": "./dist/plugin.mjs",
     "./package.json": "./package.json"
   },
   "publishConfig": {
     "access": "public"
   },
+  "workspaces": [
+    "./playground"
+  ],
   "scripts": {
     "build": "tsdown",
-    "dev": "vite serve playground",
-    "test": "vite build playground",
-    "typecheck": "tsc --noEmit",
-    "release": "bumpp && bun publish",
-    "prepublishOnly": "bun run build"
+    "dev": "tsdown --watch",
+    "play": "cd ./playground && bun run dev",
+    "typecheck": "oxlint && tsc --noEmit",
+    "release": "bumpp && bun publish"
   },
   "peerDependencies": {
     "solid-js": "^1.6",
     "tinyglobby": "*",
     "@babel/core": "^7",
-    "@solidjs/router": "^0.10",
-    "vite": "^3 || ^4 || ^5 || ^6 || ^7"
+    "@solidjs/router": ">=0.10.0 <1",
+    "vite": "^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0"
   },
   "devDependencies": {
     "@solidjs/router": "^0.15.4",
+    "@types/babel__core": "^7.20.5",
     "@types/node": "^24.10.1",
     "bumpp": "^10.3.1",
     "bun-types": "^1.3.2",

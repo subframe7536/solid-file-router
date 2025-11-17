@@ -1,4 +1,4 @@
-import { createRoute } from '../../../src/runtime'
+import { createRoute } from 'solid-file-router'
 
 export default createRoute({
   loadingComponent: () => <div>Loading...</div>,

@@ -1,8 +1,6 @@
-import { writeFileSync } from 'node:fs'
-
 export const patterns = {
   optional: [/^-(:?[\w-]+|\*)/, '$1?'],
-  param: [/\$([^.]+)/g, ':$1'],
+  param: [/\[([^\]]+)]/g, ':$1'],
   route: [/^.*\/?src\/pages\/|\.(jsx|tsx|mdx)$/g, ''],
   slash: [/^index$|\./g, '/'],
   splat: [/\[\.{3}\w+\]/g, '*'],
@@ -65,6 +63,7 @@ export async function generateRegularRoutes(
       .replace(...patterns.param)
       .split('/')
       .filter(Boolean)
+    console.log(segments)
 
     segments.reduce((parent, segment, index) => {
       const path = segment
@@ -161,6 +160,5 @@ export const FileRouter = (props) => createComponent(Router, {
   }
 })
   `
-  writeFileSync('test.js', result)
   return result
 }

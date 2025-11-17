@@ -1,51 +1,39 @@
-import { writeFileSync } from 'node:fs'
 import { glob } from 'tinyglobby'
-import { createLogger, normalizePath } from 'vite'
+import { normalizePath } from 'vite'
 import type { Plugin } from 'vite'
 import { generateDefinition } from './utils/definition'
 import { generateRouteTypes } from './utils/route-type'
 import { extract } from './utils/extract'
 import { helper } from './helper'
-import { VID_EXTRACT, VID_EXTRACT_RESOLVED, VID_HELPER } from './const'
+import {
+  ID_EXTRACT,
+  logger,
+  VID_EXTRACT,
+  VID_EXTRACT_RESOLVED,
+  VID_HELPER,
+} from './const'
 
 interface FileRouterPluginOption {
   /**
    * The output file path where the page types will be saved.
-   * @default './src/routes.d.ts'
+   * @default 'src/routes.gen.ts'
    */
   output?: string
   /**
    * The base directory of `src/pages`.
    *
    * e.g. If your `_app.tsx` is located at `packages/app/module/src/pages/_app.tsx`,
-   * You need to setup to `./packages/app/module/`
-   * @default './'
+   * You need to setup to `packages/app/module/`
+   * @default ''
    */
   baseDir?: string
   /**
    * A list of glob patterns to be ignored during processing.
    *
-   * Default: all files in `components/`
+   * Default: all files in `components/`, `node_modules/` and `dist/`
    */
   ignore?: string[]
 }
-
-function fastJoin(base: string) {
-  return (target: string) => {
-    base = normalizePath(base)
-    if (!base.endsWith('/')) {
-      base += '/'
-    }
-    target = normalizePath(target)
-    if (target.startsWith('/')) {
-      target.slice(1)
-    }
-    return base + target
-  }
-}
-
-const logger = createLogger('info', { prefix: '[page]' })
-let cache = ''
 
 /**
  * Vite plugin for page generation
@@ -54,34 +42,33 @@ export function fileRouterPlugin(
   options: FileRouterPluginOption = {},
 ): Plugin[] {
   const {
-    output = './src/routes.d.ts',
-    baseDir = './',
+    output = 'src/routes.d.ts',
+    baseDir = '',
     ignore = ['**/components/**'],
   } = options
 
-  const routesFilter = fastJoin(baseDir)('src/pages/**/[\\w$-]*.{jsx,tsx,mdx}')
-
-  let root = process.cwd()
+  const routesFilter = `${normalizePath(baseDir).replace(/\/$/, '')}/src/pages/**/[\\w[-]*.{jsx,tsx,mdx}`
+  let root: string
   async function generate(): Promise<string> {
     const start = Date.now()
-    const files = await glob(routesFilter, { cwd: root, ignore })
-    const module = await generateDefinition(files.map(fastJoin(root)))
-    const { routeInfo, count } = generateRouteTypes(files)
+    const files = await glob(routesFilter, {
+      cwd: root,
+      ignore: [...ignore, '**/node_modules/**', '**/dist/**'],
+      absolute: true,
+    })
+
+    const module = await generateDefinition(files)
+    const count = generateRouteTypes(files, normalizePath(`${root}/${output}`))
     logger.info(`Scanned ${count} routes in ${Date.now() - start} ms`, {
       timestamp: true,
     })
-
-    if (cache !== routeInfo) {
-      cache = routeInfo
-      writeFileSync(fastJoin(root)(output), routeInfo)
-    }
     return module
   }
 
   return [
     helper,
     {
-      name: `solid-file-router:plugin-extract`,
+      name: ID_EXTRACT,
       configResolved(config) {
         root = config.root
       },
@@ -94,7 +81,7 @@ export function fileRouterPlugin(
         },
       },
       configureServer(server) {
-        const handleFileChange = (file = '') =>
+        const handleFileChange = (file: string) =>
           file.includes('/src/pages/') ? generate() : null
 
         server.watcher

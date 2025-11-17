@@ -1,4 +1,4 @@
-import { createRoute } from '../../../src/runtime'
+import { createRoute } from 'solid-file-router'
 
 function createInfo(name: string, usr: any) {
   return { name, role: usr.role }
