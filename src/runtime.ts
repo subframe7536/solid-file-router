@@ -16,7 +16,7 @@ export type RouteConfig<T = unknown> = Pick<
 }
 
 /**
- * Indicate the route export
+ * Indicate the route export entry
  *
  * @example
  * ```ts

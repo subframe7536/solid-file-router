@@ -63,7 +63,6 @@ export async function generateRegularRoutes(
       .replace(...patterns.param)
       .split('/')
       .filter(Boolean)
-    console.log(segments)
 
     segments.reduce((parent, segment, index) => {
       const path = segment
