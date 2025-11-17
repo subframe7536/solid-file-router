@@ -2,7 +2,7 @@
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "types": [
-      "./node_modules/solid-file-router/client.d.ts"
+      "solid-file-router/client"
     ]
   }
 }

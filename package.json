@@ -39,8 +39,8 @@
     "test": "vitest --run",
     "test:dev": "vitest",
     "play": "cd ./playground && bun run dev",
-    "typecheck": "oxlint && tsc --noEmit",
-    "release": "bumpp && bun publish",
+    "lint": "oxlint && tsc --noEmit",
+    "release": "bun run build && bun run lint && bun run test && bumpp && bun publish",
     "init": "bun link && bun i && bun run build"
   },
   "peerDependencies": {

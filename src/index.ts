@@ -38,9 +38,7 @@ interface FileRouterPluginOption {
 /**
  * Vite plugin for page generation
  */
-export function fileRouterPlugin(
-  options: FileRouterPluginOption = {},
-): Plugin[] {
+export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
   const {
     output = 'src/routes.d.ts',
     baseDir = '',

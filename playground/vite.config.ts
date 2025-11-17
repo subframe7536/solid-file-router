@@ -1,9 +1,9 @@
 import solid from 'vite-plugin-solid'
 import { defineConfig } from 'vite'
-import { fileRouterPlugin } from '../src/index'
+import { fileRouter } from '../src/index'
 
 export default defineConfig({
-  plugins: [solid(), fileRouterPlugin()],
+  plugins: [solid(), fileRouter()],
   build: {
     minify: false,
   },
