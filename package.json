@@ -41,7 +41,7 @@
     "test:dev": "vitest",
     "play": "cd ./playground && bun run dev",
     "lint": "oxlint && tsc --noEmit",
-    "release": "bun run build && bun run lint && bun run test && bumpp && npm publish",
+    "release": "bun run build && bun run lint && bun run test && bumpp",
     "init": "bun link && bun i && bun run build"
   },
   "peerDependencies": {
