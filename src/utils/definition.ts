@@ -39,11 +39,23 @@ export async function generateRegularRoutes(
 ): Promise<[imports: string[], routs: BaseRoute[]]> {
   const imports = []
 
-  const appPath = files.find((key) => key.endsWith('_app.tsx'))
-  if (!appPath) {
-    throw new Error('No `_app.tsx` found')
+  const appPath = files.find(
+    (key) => key.endsWith('_app.tsx') || key.endsWith('_app.jsx'),
+  )
+  if (appPath) {
+    imports.push(`import __app_comp from '${appPath}?comp'`)
+  } else {
+    logger.warn(
+      'No `_app.jsx` or `_app.tsx` found, fallback to parent component',
+      {
+        timestamp: true,
+      },
+    )
+    imports.push(
+      `import { memo } from "solid-js/web";`,
+      `const __app_comp = (props) => memo(() => props.children)`,
+    )
   }
-  imports.push(`import __app_comp from '${appPath}?comp'`)
 
   const filtered = files.filter(
     (key) =>
@@ -122,14 +134,18 @@ export async function generateRegularRoutes(
     }, {} as BaseRoute)
   }
 
-  const notFoundPath = files.find((key) => key.endsWith('404.tsx'))
+  const notFoundPath = files.find(
+    (key) => key.endsWith('404.tsx') || key.endsWith('404.jsx'),
+  )
   if (notFoundPath) {
     imports.push(
       `import __404_comp from '${notFoundPath}?comp'`,
       `import __404_meta from '${notFoundPath}?meta'`,
     )
   } else {
-    logger.warn('No `404.tsx` found, fallback to `() => null`')
+    logger.warn('No `404.jsx` or `404.tsx` found, fallback to `() => null`', {
+      timestamp: true,
+    })
     imports.push(
       `const __404_comp = () => null`,
       `const __404_meta = undefined`,
