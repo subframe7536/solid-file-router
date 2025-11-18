@@ -290,7 +290,11 @@ src/
     index.tsx             # / route
     about.tsx             # /about route
     404.tsx               # Fallback for unmatched routes
-    blog/
+    nest.d.a.t.a.tsx      # /nest/d/a/t/a route
+    -[lang]/              # Optional lang parameter
+      index.tsx           # /:lang? route
+      [slug].tsx          # /:lang?/:slug route
+    blog/                 # Blog routes
       _layout.tsx         # Layout for blog routes
       index.tsx           # /blog route
       [id].tsx            # /blog/:id route
