@@ -71,8 +71,37 @@ describe('generateDefinition', () => {
     `)
   })
 
-  it('throws if no _app.tsx present', async () => {
-    const badFiles = files.filter((f) => !f.endsWith('_app.tsx'))
-    await expect(generateDefinition(badFiles as any)).rejects.toThrow()
+  it('generate fallback if no _app.tsx present', async () => {
+    expect(await generateDefinition([] as any)).toMatchInlineSnapshot(`
+      "import { memo } from "solid-js/web";
+      const __app_comp = (props) => memo(() => props.children)
+      const __404_comp = () => null
+      const __404_meta = undefined
+      import { createComponent, lazy } from 'solid-js'
+      import { Router } from '@solidjs/router'
+
+      export const Root = __app_comp
+
+      export const fileRoutes = [
+        {
+          "id": "*",
+          "path": "*",
+          "component": __404_comp,
+          ...__404_meta
+        }
+      ]
+      export const FileRouter = (props) => createComponent(Router, {
+        get base() {
+          return props.base
+        },
+        get root() {
+          return Root
+        },
+        get children() {
+          return fileRoutes
+        }
+      })
+      "
+    `)
   })
 })
