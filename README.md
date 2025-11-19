@@ -312,7 +312,7 @@ Pass options to `fileRouter()` in your Vite config:
 interface FileRouterPluginOption {
   /**
    * The output file path where the page types will be saved.
-   * @default 'src/routes.gen.ts'
+   * @default 'src/routes.d.ts'
    */
   output?: string
   /**
@@ -329,5 +329,10 @@ interface FileRouterPluginOption {
    * Default: all files in `components/`, `node_modules/` and `dist/`
    */
   ignore?: string[]
+    /**
+   * Whether to reload the page when route files change.
+   * @default true
+   */
+  reloadOnChange?: boolean
 }
 ```

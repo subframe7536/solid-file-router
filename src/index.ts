@@ -16,7 +16,7 @@ import {
 interface FileRouterPluginOption {
   /**
    * The output file path where the page types will be saved.
-   * @default 'src/routes.gen.ts'
+   * @default 'src/routes.d.ts'
    */
   output?: string
   /**
@@ -33,6 +33,11 @@ interface FileRouterPluginOption {
    * Default: all files in `components/`, `node_modules/` and `dist/`
    */
   ignore?: string[]
+  /**
+   * Whether to reload the page when route files change.
+   * @default true
+   */
+  reloadOnChange?: boolean
 }
 
 /**
@@ -43,6 +48,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     output = 'src/routes.d.ts',
     baseDir = '',
     ignore = ['**/components/**'],
+    reloadOnChange = true,
   } = options
 
   const routesFilter = `${normalizePath(baseDir).replace(/\/$/, '')}/src/pages/**/[\\w[-]*.{jsx,tsx,mdx}`
@@ -79,13 +85,29 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
         },
       },
       configureServer(server) {
-        const handleFileChange = (file: string) =>
-          file.includes('/src/pages/') ? generate() : null
+        const handleFileChange = (gen: boolean) => async (file: string) => {
+          if (file.includes('/src/pages/')) {
+            // 1. Invalidate the virtual module so Vite knows to reload it
+            const mod = server.moduleGraph.getModuleById(VID_EXTRACT_RESOLVED)
+            if (mod) {
+              server.moduleGraph.invalidateModule(mod)
+            }
+            // 2. Trigger a full reload or let Vite HMR handle the new route
+            // Usually, if the virtual module is invalidated, Vite sends an update.
+            server.ws.send({ type: 'full-reload', path: '*' })
+          }
+          if (gen) {
+            await generate()
+          }
+        }
 
         server.watcher
-          .on('add', handleFileChange)
-          .on('change', handleFileChange)
-          .on('unlink', handleFileChange)
+          .on('add', handleFileChange(true))
+          .on('unlink', handleFileChange(true))
+
+        if (reloadOnChange) {
+          server.watcher.on('change', handleFileChange(false))
+        }
       },
       load: {
         filter: {
