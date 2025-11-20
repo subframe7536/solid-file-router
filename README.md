@@ -80,6 +80,8 @@ render(() => (
 ), document.getElementById('app')!)
 ```
 
+Note: `<Root />` is the component of `src/packages/_app.tsx`, `fileRoutes` is `RouteDefintion` in `@solidjs/router`
+
 ### Simple Route
 
 `createRoute` is used to define route components. You **MUST** export it as the default export in your page files.
