@@ -161,7 +161,7 @@ All routes under `src/pages/blog/` will now be wrapped by this layout.
 
 ### Data Preloading
 
-Use the `preload` function to fetch data before rendering:
+Use the [`@solidjs/router`'s `preload`](https://docs.solidjs.com/solid-router/reference/preload-functions/preload) function to fetch data before rendering:
 
 ```tsx
 // src/pages/blog/[id].tsx
@@ -293,6 +293,8 @@ src/
     about.tsx             # /about route
     404.tsx               # Fallback for unmatched routes
     nest.d.a.t.a.tsx      # /nest/d/a/t/a route
+    (group)/              # Pathless layouts
+      data.tsx            # /data route
     -[lang]/              # Optional lang parameter
       index.tsx           # /:lang? route
       [slug].tsx          # /:lang?/:slug route
@@ -338,3 +340,11 @@ interface FileRouterPluginOption {
   reloadOnChange?: boolean
 }
 ```
+
+## Credit
+
+I previously use [`generouted`](https://github.com/oedotme/generouted), but it is hard to customize some features, like load the route component lazily but load the route info directly, so I make a new one, but highly inspired by it.
+
+## License
+
+MIT
