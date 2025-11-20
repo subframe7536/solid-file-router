@@ -31,15 +31,12 @@
     "access": "public",
     "registry": "https://registry.npmjs.org"
   },
-  "workspaces": [
-    "./playground"
-  ],
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
     "test": "vitest --run",
     "test:dev": "vitest",
-    "play": "cd ./playground && bun run dev",
+    "play": "vite serve playground",
     "lint": "oxlint && tsc --noEmit",
     "release": "bun run build && bun run lint && bun run test && bumpp",
     "init": "bun link && bun i && bun run build"
