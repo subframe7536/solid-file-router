@@ -104,22 +104,21 @@ export async function generateRegularRoutes(
             r.path === path ||
             r.id?.replace('/_layout', '').split('/').pop() === path,
         )
-        const props = group
-          ? route?.component
-            ? { id: path, path: '/' }
-            : { id: path }
-          : { path }
+
         if (found) {
           found.children ??= []
-        } else {
-          current?.[insert]({ ...props, children: [] })
+          return found
         }
-        return (
-          found ||
-          (current?.[
-            insert === 'unshift' ? 0 : current.length - 1
-          ] as BaseRoute)
-        )
+
+        const props = group
+          ? route?.component
+            ? { id: path, path: '' }
+            : { id: path }
+          : { path }
+        current?.[insert]({ ...props, children: [] })
+        return current?.[
+          insert === 'unshift' ? 0 : current.length - 1
+        ] as BaseRoute
       }
 
       if (layout) {
