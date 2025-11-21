@@ -6,10 +6,11 @@ export const patterns = {
   route: [/^.*\/?src\/pages\/|\.(jsx|tsx|mdx)$/g, ''],
   slash: [/^index$|\./g, '/'],
   splat: [/\[\.{3}\w+\]/g, '*'],
-  modal: [/\+|\([\w-]+\)\//g, ''],
-  indexName: [/(\/)?index/g, ''],
-  dots: [/\./g, '/'],
 } as const
+
+const REG_LAYOUT = /_layout\.(jsx|tsx)$/
+const REG_GROUP = /\([\w-]+\)/
+const REG_INSERT = /^\w|\//
 
 function wrapInline(code: string) {
   return `$###${code}###$`
@@ -29,10 +30,6 @@ interface BaseRoute {
   component?: string
   __?: string
 }
-
-const REG_LAYOUT = /_layout\.(jsx|tsx)$/
-const REG_GROUP = /\([\w-]+\)/
-const REG_INSERT = /^\w|\//
 
 export async function generateRegularRoutes(
   files: string[],
