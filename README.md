@@ -42,13 +42,14 @@ export default defineConfig({
 2. **Create your pages directory** at `src/pages/`
 
 3. **Create the app root** (`src/pages/_app.tsx`):
+   *This serves as the root layout for your application.*
 
 ```tsx
 import { createRoute } from 'solid-file-router'
 
 export default createRoute({
   component: (props) => {
-    return <div>{props.children}</div>
+    return <div id="app-root">{props.children}</div>
   },
 })
 ```
@@ -62,11 +63,194 @@ import { FileRouter } from 'virtual:routes'
 render(() => <FileRouter base="/optional/base" />, document.getElementById('app')!)
 ```
 
-## Basic Usage
+## Project Structure
 
-### Custom Router
+Understanding the file structure is key to using the router effectively.
 
-You can create a custom router by using the `Router` component directly:
+```text
+src/
+  pages/
+    _app.tsx              # App root (Required)
+    index.tsx             # Matches: /
+    about.tsx             # Matches: /about
+    404.tsx               # Catch-all for unmatched routes
+
+    # Nested Routes & Layouts
+    blog/
+      _layout.tsx         # Wraps all routes inside /blog/
+      index.tsx           # Matches: /blog
+      [id].tsx            # Matches: /blog/:id
+
+    # Dynamic & Optional Params
+    -[lang]/
+      index.tsx           # Matches: /:lang?
+
+    # Pathless Layouts (Logical grouping without URL change)
+    (auth)/
+      login.tsx           # Matches: /login
+      register.tsx        # Matches: /register
+
+    # Nested URLs without nested layouts
+    path.to.some.url.tsx  # Matches: /path/to/some/url
+
+  index.tsx               # Entry point
+  routes.d.ts             # Auto-generated type definitions
+```
+
+## API Reference & Examples
+
+### `createRoute(config)`
+
+The core function to define route behavior. **Must** be the default export in every page file.
+
+**Parameters:**
+- `component` (Required): Component to render.
+- `preload` (Optional): Async function to fetch data before rendering (`@solidjs/router` mechanism).
+- `loadingComponent` (Optional): Component shown while `preload` is pending.
+- `errorComponent` (Optional): Error Boundary component shown if rendering or preloading fails.
+- `info` (Optional): Arbitrary metadata.
+- `matchFilters` (Optional): Custom logic to validate route matching.
+
+#### Example 1: Basic Page with Dynamic Params
+
+*File: `src/pages/blog/[id].tsx`*
+
+```tsx
+import { createRoute } from 'solid-file-router'
+import { useParams } from '@solidjs/router'
+
+export default createRoute({
+  // Validate matches or extract custom data
+  matchFilters: {
+    id: (v) => /^\d+$/.test(v) // Only match if ID is numeric
+  },
+  component: (props) => {
+    // Typesafe params if using the generated hooks/types
+    const params = useParams<{ id: string }>()
+    return <div>Viewing Post ID: {params.id}</div>
+  },
+})
+```
+
+#### Example 2: Data Loading, Loading States & Error Handling
+
+*File: `src/pages/dashboard.tsx`*
+
+```tsx
+import { createRoute } from 'solid-file-router'
+
+export default createRoute({
+  // Fetch data before the component renders
+  preload: async ({ params, location }) => {
+    const res = await fetch(`/api/stats`)
+    if (!res.ok) throw new Error("Failed to load stats")
+    return res.json()
+  },
+
+  // Show this while preload is awaiting
+  loadingComponent: () => <div class="spinner">Loading Dashboard...</div>,
+
+  // Show this if preload throws or component errors
+  errorComponent: (props) => (
+    <div class="error-alert">
+      <p>Error: {props.error.message}</p>
+      <button onClick={props.reset}>Retry</button>
+    </div>
+  ),
+
+  // Main component receives data from preload via props.data
+  component: (props) => (
+    <main>
+      <h1>Dashboard</h1>
+      <pre>{JSON.stringify(props.data, null, 2)}</pre>
+    </main>
+  ),
+})
+```
+
+#### Example 3: Nested Layouts
+
+*File: `src/pages/settings/_layout.tsx`*
+
+```tsx
+import { createRoute } from 'solid-file-router'
+import { A } from '@solidjs/router'
+
+export default createRoute({
+  component: (props) => (
+    <div class="settings-layout">
+      <nav>
+        <A href="/settings/profile">Profile</A>
+        <A href="/settings/account">Account</A>
+      </nav>
+      <div class="content">
+        {/* Renders the nested child route */}
+        {props.children}
+      </div>
+    </div>
+  ),
+})
+```
+
+---
+
+### `generatePath(path, params)`
+
+A utility to construct URLs with type validation. It ensures you don't pass incorrect parameters to your routes.
+
+**Parameters:**
+- `path`: The route pattern (e.g., `/blog/:id`).
+- `params`: Object containing:
+    - **Path parameters**: Prefixed with `$` (e.g., `$id`, `$lang`).
+    - **Query parameters**: Standard keys (e.g., `search`, `page`).
+
+#### Example: Type-Safe Navigation
+
+```tsx
+import { generatePath } from 'solid-file-router'
+import { useNavigate } from '@solidjs/router'
+
+export function NavigationButton() {
+  const navigate = useNavigate()
+
+  const goToPost = (postId: string) => {
+    // ✅ Type Safe: TS will error if $id is missing
+    const url = generatePath('/blog/:id', {
+      $id: postId,      // Path param
+      ref: 'newsletter' // Query param -> /blog/123?ref=newsletter
+    })
+
+    navigate(url)
+  }
+
+  return <button onClick={() => goToPost('123')}>Read Post</button>
+}
+```
+
+---
+
+### `virtual:routes`
+
+The virtual module that exposes the generated routing configuration.
+
+**Exports:**
+- `FileRouter`: High-level component to render the app (Easy to use).
+- `fileRoutes`: The raw `RouteDefinition` array for `@solidjs/router`.
+- `Root`: The component exported from `_app.tsx`.
+
+#### Example1: Custom Base URL
+
+```tsx
+import { render } from 'solid-js/web'
+import { Router } from '@solidjs/router'
+import { FileRouter } from 'virtual:routes'
+
+render(() => <FileRouter base="/app" />, document.getElementById('app')!)
+```
+
+#### Example2: Custom Router Integration
+
+If you need more control than `<FileRouter>` provides (e.g., preload or use `<HashRouter />`), you can use the raw exports:
 
 ```tsx
 import { render } from 'solid-js/web'
@@ -74,243 +258,19 @@ import { Router } from '@solidjs/router'
 import { fileRoutes, Root } from 'virtual:routes'
 
 render(() => (
-  <Router root={<Root />} preload={true}>
+  <Router
+    root={<Root />} // Transformed `src/pages/_app.tsx`
+    preload={true}
+    {/* Other props */}
+  >
     {fileRoutes}
   </Router>
 ), document.getElementById('app')!)
 ```
 
-Note: `<Root />` is the component of `src/packages/_app.tsx`, `fileRoutes` is `RouteDefintion` in `@solidjs/router`
-
-### Simple Route
-
-`createRoute` is used to define route components. You **MUST** export it as the default export in your page files.
-
-Create a file in `src/pages/` directory. The file path maps to the route:
-
-```tsx
-// src/pages/index.tsx
-import { createRoute } from 'solid-file-router'
-
-export default createRoute({
-  component: () => <div>Home Page</div>,
-})
-```
-
-Now visiting `/` will render your component.
-
-### Nested Routes
-
-Create nested directories to organize routes:
-
-```
-src/pages/
-  _app.tsx
-  index.tsx
-  about.tsx
-  -[lang]/
-    index.tsx
-  blog/
-    index.tsx
-    [id].tsx
-```
-
-This creates routes:
-- `pages/index.tsx` -> `/`
-- `pages/about.tsx` -> `/about`
-- `pages/blog/index.tsx` -> `/blog`
-- `pages/blog/[id].tsx` -> `/blog/:id`
-- `pages/-[lang]/index.tsx` -> `/:lang?`
-
-### Dynamic Routes
-
-Use bracket notation for dynamic segments:
-
-```tsx
-// src/pages/blog/[id].tsx
-import { createRoute } from 'solid-file-router'
-import { useParams } from '@solidjs/router'
-
-export default createRoute({
-  component: (props) => {
-    const params = useParams<{ id: string }>()
-    return <div>Blog Post: {params.id}</div>
-  },
-})
-```
-
-### Layouts
-
-Use `_layout.tsx` to define layout components that wrap nested routes:
-
-```tsx
-// src/pages/blog/_layout.tsx
-import { createRoute } from 'solid-file-router'
-
-export default createRoute({
-  component: (props) => (
-    <div class="blog-layout">
-      <sidebar />
-      {props.children}
-    </div>
-  ),
-})
-```
-
-All routes under `src/pages/blog/` will now be wrapped by this layout.
-
-### Data Preloading
-
-Use the [`@solidjs/router`'s `preload`](https://docs.solidjs.com/solid-router/reference/preload-functions/preload) function to fetch data before rendering:
-
-```tsx
-// src/pages/blog/[id].tsx
-import { createRoute } from 'solid-file-router'
-
-export default createRoute({
-  preload: async (params) => {
-    const response = await fetch(`/api/blog/${params.id}`)
-    return response.json()
-  },
-  component: (props) => (
-    <div>
-      <h1>{props.data.title}</h1>
-      <p>{props.data.content}</p>
-    </div>
-  ),
-})
-```
-
-### Loading States
-
-Show a loading component while data is being fetched:
-
-```tsx
-// src/pages/_app.tsx
-import { createRoute } from 'solid-file-router'
-
-export default createRoute({
-  loadingComponent: () => <div>Loading...</div>,
-  component: (props) => (
-    <div>{props.children}</div>
-  ),
-})
-```
-
-### Error Handling
-
-Handle errors with custom error boundaries:
-
-```tsx
-// src/pages/_app.tsx
-import { createRoute } from 'solid-file-router'
-
-function ErrorBoundary(props: { error: Error; reset: () => void }) {
-  return (
-    <div>
-      <h2>Something went wrong</h2>
-      <p>{props.error.message}</p>
-      <button onClick={props.reset}>Try again</button>
-    </div>
-  )
-}
-
-export default createRoute({
-  errorComponent: ErrorBoundary,
-  component: (props) => (
-    <div>{props.children}</div>
-  ),
-})
-```
-
-### 404 Page
-
-Create a catch-all page for unmatched routes:
-
-```tsx
-// src/pages/404.tsx
-import { createRoute } from 'solid-file-router'
-
-export default createRoute({
-  component: () => <div>Page not found</div>,
-})
-```
-
-### Type-Safe Path Generation
-
-Use `generatePath` for type-safe route navigation:
-
-```tsx
-import { generatePath } from 'solid-file-router'
-import { useNavigate } from '@solidjs/router'
-
-export function MyComponent() {
-  const navigate = useNavigate()
-
-  const handleNavigation = () => {
-    // TypeScript will validate the path and parameters
-    const path = generatePath('/blog/:id', { $id: '123' })
-    navigate(path)
-  }
-
-  return <button onClick={handleNavigation}>Go to Blog</button>
-}
-```
-
-## API Reference
-
-### `createRoute(config)`
-
-Creates a route configuration object. Must be the default export in page files.
-
-**Parameters:**
-- `component` (required) - The component to render for this route
-- `errorComponent` (optional) - Component to render when an error occurs
-- `loadingComponent` (optional) - Component to show while loading data
-- `preload` (optional) - Async function to fetch data before rendering
-- `info` (optional) - Route metadata (e.g., page title)
-- `matchFilters` (optional) - Custom route matching logic
-
-### `generatePath(path, params)`
-
-Generates a URL path with parameters substituted. Provides full type safety for routes and parameters.
-
-**Parameters:**
-- `path` - The route path pattern
-- `params` - Object with path parameters (prefixed with `$`) and query parameters
-  - Path parameters are prefixed with `$` (e.g., `$id`)
-  - Query parameters are not prefixed with `$` (e.g., `search`)
-
-**Returns:** Complete URL string with parameters filled in
-
-## Project Structure Example
-
-```
-src/
-  pages/
-    _app.tsx              # App root and layout
-    index.tsx             # / route
-    about.tsx             # /about route
-    404.tsx               # Fallback for unmatched routes
-    nest.d.a.t.a.tsx      # /nest/d/a/t/a route
-    (group)/              # Pathless layouts
-      data.tsx            # /data route
-    -[lang]/              # Optional lang parameter
-      index.tsx           # /:lang? route
-      [slug].tsx          # /:lang?/:slug route
-    blog/                 # Blog routes
-      _layout.tsx         # Layout for blog routes
-      index.tsx           # /blog route
-      [id].tsx            # /blog/:id route
-      category/
-        [slug].tsx        # /blog/category/:slug route
-  index.tsx               # App entry point
-  routes.d.ts             # Auto-generated type definitions
-```
-
 ## Configuration
 
-Pass options to `fileRouter()` in your Vite config:
+Options passed to the `fileRouter()` plugin in `vite.config.ts`.
 
 ```ts
 interface FileRouterPluginOption {
@@ -319,21 +279,22 @@ interface FileRouterPluginOption {
    * @default 'src/routes.d.ts'
    */
   output?: string
+
   /**
    * The base directory of `src/pages`.
-   *
-   * e.g. If your `_app.tsx` is located at `packages/app/module/src/pages/_app.tsx`,
-   * You need to setup to `packages/app/module/`
+   * Useful if your pages are in a monorepo subfolder.
+   * e.g., 'packages/app/src/pages'
    * @default ''
    */
   baseDir?: string
+
   /**
-   * A list of glob patterns to be ignored during processing.
-   *
-   * Default: all files in `components/`, `node_modules/` and `dist/`
+   * List of glob patterns to ignore.
+   * Default ignores: files in components/, node_modules/, dist/
    */
   ignore?: string[]
-    /**
+
+  /**
    * Whether to reload the page when route files change.
    * @default true
    */
@@ -343,7 +304,7 @@ interface FileRouterPluginOption {
 
 ## Credit
 
-I previously use [`generouted`](https://github.com/oedotme/generouted), but it is hard to customize some features, like load the route component lazily but load the route info directly, so I make a new one, but highly inspired by it.
+Highly inspired by [`generouted`](https://github.com/oedotme/generouted). Created to provide better customization for SolidJS specific features like lazy loading route components while keeping route metadata eager.
 
 ## License
 
