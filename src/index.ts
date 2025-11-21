@@ -30,7 +30,7 @@ interface FileRouterPluginOption {
   /**
    * A list of glob patterns to be ignored during processing.
    *
-   * Default: all files in `components/`, `node_modules/` and `dist/`
+   * Default is {@link DEFAULT_IGNORES}: all files in `components/`, `node_modules/` and `dist/`
    */
   ignore?: string[]
   /**
@@ -40,6 +40,12 @@ interface FileRouterPluginOption {
   reloadOnChange?: boolean
 }
 
+export const DEFAULT_IGNORES = [
+  '**/components/**',
+  '**/node_modules/**',
+  '**/dist/**',
+]
+
 /**
  * Vite plugin for page generation
  */
@@ -47,7 +53,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
   const {
     output = 'src/routes.d.ts',
     baseDir = '',
-    ignore = ['**/components/**'],
+    ignore = DEFAULT_IGNORES,
     reloadOnChange = true,
   } = options
 
@@ -57,7 +63,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     const start = Date.now()
     const files = await glob(routesFilter, {
       cwd: root,
-      ignore: [...ignore, '**/node_modules/**', '**/dist/**'],
+      ignore,
       absolute: true,
     })
 
@@ -85,7 +91,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
         },
       },
       configureServer(server) {
-        const handleFileChange = (gen: boolean) => async (file: string) => {
+        const handleFileEvent = (gen: boolean) => async (file: string) => {
           if (file.includes('/src/pages/')) {
             // 1. Invalidate the virtual module so Vite knows to reload it
             const mod = server.moduleGraph.getModuleById(VID_EXTRACT_RESOLVED)
@@ -102,11 +108,11 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
         }
 
         server.watcher
-          .on('add', handleFileChange(true))
-          .on('unlink', handleFileChange(true))
+          .on('add', handleFileEvent(true))
+          .on('unlink', handleFileEvent(true))
 
         if (reloadOnChange) {
-          server.watcher.on('change', handleFileChange(false))
+          server.watcher.on('change', handleFileEvent(false))
         }
       },
       load: {
