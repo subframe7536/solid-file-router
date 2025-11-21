@@ -2,7 +2,9 @@
 
 Type safe file router for solid.js
 
-Generate type safe route definition and virtual module that return `@solidjs/router`'s `RouteDefinition` and `<FileRouter>`
+Generate type safe route definition and virtual module that return `@solidjs/router`'s `RouteDefinition` and `<FileRouter />`
+
+**ESM Only**
 
 ## Features
 
@@ -266,6 +268,20 @@ render(() => (
     {fileRoutes}
   </Router>
 ), document.getElementById('app')!)
+```
+
+#### Type Definition
+
+In `tsconfig.json`
+
+```json
+{
+  "compilerOptions": {
+    "types": [
+      "solid-file-router/client"
+    ]
+  }
+}
 ```
 
 ## Configuration
