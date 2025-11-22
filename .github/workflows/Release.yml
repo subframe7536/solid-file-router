@@ -23,7 +23,7 @@ jobs:
       - name: Update npm
         run: bun install -g npm@latest
 
-      - run: bun ci --linker hoisted
+      - run: bun ci
       - run: bun run build
       - run: npm publish
       - run: bunx changelogithub
