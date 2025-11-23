@@ -295,26 +295,41 @@ interface FileRouterPluginOption {
    * @default 'src/routes.d.ts'
    */
   output?: string
-
   /**
    * The base directory of `src/pages`.
-   * Useful if your pages are in a monorepo subfolder.
-   * e.g., 'packages/app/src/pages'
+   *
+   * e.g. If your `_app.tsx` is located at `packages/app/module/src/pages/_app.tsx`,
+   * You need to setup to `packages/app/module/`
    * @default ''
    */
   baseDir?: string
-
   /**
-   * List of glob patterns to ignore.
-   * Default ignores: files in components/, node_modules/, dist/
+   * A list of glob patterns to be ignored during processing.
+   *
+   * Default is {@link DEFAULT_IGNORES}: all files in `components/`, `node_modules/` and `dist/`
    */
   ignore?: string[]
-
   /**
    * Whether to reload the page when route files change.
    * @default true
    */
   reloadOnChange?: boolean
+  /**
+   * Route's dts config to control Route's info type
+   * @example
+   * ```ts
+   * {
+   *   title: 'string',
+   *   description: 'string',
+   *   auth: {
+   *     required: 'boolean',
+   *     code: 'string',
+   *   },
+   *   tags: 'string[]',
+   * }
+   * ```
+   */
+  infoDts?: InfoTypeDefinition
 }
 ```
 
