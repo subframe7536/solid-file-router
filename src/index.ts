@@ -3,6 +3,7 @@ import { normalizePath } from 'vite'
 import type { Plugin } from 'vite'
 import { generateDefinition } from './utils/definition'
 import { generateRouteTypes } from './utils/route-type'
+import type { InfoTypeDefinition } from './utils/route-type'
 import { extract } from './utils/extract'
 import { helper } from './helper'
 import {
@@ -38,6 +39,22 @@ interface FileRouterPluginOption {
    * @default true
    */
   reloadOnChange?: boolean
+  /**
+   * Route's dts config to control Route's info type
+   * @example
+   * ```ts
+   * {
+   *   title: 'string',
+   *   description: 'string',
+   *   auth: {
+   *     required: 'boolean',
+   *     code: 'string',
+   *   },
+   *   tags: 'string[]',
+   * }
+   * ```
+   */
+  infoDts?: InfoTypeDefinition
 }
 
 export const DEFAULT_IGNORES = [
@@ -55,6 +72,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     baseDir = '',
     ignore = DEFAULT_IGNORES,
     reloadOnChange = true,
+    infoDts,
   } = options
 
   const routesFilter = `${normalizePath(baseDir).replace(/\/$/, '')}/src/pages/**/[\\w[-]*.{jsx,tsx,mdx}`
@@ -68,7 +86,11 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     })
 
     const module = await generateDefinition(files)
-    const count = generateRouteTypes(files, normalizePath(`${root}/${output}`))
+    const count = generateRouteTypes(
+      files,
+      normalizePath(`${root}/${output}`),
+      infoDts,
+    )
     logger.info(`Scanned ${count} routes in ${Date.now() - start} ms`, {
       timestamp: true,
     })

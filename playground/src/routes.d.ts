@@ -12,5 +12,10 @@ declare module 'solid-file-router' {
       '/nest/:id': { $id: string }
       '/nest/value': never
     }
+    interface Info {
+      "name": string,
+      "role": string,
+      [x: string]: unknown
+    }
   }
 }

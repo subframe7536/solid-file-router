@@ -1,6 +1,11 @@
 import type { Component } from 'solid-js'
 import type { RouteDefinition, RouteSectionProps } from '@solidjs/router'
 
+export namespace FileRouteInfo {
+  export interface Path {}
+  export interface Info {}
+}
+
 interface ErrorComponentProps {
   error: Error
   reset: VoidFunction
@@ -8,8 +13,9 @@ interface ErrorComponentProps {
 
 export type RouteConfig<T = unknown> = Pick<
   RouteDefinition<string, T>,
-  'info' | 'matchFilters' | 'preload'
+  'matchFilters' | 'preload'
 > & {
+  info?: FileRouteInfo.Info
   component: Component<RouteSectionProps<T>>
   errorComponent?: Component<ErrorComponentProps>
   loadingComponent?: Component<RouteSectionProps<T>>
@@ -25,10 +31,6 @@ export type RouteConfig<T = unknown> = Pick<
  */
 export function createRoute<T>(config: RouteConfig<T>): RouteConfig<T> {
   return config
-}
-
-export namespace FileRouteInfo {
-  export interface Path {}
 }
 
 export function generatePath<T extends keyof FileRouteInfo.Path & string>(
