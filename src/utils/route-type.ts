@@ -104,11 +104,9 @@ export function generateRouteTypes(
 export {}
 
 declare module '${PACKAGE_NAME}' {
-  namespace FileRouteInfo {
-    interface Path {
-      ${params.sort().join('\n      ')}
-    }${infoDts ? '\n' + generateInlineType(infoDts, 'Info', 2) : ''}
-  }
+  interface FileRoutePath {
+    ${params.sort().join('\n    ')}
+  }${infoDts ? '\n' + generateInlineType(infoDts, 'FileRouteInfo', 1) : ''}
 }
 `
 

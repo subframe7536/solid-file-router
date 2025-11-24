@@ -7,7 +7,7 @@ export default createRoute({
     const nav = useNavigate()
     onMount(() => {
       setTimeout(() => {
-        nav(generatePath('/nest/:id', { $id: '1' }))
+        nav(generatePath('/nest/:id', { $id: 'from:404' }))
       }, 2000)
     })
     return <div>404</div>

@@ -2,10 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { generatePath } from '../src/runtime'
 
 declare module '../src/runtime' {
-  namespace FileRouteInfo {
-    interface Path {
-      [x: string]: any
-    }
+  interface FileRoutePath {
+    [x: string]: any
   }
 }
 

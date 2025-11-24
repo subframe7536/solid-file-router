@@ -5,6 +5,6 @@ export default createRoute({
     return 123
   },
   component: (props) => {
-    return <div>{JSON.stringify(props.data)}</div>
+    return <div>data: {JSON.stringify(props.data)}</div>
   },
 })
