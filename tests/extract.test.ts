@@ -385,7 +385,7 @@ export default createRoute({
   preload: () => {},
   matchFilters: [],
   errorComponent: ErrorPage,
-  loadComponent: () => HomePage
+  loadingComponent: () => HomePage
 })
 `
       const config: ExtractConfig = {
@@ -404,16 +404,146 @@ export default createRoute({
 export default createRoute({
   component: HomePage,
   errorComponent: ErrorPage,
-  loadComponent: loadPage
+  loadingComponent: loadPage
 })
 `
       const config: ExtractConfig = {
         entryFn: 'createRoute',
-        pick: ['component', 'errorComponent', 'loadComponent'],
+        pick: ['component', 'errorComponent', 'loadingComponent'],
         targetFn: '__wrapRoute',
       }
       const result = await extract(code, 'test.tsx', config)
       expect(result).toContain('__wrapRoute')
+    })
+  })
+
+  describe('?load and ?error transforms', () => {
+    it('extracts only loadingComponent with ?load transform', async () => {
+      const code = `
+export default createRoute({
+  component: HomePage,
+  errorComponent: ErrorPage,
+  loadingComponent: LoadingSpinner,
+  info: { title: 'Home' }
+})
+`
+      const config: ExtractConfig = {
+        entryFn: 'createRoute',
+        pick: ['loadingComponent'],
+      }
+      const result = await extract(code, 'test.tsx', config)
+      expect(result).toContain('loadingComponent')
+      expect(result).not.toContain('component')
+      expect(result).not.toContain('errorComponent')
+      expect(result).not.toContain('info')
+    })
+
+    it('extracts only errorComponent with ?error transform', async () => {
+      const code = `
+export default createRoute({
+  component: HomePage,
+  errorComponent: ErrorPage,
+  loadingComponent: LoadingSpinner,
+  info: { title: 'Home' }
+})
+`
+      const config: ExtractConfig = {
+        entryFn: 'createRoute',
+        pick: ['errorComponent'],
+      }
+      const result = await extract(code, 'test.tsx', config)
+      expect(result).toContain('errorComponent')
+      expect(result).not.toContain('component')
+      expect(result).not.toContain('loadingComponent')
+      expect(result).not.toContain('info')
+    })
+
+    it('extracts only component with ?comp transform', async () => {
+      const code = `
+export default createRoute({
+  component: HomePage,
+  errorComponent: ErrorPage,
+  loadingComponent: LoadingSpinner,
+  info: { title: 'Home' }
+})
+`
+      const config: ExtractConfig = {
+        entryFn: 'createRoute',
+        pick: ['component'],
+        targetFn: '__comp',
+      }
+      const result = await extract(code, 'test.tsx', config)
+      expect(result).toContain('__comp')
+      expect(result).toContain('component')
+      expect(result).not.toContain('errorComponent')
+      expect(result).not.toContain('loadingComponent')
+      expect(result).not.toContain('info')
+    })
+
+    it('handles missing loadingComponent gracefully', async () => {
+      const code = `
+export default createRoute({
+  component: HomePage,
+  errorComponent: ErrorPage
+})
+`
+      const config: ExtractConfig = {
+        entryFn: 'createRoute',
+        pick: ['loadingComponent'],
+      }
+      const result = await extract(code, 'test.tsx', config)
+      expect(result).toBeTruthy()
+      expect(result).not.toContain('loadingComponent')
+    })
+
+    it('handles missing errorComponent gracefully', async () => {
+      const code = `
+export default createRoute({
+  component: HomePage,
+  loadingComponent: LoadingSpinner
+})
+`
+      const config: ExtractConfig = {
+        entryFn: 'createRoute',
+        pick: ['errorComponent'],
+      }
+      const result = await extract(code, 'test.tsx', config)
+      expect(result).toBeTruthy()
+      expect(result).not.toContain('errorComponent')
+    })
+
+    it('extracts loadingComponent from layout file', async () => {
+      const code = `
+export default createRoute({
+  component: LayoutWrapper,
+  loadingComponent: () => <div>Loading layout...</div>,
+  errorComponent: LayoutError
+})
+`
+      const config: ExtractConfig = {
+        entryFn: 'createRoute',
+        pick: ['loadingComponent'],
+      }
+      const result = await extract(code, 'test.tsx', config)
+      expect(result).toContain('loadingComponent')
+      expect(result).toContain('Loading layout...')
+    })
+
+    it('extracts errorComponent from app file', async () => {
+      const code = `
+export default createRoute({
+  component: AppRoot,
+  errorComponent: GlobalErrorBoundary,
+  loadingComponent: GlobalLoader
+})
+`
+      const config: ExtractConfig = {
+        entryFn: 'createRoute',
+        pick: ['errorComponent'],
+      }
+      const result = await extract(code, 'test.tsx', config)
+      expect(result).toContain('errorComponent')
+      expect(result).toContain('GlobalErrorBoundary')
     })
   })
 })

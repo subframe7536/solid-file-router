@@ -1,18 +1,12 @@
 import { glob } from 'tinyglobby'
 import { normalizePath } from 'vite'
 import type { Plugin } from 'vite'
-import { generateDefinition } from './utils/definition'
+import { generateDefinition, InheritanceConfig } from './utils/definition'
 import { generateRouteTypes } from './utils/route-type'
 import type { InfoTypeDefinition } from './utils/route-type'
 import { extract } from './utils/extract'
 import { helper } from './helper'
-import {
-  ID_EXTRACT,
-  logger,
-  VID_EXTRACT,
-  VID_EXTRACT_RESOLVED,
-  VID_HELPER,
-} from './const'
+import { ID_EXTRACT, logger, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
 
 interface FileRouterPluginOption {
   /**
@@ -55,13 +49,33 @@ interface FileRouterPluginOption {
    * ```
    */
   infoDts?: InfoTypeDefinition
+  /**
+   * Whether to enable verbose log
+   */
+  verboseLog?: boolean
+  /**
+   * Component inheritance configuration.
+   *
+   * Controls how loading and error components are inherited from layouts.
+   *
+   * @default { enabled: true }
+   *
+   * @example
+   * // Disable inheritance globally
+   * { enabled: false }
+   *
+   * @example
+   * // Enable with custom behavior
+   * {
+   *   enabled: true,
+   *   inheritLoading: true,
+   *   inheritError: true
+   * }
+   */
+  inheritance?: InheritanceConfig
 }
 
-export const DEFAULT_IGNORES = [
-  '**/components/**',
-  '**/node_modules/**',
-  '**/dist/**',
-]
+export const DEFAULT_IGNORES = ['**/components/**', '**/node_modules/**', '**/dist/**']
 
 /**
  * Vite plugin for page generation
@@ -73,7 +87,15 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     ignore = DEFAULT_IGNORES,
     reloadOnChange = true,
     infoDts,
+    verboseLog,
+    inheritance = { enabled: true },
   } = options
+
+  const inheritanceConfig = {
+    enabled: inheritance.enabled ?? true,
+    inheritLoading: inheritance.inheritLoading ?? true,
+    inheritError: inheritance.inheritError ?? true,
+  }
 
   const routesFilter = `${normalizePath(baseDir).replace(/\/$/, '')}/src/pages/**/[\\w[-]*.{jsx,tsx,mdx}`
   let root: string
@@ -85,12 +107,8 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
       absolute: true,
     })
 
-    const module = await generateDefinition(files)
-    const count = generateRouteTypes(
-      files,
-      normalizePath(`${root}/${output}`),
-      infoDts,
-    )
+    const module = await generateDefinition(files, verboseLog, inheritanceConfig)
+    const count = generateRouteTypes(files, normalizePath(`${root}/${output}`), infoDts)
     logger.info(`Scanned ${count} routes in ${Date.now() - start} ms`, {
       timestamp: true,
     })
@@ -129,9 +147,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
           }
         }
 
-        server.watcher
-          .on('add', handleFileEvent(true))
-          .on('unlink', handleFileEvent(true))
+        server.watcher.on('add', handleFileEvent(true)).on('unlink', handleFileEvent(true))
 
         if (reloadOnChange) {
           server.watcher.on('change', handleFileEvent(false))
@@ -147,21 +163,35 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
       },
       transform: {
         filter: {
-          id: [/\?meta$/, /\?comp$/],
+          id: [/\?meta$/, /\?comp$/, /\?load$/, /\?error$/],
         },
         async handler(code, id) {
           if (id.endsWith('?meta')) {
             return await extract(code, id, {
               entryFn: 'createRoute',
-              pick: ['info', 'preload', 'matchFilters'],
+              pick: ['info', 'preload', 'matchFilters', 'inherit'],
             })
           } else if (id.endsWith('?comp')) {
-            const result = await extract(code, id, {
+            // const result = await extract(code, id, {
+            //   entryFn: 'createRoute',
+            //   pick: ['component'],
+            //   targetFn: '__comp',
+            // })
+            // return `import __comp from '${VID_HELPER}'\n${result}`
+            return await extract(code, id, {
               entryFn: 'createRoute',
-              pick: ['component', 'errorComponent', 'loadComponent'],
-              targetFn: '__comp',
+              pick: ['component'],
             })
-            return `import __comp from '${VID_HELPER}'\n${result}`
+          } else if (id.endsWith('?load')) {
+            return await extract(code, id, {
+              entryFn: 'createRoute',
+              pick: ['loadingComponent'],
+            })
+          } else if (id.endsWith('?error')) {
+            return await extract(code, id, {
+              entryFn: 'createRoute',
+              pick: ['errorComponent'],
+            })
           }
         },
       },

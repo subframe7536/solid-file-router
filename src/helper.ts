@@ -3,32 +3,28 @@ import { ID_HELPER, VID_HELPER, VID_HELPER_RESOLVED } from './const'
 
 const code = `
 import { createComponent } from "solid-js/web";
-import { ErrorBoundary, Show, Suspense } from 'solid-js';
+import { ErrorBoundary, Suspense } from 'solid-js';
 
-export default function (config) {
+export default function (component, loadingComponent, errorComponent) {
   return (props) => {
-    const load = config.loadingComponent ? createComponent(config.loadingComponent, props) : null;
-    const Catch = config.errorComponent || (props => (import.meta.env.DEV && console.error(props.error), null));
-    const comp = createComponent(config.component, props);
+    const Catch = errorComponent || (props => (import.meta.env.DEV && console.error(props.error), null))
+    
+    const child = loadingComponent
+    ? createComponent(Suspense, {
+        fallback: createComponent(loadingComponent, props),
+        get children() {
+          return createComponent(component, props);
+        }
+      })
+    : createComponent(component, props)
+
     return createComponent(ErrorBoundary, {
-      fallback: (error, reset) => createComponent(Catch, {
-        error: error,
-        reset: reset
-      }),
+      fallback: (error, reset) => createComponent(Catch, { error, reset }),
       get children() {
-        return createComponent(Show, {
-          when: load,
-          fallback: comp,
-          get children() {
-            return createComponent(Suspense, {
-              fallback: load,
-              children: comp
-            });
-          }
-        });
+        return child
       }
-    });
-  };
+    })
+  }
 }
 `
 

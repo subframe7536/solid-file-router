@@ -10,4 +10,5 @@
   },
   "editor.formatOnSave": true,
   "oxc.fmt.experimental": true,
+  "kiroAgent.configureMCP": "Enabled",
 }

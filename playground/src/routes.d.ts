@@ -8,6 +8,11 @@ declare module 'solid-file-router' {
   interface FileRoutePath {
     '/': never
     '/data': never
+    '/inheritance-test': never
+    '/inheritance-test/custom-loading': never
+    '/inheritance-test/default': never
+    '/inheritance-test/no-inheritance': never
+    '/inheritance-test/selective-inheritance': never
     '/nest': never
     '/nest/:id': { $id: string }
     '/nest/value': never
