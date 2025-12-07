@@ -16,9 +16,29 @@ declare module 'solid-file-router' {
     '/nest': never
     '/nest/:id': { $id: string }
     '/nest/value': never
+    "/404": never
   }
   interface FileRouteInfo {
     name: string
     role: string
   }
+}
+
+declare module '@solidjs/router' {
+  import type { AnchorProps } from '@solidjs/router'
+
+  type Paths =
+    |'/'
+    |'/data'
+    |'/inheritance-test'
+    |'/inheritance-test/custom-loading'
+    |'/inheritance-test/default'
+    |'/inheritance-test/no-inheritance'
+    |'/inheritance-test/selective-inheritance'
+    |'/nest'
+    |'/nest/:id'
+    |'/nest/value'
+    |"/404"
+
+  export declare function A(props: Omit<AnchorProps, 'href'> & { href: Paths }): JSX.Element
 }
