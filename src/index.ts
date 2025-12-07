@@ -4,7 +4,7 @@ import type { Plugin } from 'vite'
 import { generateDefinition, InheritanceConfig } from './utils/definition'
 import { generateRouteTypes } from './utils/route-type'
 import type { InfoTypeDefinition } from './utils/route-type'
-import { extract } from './utils/extract'
+import { extract, invalidateCache } from './utils/extract'
 import { helper } from './helper'
 import { ID_EXTRACT, logger, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
 
@@ -77,6 +77,13 @@ interface FileRouterPluginOption {
 
 export const DEFAULT_IGNORES = ['**/components/**', '**/node_modules/**', '**/dist/**']
 
+const queryMap = new Map<string, string[]>([
+  ['meta', ['info', 'preload', 'matchFilters', 'inherit']],
+  ['comp', ['component']],
+  ['load', ['loadingComponent']],
+  ['error', ['errorComponent']],
+])
+
 /**
  * Vite plugin for page generation
  */
@@ -133,6 +140,9 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
       configureServer(server) {
         const handleFileEvent = (gen: boolean) => async (file: string) => {
           if (file.includes('/src/pages/')) {
+            // Invalidate transform cache for this file
+            invalidateCache(file)
+
             // 1. Invalidate the virtual module so Vite knows to reload it
             const mod = server.moduleGraph.getModuleById(VID_EXTRACT_RESOLVED)
             if (mod) {
@@ -165,33 +175,11 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
         filter: {
           id: [/\?meta$/, /\?comp$/, /\?load$/, /\?error$/],
         },
-        async handler(code, id) {
-          if (id.endsWith('?meta')) {
-            return await extract(code, id, {
-              entryFn: 'createRoute',
-              pick: ['info', 'preload', 'matchFilters', 'inherit'],
-            })
-          } else if (id.endsWith('?comp')) {
-            // const result = await extract(code, id, {
-            //   entryFn: 'createRoute',
-            //   pick: ['component'],
-            //   targetFn: '__comp',
-            // })
-            // return `import __comp from '${VID_HELPER}'\n${result}`
-            return await extract(code, id, {
-              entryFn: 'createRoute',
-              pick: ['component'],
-            })
-          } else if (id.endsWith('?load')) {
-            return await extract(code, id, {
-              entryFn: 'createRoute',
-              pick: ['loadingComponent'],
-            })
-          } else if (id.endsWith('?error')) {
-            return await extract(code, id, {
-              entryFn: 'createRoute',
-              pick: ['errorComponent'],
-            })
+        async handler(code, fullId) {
+          const [id, query] = fullId.split('?')
+          if (query && queryMap.has(query)) {
+            const pick = queryMap.get(query)!
+            return await extract(code, id, { entryFn: 'createRoute', pick }, verboseLog)
           }
         },
       },

@@ -7,9 +7,7 @@ export interface InfoTypeDefinition {
 }
 
 export function parseParams(files: string[]) {
-  const filtered = files.filter(
-    (key) => !key.includes('/_') && !key.includes('/404'),
-  )
+  const filtered = files.filter((key) => !key.includes('/_') && !key.includes('/404'))
   const params: string[] = []
 
   for (const key of filtered) {
@@ -58,9 +56,7 @@ function generateInlineType(
       const inlineType = generateInlineObjectType(value, indentLevel + 1)
       result += `${innerIndent}${key}: ${inlineType}\n`
     } else {
-      throw new Error(
-        `Unsupported type descriptor for key "${key}": ${typeof value}`,
-      )
+      throw new Error(`Unsupported type descriptor for key "${key}": ${typeof value}`)
     }
   }
 
@@ -68,10 +64,7 @@ function generateInlineType(
   return result
 }
 
-function generateInlineObjectType(
-  obj: InfoTypeDefinition,
-  indentLevel: number = 0,
-): string {
+function generateInlineObjectType(obj: InfoTypeDefinition, indentLevel: number = 0): string {
   const indent = '  '.repeat(indentLevel)
   const innerIndent = '  '.repeat(indentLevel + 1)
 

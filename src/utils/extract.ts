@@ -1,4 +1,5 @@
 import type * as Babel from '@babel/core'
+import { logger } from '../const'
 
 export interface ExtractConfig {
   entryFn: string
@@ -26,16 +27,11 @@ function validateCallExpression(callExpr: any, ctx: TransformContext): void {
 
   if (!t.isIdentifier(callExpr.callee) || callExpr.callee.name !== entryFn) {
     throw new Error(
-      `Expected function name to be "${entryFn}", but got "${
-        callExpr.callee.name || 'unknown'
-      }"`,
+      `Expected function name to be "${entryFn}", but got "${callExpr.callee.name || 'unknown'}"`,
     )
   }
 
-  if (
-    callExpr.arguments.length !== 1 ||
-    !t.isObjectExpression(callExpr.arguments[0])
-  ) {
+  if (callExpr.arguments.length !== 1 || !t.isObjectExpression(callExpr.arguments[0])) {
     throw new Error(`Expected exactly one object argument for "${entryFn}"`)
   }
 }
@@ -47,9 +43,7 @@ function extractFilteredProperties(objExpr: any, ctx: TransformContext): any[] {
   const { t, pick, entryFn } = ctx
 
   // Ban spread at top level
-  const hasSpread = objExpr.properties.some((prop: any) =>
-    t.isSpreadElement(prop),
-  )
+  const hasSpread = objExpr.properties.some((prop: any) => t.isSpreadElement(prop))
   if (hasSpread) {
     throw new Error(
       `Spread expressions at the top level of ${entryFn}'s parameter will prevent treeshaking`,
@@ -71,21 +65,14 @@ function extractFilteredProperties(objExpr: any, ctx: TransformContext): any[] {
 /**
  * Creates the transformed node, optionally wrapped with targetFn
  */
-function createTransformedNode(
-  filteredProperties: any[],
-  ctx: TransformContext,
-): any {
+function createTransformedNode(filteredProperties: any[], ctx: TransformContext): any {
   const { t, targetFn } = ctx
 
   const newNode = t.objectExpression(filteredProperties)
-  return targetFn
-    ? t.callExpression(t.identifier(targetFn), [newNode])
-    : newNode
+  return targetFn ? t.callExpression(t.identifier(targetFn), [newNode]) : newNode
 }
 
-export function extractPlugin({
-  types: t,
-}: typeof Babel): Babel.PluginObj<State> {
+export function extractPlugin({ types: t }: typeof Babel): Babel.PluginObj<State> {
   return {
     name: 'transform-default-export',
     post() {
@@ -122,10 +109,7 @@ export function extractPlugin({
 
           const ctx = { t, entryFn, pick, targetFn }
           validateCallExpression(init, ctx)
-          const filteredProperties = extractFilteredProperties(
-            init.arguments[0],
-            ctx,
-          )
+          const filteredProperties = extractFilteredProperties(init.arguments[0], ctx)
           const targetNode = createTransformedNode(filteredProperties, ctx)
 
           // Update the variable declarator
@@ -164,10 +148,7 @@ export function extractPlugin({
 
         const ctx = { t, entryFn, pick, targetFn }
         validateCallExpression(callExpr, ctx)
-        const filteredProperties = extractFilteredProperties(
-          callExpr.arguments[0],
-          ctx,
-        )
+        const filteredProperties = extractFilteredProperties(callExpr.arguments[0], ctx)
         const targetNode = createTransformedNode(filteredProperties, ctx)
 
         // Update the appropriate node
@@ -182,21 +163,64 @@ export function extractPlugin({
   }
 }
 
-export async function extract(code: string, id: string, config: ExtractConfig) {
+interface AstCacheEntry {
+  code: string
+  ast: Babel.types.File
+}
+
+const astCache = new Map<string, AstCacheEntry>()
+
+export function invalidateCache(id: string): void {
+  astCache.delete(id)
+}
+
+async function parseToAst(code: string, id: string): Promise<Babel.types.File | null | undefined> {
   const babel = await import('@babel/core')
+  const result = await babel.parseAsync(code, {
+    parserOpts: {
+      plugins: ['jsx', 'typescript'],
+    },
+    filename: id,
+  })
+  return result
+}
+
+export async function extract(code: string, id: string, config: ExtractConfig, verbose = false) {
+  const babel = await import('@babel/core')
+
+  let ast: Babel.types.File | null | undefined
+  const cached = astCache.get(id)
+
+  if (cached && cached.code === code) {
+    ast = cached.ast
+    if (verbose) {
+      logger.info(`AST cache hit:  ${id}`, { timestamp: false })
+    }
+  } else {
+    ast = await parseToAst(code, id)
+    if (ast) {
+      astCache.set(id, { code, ast })
+      if (verbose) {
+        logger.info(`AST cache save: ${id}`, { timestamp: false })
+      }
+    }
+  }
+
+  if (!ast) {
+    return undefined
+  }
+
   try {
-    const transformed = await babel.transformAsync(code, {
+    const transformed = await babel.transformFromAstAsync(ast, code, {
       plugins: [[extractPlugin, config]],
-      parserOpts: {
-        plugins: ['jsx', 'typescript'],
-      },
       filename: id,
-      ast: false,
       sourceMaps: true,
       configFile: false,
       babelrc: false,
+      cloneInputAst: true,
     })
-    return transformed?.code
+
+    return transformed?.code ?? undefined
   } catch (error) {
     throw new Error(`${error}`)
   }

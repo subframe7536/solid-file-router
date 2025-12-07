@@ -91,9 +91,7 @@ export default createRoute({
         entryFn: 'createRoute',
         pick: ['info', 'component'],
       }
-      await expect(extract(code, 'test.tsx', config)).rejects.toThrow(
-        'prevent treeshaking',
-      )
+      await expect(extract(code, 'test.tsx', config)).rejects.toThrow('prevent treeshaking')
     })
 
     it('handles nested properties correctly (shallow pick)', async () => {
@@ -365,9 +363,7 @@ export { route as default }
         entryFn: 'createRoute',
         pick: ['info', 'component'],
       }
-      await expect(extract(code, 'test.tsx', config)).rejects.toThrow(
-        'prevent treeshaking',
-      )
+      await expect(extract(code, 'test.tsx', config)).rejects.toThrow('prevent treeshaking')
     })
   })
 

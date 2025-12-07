@@ -17,8 +17,6 @@ describe('generatePath', () => {
   })
 
   it('appends query params', () => {
-    expect(generatePath('/user/:id', { $id: '123', q: 'abc' } as any)).toBe(
-      '/user/123?q=abc',
-    )
+    expect(generatePath('/user/:id', { $id: '123', q: 'abc' } as any)).toBe('/user/123?q=abc')
   })
 })
