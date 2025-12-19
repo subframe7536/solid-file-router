@@ -163,48 +163,49 @@ export function extractPlugin({ types: t }: typeof Babel): Babel.PluginObj<State
   }
 }
 
-interface AstCacheEntry {
-  code: string
-  ast: Babel.types.File
-}
-
-const astCache = new Map<string, AstCacheEntry>()
+// Promise-based AST cache
+const astPromiseCache = new Map<string, Promise<Babel.types.File | null>>()
 
 export function invalidateCache(id: string): void {
-  astCache.delete(id)
-}
-
-async function parseToAst(code: string, id: string): Promise<Babel.types.File | null | undefined> {
-  const babel = await import('@babel/core')
-  const result = await babel.parseAsync(code, {
-    parserOpts: {
-      plugins: ['jsx', 'typescript'],
-    },
-    filename: id,
-  })
-  return result
+  // Remove all cache entries that start with the file ID
+  for (const key of astPromiseCache.keys()) {
+    if (key === id) {
+      astPromiseCache.delete(key)
+      break
+    }
+  }
 }
 
 export async function extract(code: string, id: string, config: ExtractConfig, verbose = false) {
   const babel = await import('@babel/core')
 
-  let ast: Babel.types.File | null | undefined
-  const cached = astCache.get(id)
+  // Get or create AST parsing promise
+  let astPromise = astPromiseCache.get(id)
 
-  if (cached && cached.code === code) {
-    ast = cached.ast
+  if (!astPromise) {
     if (verbose) {
-      logger.info(`AST cache hit:  ${id}`, { timestamp: false })
+      logger.info(`AST cache miss: ${id}`, { timestamp: false })
     }
-  } else {
-    ast = await parseToAst(code, id)
-    if (ast) {
-      astCache.set(id, { code, ast })
-      if (verbose) {
-        logger.info(`AST cache save: ${id}`, { timestamp: false })
-      }
-    }
+
+    astPromise = babel
+      .parseAsync(code, {
+        parserOpts: {
+          plugins: ['jsx', 'typescript'],
+        },
+        filename: id,
+      })
+      .catch((error) => {
+        // Remove failed promise from cache to allow retry
+        astPromiseCache.delete(id)
+        throw error
+      })
+
+    astPromiseCache.set(id, astPromise)
+  } else if (verbose) {
+    logger.info(`AST cache hit:  ${id}`, { timestamp: false })
   }
+
+  const ast = await astPromise
 
   if (!ast) {
     return undefined

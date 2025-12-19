@@ -1,8 +1,11 @@
 import type { ExtractConfig } from '../src/utils/extract'
-import { describe, it, expect } from 'vitest'
-import { extract } from '../src/utils/extract'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { extract, invalidateCache } from '../src/utils/extract'
 
 describe('extractPlugin', () => {
+  beforeEach(() => {
+    invalidateCache('test.tsx')
+  })
   describe('Case 1: direct export default call', () => {
     it('extracts properties from direct call expression', async () => {
       const code = `
