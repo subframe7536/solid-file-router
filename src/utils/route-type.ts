@@ -104,12 +104,17 @@ declare module '${PACKAGE_NAME}' {
 }
 
 declare module '@solidjs/router' {
-  import type { AnchorProps } from '@solidjs/router'
+  import type { AnchorProps, NavigateOptions, RouterResponseInit, CustomResponse } from '@solidjs/router'
 
   type Paths =
     |${params.map((s) => s.split(': ')[0]).join('\n    |')}
 
   export declare function A(props: Omit<AnchorProps, 'href'> & { href: Paths }): JSX.Element
+  export interface Navigator {
+    (to: Paths, options?: Partial<NavigateOptions>): void;
+    (delta: number): void;
+  }
+  export declare function redirect(url: Paths, init?: number | RouterResponseInit): CustomResponse<never>
 }
 `
 
