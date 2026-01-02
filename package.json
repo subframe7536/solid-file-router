@@ -63,11 +63,8 @@
     "tinyglobby": "*",
     "tsdown": "^0.18.1",
     "typescript": "^5.9.3",
-    "vite": "npm:rolldown-vite@latest",
+    "vite": "^7.3.0",
     "vite-plugin-solid": "^2.11.10",
     "vitest": "^4.0.16"
-  },
-  "overrides": {
-    "vite": "npm:rolldown-vite@latest"
   }
 }

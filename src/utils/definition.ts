@@ -407,14 +407,14 @@ export interface InheritanceConfig {
 
 export async function generateDefinition(
   files: string[],
-  isDev = false,
+  verbose = false,
   inheritanceConfig: InheritanceConfig = {
     enabled: true,
     inheritLoading: true,
     inheritError: true,
   },
 ): Promise<string> {
-  const [imports, regularRoutes] = await generateRegularRoutes(files, isDev, inheritanceConfig)
+  const [imports, regularRoutes] = await generateRegularRoutes(files, verbose, inheritanceConfig)
   const result = `import { createComponent, lazy } from 'solid-js'
 import { Router } from '@solidjs/router'
 ${imports.join('\n')}

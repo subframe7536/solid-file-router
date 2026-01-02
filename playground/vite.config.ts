@@ -10,7 +10,7 @@ export default defineConfig({
         name: 'string',
         role: 'string',
       },
-      verboseLog: true,
+      // verboseLog: true,
     }),
   ],
   build: {

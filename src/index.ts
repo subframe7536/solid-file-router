@@ -141,20 +141,20 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
       configureServer(server) {
         const handleFileEvent = (gen: boolean) => async (file: string) => {
           if (file.includes('/src/pages/')) {
-            // Invalidate transform cache for this file
-            invalidateCache(file)
-
-            // 1. Invalidate the virtual module so Vite knows to reload it
-            const mod = server.moduleGraph.getModuleById(VID_EXTRACT_RESOLVED)
-            if (mod) {
-              server.moduleGraph.invalidateModule(mod)
+            if (gen) {
+              await generate()
+            } else {
+              invalidateCache(file)
             }
-            // 2. Trigger a full reload or let Vite HMR handle the new route
-            // Usually, if the virtual module is invalidated, Vite sends an update.
-            server.ws.send({ type: 'full-reload', path: '*' })
-          }
-          if (gen) {
-            await generate()
+
+            // Invalidate the virtual module for add/unlink events
+            const module = server.moduleGraph.getModuleById(VID_EXTRACT_RESOLVED)
+            if (module) {
+              server.moduleGraph.invalidateModule(module)
+              server.ws.send({
+                type: 'full-reload',
+              })
+            }
           }
         }
 

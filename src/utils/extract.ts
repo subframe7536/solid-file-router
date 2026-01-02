@@ -167,12 +167,8 @@ export function extractPlugin({ types: t }: typeof Babel): Babel.PluginObj<State
 const astPromiseCache = new Map<string, Promise<Babel.types.File | null>>()
 
 export function invalidateCache(id: string): void {
-  // Remove all cache entries that start with the file ID
-  for (const key of astPromiseCache.keys()) {
-    if (key === id) {
-      astPromiseCache.delete(key)
-      break
-    }
+  if (astPromiseCache.has(id)) {
+    astPromiseCache.delete(id)
   }
 }
 
