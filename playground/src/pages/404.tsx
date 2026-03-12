@@ -1,6 +1,6 @@
-import { onMount } from 'solid-js'
-import { createRoute, generatePath } from 'solid-file-router'
 import { useNavigate } from '@solidjs/router'
+import { createRoute, generatePath } from 'solid-file-router'
+import { onMount } from 'solid-js'
 
 export default createRoute({
   component: () => {

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+
 import { parseParams } from '../src/utils/route-type'
 
 const root = '/root/project'

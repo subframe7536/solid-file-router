@@ -1,13 +1,14 @@
 import { glob } from 'tinyglobby'
 import { normalizePath } from 'vite'
 import type { Plugin } from 'vite'
+
+import { ID_EXTRACT, logger, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
+import { helper } from './helper'
 import type { InheritanceConfig } from './utils/definition'
 import { generateDefinition } from './utils/definition'
+import { extract, invalidateCache } from './utils/extract'
 import { generateRouteTypes } from './utils/route-type'
 import type { InfoTypeDefinition } from './utils/route-type'
-import { extract, invalidateCache } from './utils/extract'
-import { helper } from './helper'
-import { ID_EXTRACT, logger, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
 
 interface FileRouterPluginOption {
   /**

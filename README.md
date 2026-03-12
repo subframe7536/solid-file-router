@@ -44,7 +44,7 @@ export default defineConfig({
 2. **Create your pages directory** at `src/pages/`
 
 3. **Create the app root** (`src/pages/_app.tsx`):
-   *This serves as the root layout for your application.*
+   _This serves as the root layout for your application._
 
 ```tsx
 import { createRoute } from 'solid-file-router'
@@ -106,6 +106,7 @@ src/
 The core function to define route behavior. **Must** be the default export in every page file.
 
 **Parameters:**
+
 - `component` (Required): Component to render.
 - `preload` (Optional): Async function to fetch data before rendering (`@solidjs/router` mechanism).
 - `loadingComponent` (Optional): Component shown while `preload` is pending.
@@ -126,7 +127,7 @@ This inheritance system reduces boilerplate while maintaining flexibility for ro
 
 #### Example 1: Basic Page with Dynamic Params
 
-*File: `src/pages/blog/[id].tsx`*
+_File: `src/pages/blog/[id].tsx`_
 
 ```tsx
 import { createRoute } from 'solid-file-router'
@@ -135,7 +136,7 @@ import { useParams } from '@solidjs/router'
 export default createRoute({
   // Validate matches or extract custom data
   matchFilters: {
-    id: (v) => /^\d+$/.test(v) // Only match if ID is numeric
+    id: (v) => /^\d+$/.test(v), // Only match if ID is numeric
   },
   component: (props) => {
     // Typesafe params if using the generated hooks/types
@@ -147,7 +148,7 @@ export default createRoute({
 
 #### Example 2: Data Loading, Loading States & Error Handling
 
-*File: `src/pages/dashboard.tsx`*
+_File: `src/pages/dashboard.tsx`_
 
 ```tsx
 import { createRoute } from 'solid-file-router'
@@ -156,7 +157,7 @@ export default createRoute({
   // Fetch data before the component renders
   preload: async ({ params, location }) => {
     const res = await fetch(`/api/stats`)
-    if (!res.ok) throw new Error("Failed to load stats")
+    if (!res.ok) throw new Error('Failed to load stats')
     return res.json()
   },
 
@@ -183,7 +184,7 @@ export default createRoute({
 
 #### Example 3: Nested Layouts
 
-*File: `src/pages/settings/_layout.tsx`*
+_File: `src/pages/settings/_layout.tsx`_
 
 ```tsx
 import { createRoute } from 'solid-file-router'
@@ -216,6 +217,7 @@ One of the most powerful features is automatic inheritance of loading and error 
 When you define `loadingComponent` or `errorComponent` in `_app.tsx` or `_layout.tsx`, all descendant routes automatically inherit these components unless they provide their own.
 
 **Inheritance Priority (Fallback Chain):**
+
 1. Route's own component (highest priority)
 2. Nearest `_layout.tsx` ancestor
 3. `_app.tsx` application default
@@ -223,7 +225,7 @@ When you define `loadingComponent` or `errorComponent` in `_app.tsx` or `_layout
 
 ### Example: Application-Wide Defaults
 
-*File: `src/pages/_app.tsx`*
+_File: `src/pages/_app.tsx`_
 
 ```tsx
 import { createRoute } from 'solid-file-router'
@@ -235,7 +237,7 @@ export default createRoute({
       <main>{props.children}</main>
     </div>
   ),
-  
+
   // These become defaults for ALL routes
   loadingComponent: () => (
     <div class="loading-spinner">
@@ -243,7 +245,7 @@ export default createRoute({
       <p>Loading...</p>
     </div>
   ),
-  
+
   errorComponent: (props) => (
     <div class="error-page">
       <h1>Something went wrong</h1>
@@ -258,7 +260,7 @@ Now **every route** in your app automatically gets these loading and error compo
 
 ### Example: Section-Specific Overrides
 
-*File: `src/pages/dashboard/_layout.tsx`*
+_File: `src/pages/dashboard/_layout.tsx`_
 
 ```tsx
 import { createRoute } from 'solid-file-router'
@@ -270,35 +272,36 @@ export default createRoute({
       <div class="dashboard-content">{props.children}</div>
     </div>
   ),
-  
+
   // Override loading for all dashboard routes
   loadingComponent: () => (
     <div class="dashboard-loading">
       <div class="skeleton-layout" />
     </div>
   ),
-  
+
   // errorComponent not specified - inherits from _app.tsx
 })
 ```
 
 **Result:**
+
 - All routes under `/dashboard/*` use the dashboard-specific loading component
 - All routes under `/dashboard/*` still use the app-wide error component from `_app.tsx`
 
 ### Example: Route-Specific Override
 
-*File: `src/pages/dashboard/analytics.tsx`*
+_File: `src/pages/dashboard/analytics.tsx`_
 
 ```tsx
 import { createRoute } from 'solid-file-router'
 
 export default createRoute({
   preload: async () => {
-    const data = await fetch('/api/analytics').then(r => r.json())
+    const data = await fetch('/api/analytics').then((r) => r.json())
     return data
   },
-  
+
   // This route needs a special loading state
   loadingComponent: () => (
     <div class="analytics-loading">
@@ -306,9 +309,9 @@ export default createRoute({
       <div class="stats-skeleton" />
     </div>
   ),
-  
+
   // errorComponent not specified - inherits from _app.tsx
-  
+
   component: (props) => (
     <div class="analytics">
       <h1>Analytics</h1>
@@ -319,6 +322,7 @@ export default createRoute({
 ```
 
 **Result:**
+
 - This specific route uses its own custom loading component
 - Still inherits the error component from `_app.tsx`
 
@@ -343,13 +347,13 @@ src/pages/
 
 **Inheritance Resolution:**
 
-| Route | Loading Component | Error Component |
-|-------|------------------|-----------------|
-| `/dashboard` | dashboard/_layout | _app |
-| `/dashboard/users` | dashboard/_layout | _app |
-| `/dashboard/analytics` | analytics (own) | _app |
-| `/settings/profile` | _app | settings/_layout |
-| `/settings/account` | _app | settings/_layout |
+| Route                  | Loading Component  | Error Component   |
+| ---------------------- | ------------------ | ----------------- |
+| `/dashboard`           | dashboard/\_layout | \_app             |
+| `/dashboard/users`     | dashboard/\_layout | \_app             |
+| `/dashboard/analytics` | analytics (own)    | \_app             |
+| `/settings/profile`    | \_app              | settings/\_layout |
+| `/settings/account`    | \_app              | settings/\_layout |
 
 ### Benefits
 
@@ -366,10 +370,11 @@ src/pages/
 A utility to construct URLs with type validation. It ensures you don't pass incorrect parameters to your routes.
 
 **Parameters:**
+
 - `path`: The route pattern (e.g., `/blog/:id`).
 - `params`: Object containing:
-    - **Path parameters**: Prefixed with `$` (e.g., `$id`, `$lang`).
-    - **Query parameters**: Standard keys (e.g., `search`, `page`).
+  - **Path parameters**: Prefixed with `$` (e.g., `$id`, `$lang`).
+  - **Query parameters**: Standard keys (e.g., `search`, `page`).
 
 #### Example: Type-Safe Navigation
 
@@ -383,8 +388,8 @@ export function NavigationButton() {
   const goToPost = (postId: string) => {
     // ✅ Type Safe: TS will error if $id is missing
     const url = generatePath('/blog/:id', {
-      $id: postId,      // Path param
-      ref: 'newsletter' // Query param -> /blog/123?ref=newsletter
+      $id: postId, // Path param
+      ref: 'newsletter', // Query param -> /blog/123?ref=newsletter
     })
 
     navigate(url)
@@ -401,6 +406,7 @@ export function NavigationButton() {
 The virtual module that exposes the generated routing configuration.
 
 **Exports:**
+
 - `FileRouter`: High-level component to render the app (Easy to use).
 - `fileRoutes`: The raw `RouteDefinition` array for `@solidjs/router`.
 - `Root`: The component exported from `_app.tsx`.
@@ -442,9 +448,7 @@ In `tsconfig.json`
 ```json
 {
   "compilerOptions": {
-    "types": [
-      "solid-file-router/client"
-    ]
+    "types": ["solid-file-router/client"]
   }
 }
 ```
@@ -453,7 +457,7 @@ In `tsconfig.json`
 
 Options passed to the `fileRouter()` plugin in `vite.config.ts`.
 
-```ts
+````ts
 interface FileRouterPluginOption {
   /**
    * The output file path where the page types will be saved.
@@ -497,9 +501,9 @@ interface FileRouterPluginOption {
   infoDts?: InfoTypeDefinition
   /**
    * Component inheritance configuration.
-   * 
+   *
    * Controls how loading and error components are inherited from layouts.
-   * 
+   *
    * @default { enabled: true, inheritLoading: true, inheritError: true }
    */
   inheritance?: {
@@ -523,7 +527,7 @@ interface FileRouterPluginOption {
     inheritError?: boolean
   }
 }
-```
+````
 
 ### Configuring Component Inheritance
 
@@ -542,10 +546,10 @@ export default defineConfig({
     fileRouter({
       // Disable all inheritance globally
       inheritance: {
-        enabled: false
-      }
-    })
-  ]
+        enabled: false,
+      },
+    }),
+  ],
 })
 ```
 
@@ -558,11 +562,11 @@ export default defineConfig({
     fileRouter({
       inheritance: {
         enabled: true,
-        inheritLoading: false,  // Routes won't inherit loading components
-        inheritError: true      // Routes will still inherit error components
-      }
-    })
-  ]
+        inheritLoading: false, // Routes won't inherit loading components
+        inheritError: true, // Routes will still inherit error components
+      },
+    }),
+  ],
 })
 ```
 
@@ -574,7 +578,7 @@ Control inheritance for individual routes using the `inherit` property:
 // Disable all inheritance for this route
 export default createRoute({
   component: () => <SpecialPage />,
-  inherit: false  // No loading/error components from layouts
+  inherit: false, // No loading/error components from layouts
 })
 ```
 
@@ -584,9 +588,9 @@ export default createRoute({
   component: () => <CustomPage />,
   loadingComponent: () => <CustomLoader />,
   inherit: {
-    loading: false,  // Don't inherit loading component
-    error: true      // Still inherit error component (default)
-  }
+    loading: false, // Don't inherit loading component
+    error: true, // Still inherit error component (default)
+  },
 })
 ```
 
@@ -610,30 +614,33 @@ The inheritance resolution follows this priority order:
 #### Use Cases
 
 **Performance-Critical Routes:**
+
 ```tsx
 // Skip wrapper components for maximum performance
 export default createRoute({
   component: () => <HighPerformancePage />,
-  inherit: false
+  inherit: false,
 })
 ```
 
 **Custom Error Handling:**
+
 ```tsx
 // Use custom error handling instead of inherited error boundary
 export default createRoute({
   component: () => <CustomErrorHandlingPage />,
   errorComponent: (props) => <CustomErrorUI error={props.error} />,
-  inherit: { error: false }
+  inherit: { error: false },
 })
 ```
 
 **Gradual Migration:**
+
 ```tsx
 // During migration, disable inheritance for legacy routes
 export default createRoute({
   component: () => <LegacyPage />,
-  inherit: false  // Legacy page handles its own loading/error states
+  inherit: false, // Legacy page handles its own loading/error states
 })
 ```
 

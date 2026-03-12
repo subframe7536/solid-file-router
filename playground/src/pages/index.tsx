@@ -1,5 +1,6 @@
-import { createRoute } from 'solid-file-router'
 import { A } from '@solidjs/router'
+import { createRoute } from 'solid-file-router'
+
 import { TestComponent } from '../components/test'
 
 export default createRoute({
@@ -9,7 +10,7 @@ export default createRoute({
         <h1>Solid File Router Playground</h1>
         <p>Test and explore file-based routing features</p>
         <input type="text" />
-        <TestComponent></TestComponent>
+        <TestComponent />
 
         <nav style={{ 'margin-top': '30px' }}>
           <h2>Available Routes:</h2>

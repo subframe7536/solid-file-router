@@ -1,5 +1,6 @@
-import type { ExtractConfig } from '../src/utils/extract'
 import { describe, it, expect, beforeEach } from 'vitest'
+
+import type { ExtractConfig } from '../src/utils/extract'
 import { extract, invalidateCache } from '../src/utils/extract'
 
 describe('extractPlugin', () => {

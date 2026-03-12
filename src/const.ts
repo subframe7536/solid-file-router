@@ -1,4 +1,5 @@
 import { createLogger } from 'vite'
+
 import { name } from '../package.json'
 
 export const PACKAGE_NAME = name

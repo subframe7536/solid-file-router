@@ -16,7 +16,7 @@ declare module 'solid-file-router' {
     '/nest': never
     '/nest/:id': { $id: string }
     '/nest/value': never
-    "/404": never
+    '/404': never
   }
   interface FileRouteInfo {
     name: string
@@ -25,25 +25,33 @@ declare module 'solid-file-router' {
 }
 
 declare module '@solidjs/router' {
-  import type { AnchorProps, NavigateOptions, RouterResponseInit, CustomResponse } from '@solidjs/router'
+  import type {
+    AnchorProps,
+    NavigateOptions,
+    RouterResponseInit,
+    CustomResponse,
+  } from '@solidjs/router'
 
   type Paths =
-    |'/'
-    |'/data'
-    |'/inheritance-test'
-    |'/inheritance-test/custom-loading'
-    |'/inheritance-test/default'
-    |'/inheritance-test/no-inheritance'
-    |'/inheritance-test/selective-inheritance'
-    |'/nest'
-    |'/nest/:id'
-    |'/nest/value'
-    |"/404"
+    | '/'
+    | '/data'
+    | '/inheritance-test'
+    | '/inheritance-test/custom-loading'
+    | '/inheritance-test/default'
+    | '/inheritance-test/no-inheritance'
+    | '/inheritance-test/selective-inheritance'
+    | '/nest'
+    | '/nest/:id'
+    | '/nest/value'
+    | '/404'
 
   export declare function A(props: Omit<AnchorProps, 'href'> & { href: Paths }): JSX.Element
   export interface Navigator {
-    (to: Paths, options?: Partial<NavigateOptions>): void;
-    (delta: number): void;
+    (to: Paths, options?: Partial<NavigateOptions>): void
+    (delta: number): void
   }
-  export declare function redirect(url: Paths, init?: number | RouterResponseInit): CustomResponse<never>
+  export declare function redirect(
+    url: Paths,
+    init?: number | RouterResponseInit,
+  ): CustomResponse<never>
 }

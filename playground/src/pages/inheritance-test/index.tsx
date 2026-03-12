@@ -1,5 +1,5 @@
-import { createRoute } from 'solid-file-router'
 import { A } from '@solidjs/router'
+import { createRoute } from 'solid-file-router'
 
 export default createRoute({
   component: () => {

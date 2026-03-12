@@ -5,9 +5,7 @@
     "jsxImportSource": "solid-js",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": [
-      "bun-types"
-    ],
+    "types": ["bun-types"],
     "allowJs": true,
     "strict": true,
     "noEmit": true,

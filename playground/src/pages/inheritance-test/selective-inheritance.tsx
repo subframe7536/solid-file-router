@@ -1,5 +1,6 @@
-import { createResource } from 'solid-js'
 import { createRoute } from 'solid-file-router'
+import { createResource } from 'solid-js'
+
 import { fetchMockData } from './utils'
 
 export default createRoute({

@@ -1,4 +1,5 @@
 import type { Plugin } from 'vite'
+
 import { ID_HELPER, VID_HELPER, VID_HELPER_RESOLVED } from '../const'
 
 declare const __LOADER__: string

@@ -1,5 +1,7 @@
 import { writeFileSync } from 'node:fs'
+
 import { PACKAGE_NAME } from '../const'
+
 import { patterns } from './definition'
 
 export interface InfoTypeDefinition {

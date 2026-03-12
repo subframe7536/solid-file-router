@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+
 import { generatePath } from '../src/runtime'
 
 declare module '../src/runtime' {
