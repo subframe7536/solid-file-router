@@ -4,6 +4,8 @@ import type { Plugin } from 'vite'
 
 import { ID_EXTRACT, logger, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
 import { helper } from './helper'
+import { ssgPlugin } from './ssg'
+import type { SSGConfig } from './ssg/types'
 import type { InheritanceConfig } from './utils/definition'
 import { generateDefinition } from './utils/definition'
 import { extract, invalidateCache } from './utils/extract'
@@ -75,12 +77,26 @@ interface FileRouterPluginOption {
    * }
    */
   inheritance?: InheritanceConfig
+  /**
+   * SSG (Static Site Generation) configuration.
+   *
+   * When provided, selected routes will be prerendered to static HTML during `vite build`.
+   *
+   * @example
+   * ```ts
+   * ssg: {
+   *   routes: ['/', '/about'],
+   *   crawl: true,
+   * }
+   * ```
+   */
+  ssg?: SSGConfig
 }
 
 export const DEFAULT_IGNORES = ['**/components/**', '**/node_modules/**', '**/dist/**']
 
 const queryMap = new Map<string, string[]>([
-  ['meta', ['info', 'preload', 'matchFilters', 'inherit']],
+  ['meta', ['info', 'preload', 'matchFilters', 'inherit', 'prerender']],
   ['comp', ['component']],
   ['load', ['loadingComponent']],
   ['error', ['errorComponent']],
@@ -98,6 +114,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     infoDts,
     verboseLog,
     inheritance = { enabled: true },
+    ssg,
   } = options
 
   const inheritanceConfig = {
@@ -108,6 +125,8 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
 
   const routesFilter = `${normalizePath(baseDir).replace(/\/$/, '')}/src/pages/**/[\\w[-]*.{jsx,tsx,mdx}`
   let root: string
+  let isSSR = false
+  let isBuild = false
   async function generate(): Promise<string> {
     const start = Date.now()
     const files = await glob(routesFilter, {
@@ -116,20 +135,25 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
       absolute: true,
     })
 
-    const module = await generateDefinition(files, verboseLog, inheritanceConfig)
-    const count = generateRouteTypes(files, normalizePath(`${root}/${output}`), infoDts)
-    logger.info(`Scanned ${count} routes in ${Date.now() - start} ms`, {
-      timestamp: true,
-    })
+    const ssgClient = !!ssg && !isSSR && isBuild
+    const module = await generateDefinition(files, verboseLog, inheritanceConfig, isSSR, ssgClient)
+    if (!isSSR) {
+      const count = generateRouteTypes(files, normalizePath(`${root}/${output}`), infoDts)
+      logger.info(`Scanned ${count} routes in ${Date.now() - start} ms`, {
+        timestamp: true,
+      })
+    }
     return module
   }
 
-  return [
+  const plugins: Plugin[] = [
     helper,
     {
       name: ID_EXTRACT,
       configResolved(config) {
         root = config.root
+        isSSR = !!config.build.ssr
+        isBuild = config.command === 'build'
       },
       resolveId: {
         filter: {
@@ -187,4 +211,24 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
       },
     },
   ]
+
+  if (ssg && !(globalThis as any).__SOLID_FILE_ROUTER_SSG__) {
+    plugins.push(
+      ssgPlugin(
+        ssg,
+        {
+          output,
+          baseDir,
+          ignore,
+          reloadOnChange,
+          infoDts,
+          verboseLog,
+          inheritance,
+        },
+        fileRouter,
+      ),
+    )
+  }
+
+  return plugins
 }

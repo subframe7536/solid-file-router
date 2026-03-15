@@ -4,11 +4,14 @@ import solid from 'vite-plugin-solid'
 
 export default defineConfig({
   plugins: [
-    solid(),
+    solid({ ssr: true }),
     fileRouter({
       infoDts: {
         name: 'string',
         role: 'string',
+      },
+      ssg: {
+        routes: ['*'],
       },
       // verboseLog: true,
     }),

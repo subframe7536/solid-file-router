@@ -1,7 +1,10 @@
 {
   "semi": false,
   "singleQuote": true,
-  "experimentalSortImports": {
+  "ignorePatterns": [
+    "playground/src/routes.d.ts"
+  ],
+  "sortImports": {
     "groups": [
       ["side_effect"],
       ["builtin"],

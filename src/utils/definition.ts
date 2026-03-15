@@ -203,105 +203,136 @@ export async function generateRegularRoutes(
     inheritLoading: true,
     inheritError: true,
   },
+  ssr = false,
+  ssgClient = false,
 ): Promise<[imports: string[], routs: BaseRoute[]]> {
-  const imports = [`import __comp from '${VID_HELPER}'`]
+  const imports: string[] = ssr ? [] : [`import __comp from '${VID_HELPER}'`]
   const layouts: LayoutInfo[] = []
 
   const appPath = files.find((key) => key.endsWith('_app.tsx') || key.endsWith('_app.jsx'))
   if (appPath) {
     imports.push(`import __app_comp from '${appPath}?comp'`)
-    imports.push(`import __app_load from '${appPath}?load'`)
-    imports.push(`import __app_error from '${appPath}?error'`)
-    layouts.push({
-      path: appPath,
-      loadImportName: '__app_load.loadingComponent',
-      errorImportName: '__app_error.errorComponent',
-    })
+    if (!ssr) {
+      imports.push(`import __app_load from '${appPath}?load'`)
+      imports.push(`import __app_error from '${appPath}?error'`)
+      layouts.push({
+        path: appPath,
+        loadImportName: '__app_load.loadingComponent',
+        errorImportName: '__app_error.errorComponent',
+      })
+    }
   } else {
     logger.warn('No `_app.jsx` or `_app.tsx` found, fallback to parent component', {
       timestamp: true,
     })
-    imports.push(
-      `import { memo } from "solid-js/web";`,
-      `const __app_comp = (props) => memo(() => props.children)`,
-    )
+    if (ssr) {
+      imports.push(`const __app_comp = { component: (props) => props.children }`)
+    } else {
+      imports.push(
+        `import { memo } from "solid-js/web";`,
+        `const __app_comp = (props) => memo(() => props.children)`,
+      )
+    }
   }
 
-  // Find and import layout defaults
-  const layoutFiles = files.filter((key) => REG_LAYOUT.test(key))
-  layoutFiles.forEach((layoutPath, index) => {
-    imports.push(`import __layout${index}_load from '${layoutPath}?load'`)
-    imports.push(`import __layout${index}_error from '${layoutPath}?error'`)
-    layouts.push({
-      path: layoutPath,
-      loadImportName: `__layout${index}_load.loadingComponent`,
-      errorImportName: `__layout${index}_error.errorComponent`,
+  if (!ssr) {
+    // Find and import layout defaults (client only)
+    const layoutFiles = files.filter((key) => REG_LAYOUT.test(key))
+    layoutFiles.forEach((layoutPath, index) => {
+      imports.push(`import __layout${index}_load from '${layoutPath}?load'`)
+      imports.push(`import __layout${index}_error from '${layoutPath}?error'`)
+      layouts.push({
+        path: layoutPath,
+        loadImportName: `__layout${index}_load.loadingComponent`,
+        errorImportName: `__layout${index}_error.errorComponent`,
+      })
     })
-  })
+  }
 
   const filtered = files.filter(
     (key) => (!key.includes('/_') || REG_LAYOUT.test(key)) && !key.endsWith('404.tsx'),
   )
 
   // Build route-to-layout mapping
-  const routeLayoutMap = buildRouteLayoutMap(filtered, layouts)
+  const routeLayoutMap = ssr ? {} : buildRouteLayoutMap(filtered, layouts)
 
   const regularRoutes: BaseRoute[] = []
   for (let i = 0; i < filtered.length; i++) {
     const file = filtered[i]
 
     imports.push(`import __route${i}_meta from '${file}?meta'`)
-    imports.push(`import __route${i}_load from '${file}?load'`)
-    imports.push(`import __route${i}_error from '${file}?error'`)
 
-    // Resolve inherited components
-    const ancestorLayouts = routeLayoutMap[file] || []
-    const { loadExpr, errorExpr } = resolveInheritedComponents(
-      i,
-      ancestorLayouts,
-      inheritanceConfig,
-    )
+    let route: BaseRoute
 
-    // Log component inheritance chain in development mode
-    if (verbose && ancestorLayouts.length > 0) {
-      const routeId = file.replace(...patterns.route)
-      const loadChain: string[] = ['route']
-      const errorChain: string[] = ['route']
+    if (ssr) {
+      imports.push(`import __route${i}_comp from '${file}?comp'`)
+      route = {
+        id: file.replace(...patterns.route),
+        component: wrapInline(`__route${i}_comp.component`),
+        __: wrapInline(`...__route${i}_meta`),
+      }
+    } else {
+      imports.push(`import __route${i}_load from '${file}?load'`)
+      imports.push(`import __route${i}_error from '${file}?error'`)
 
-      for (const layout of ancestorLayouts) {
-        const layoutName = layout.path.includes('_app.')
-          ? '_app'
-          : layout.path.replace(...patterns.route).replace('/_layout', '')
+      // Resolve inherited components
+      const ancestorLayouts = routeLayoutMap[file] || []
+      const { loadExpr, errorExpr } = resolveInheritedComponents(
+        i,
+        ancestorLayouts,
+        inheritanceConfig,
+      )
 
-        if (layout.loadImportName) {
-          loadChain.push(layoutName)
+      // Log component inheritance chain in development mode
+      if (verbose && ancestorLayouts.length > 0) {
+        const routeId = file.replace(...patterns.route)
+        const loadChain: string[] = ['route']
+        const errorChain: string[] = ['route']
+
+        for (const layout of ancestorLayouts) {
+          const layoutName = layout.path.includes('_app.')
+            ? '_app'
+            : layout.path.replace(...patterns.route).replace('/_layout', '')
+
+          if (layout.loadImportName) {
+            loadChain.push(layoutName)
+          }
+          if (layout.errorImportName) {
+            errorChain.push(layoutName)
+          }
         }
-        if (layout.errorImportName) {
-          errorChain.push(layoutName)
+
+        logger.info(`Route "${routeId}" component inheritance:`, {
+          timestamp: true,
+        })
+        if (loadChain.length > 1) {
+          logger.info(`  loadingComponent: ${loadChain.join(' -> ')}`, {
+            timestamp: false,
+          })
+        }
+        if (errorChain.length > 1) {
+          logger.info(`  errorComponent: ${errorChain.join(' -> ')}`, {
+            timestamp: false,
+          })
         }
       }
 
-      logger.info(`Route "${routeId}" component inheritance:`, {
-        timestamp: true,
-      })
-      if (loadChain.length > 1) {
-        logger.info(`  loadingComponent: ${loadChain.join(' -> ')}`, {
-          timestamp: false,
-        })
+      if (ssgClient) {
+        imports.push(`import __route${i}_comp from '${file}?comp'`)
+        route = {
+          id: file.replace(...patterns.route),
+          component: wrapInline(`__comp(__route${i}_comp.component, ${loadExpr}, ${errorExpr})`),
+          __: wrapInline(`...__route${i}_meta`),
+        }
+      } else {
+        route = {
+          id: file.replace(...patterns.route),
+          component: wrapInline(
+            `__comp(lazy(() => import('${file}?comp').then(mod => ({ default: mod.default.component }))), ${loadExpr}, ${errorExpr})`,
+          ),
+          __: wrapInline(`...__route${i}_meta`),
+        }
       }
-      if (errorChain.length > 1) {
-        logger.info(`  errorComponent: ${errorChain.join(' -> ')}`, {
-          timestamp: false,
-        })
-      }
-    }
-
-    const route: BaseRoute = {
-      id: file.replace(...patterns.route),
-      component: wrapInline(
-        `__comp(lazy(() => import('${file}?comp').then(mod => ({ default: mod.default.component }))), ${loadExpr}, ${errorExpr})`,
-      ),
-      __: wrapInline(`...__route${i}_meta`),
     }
 
     const segments = file
@@ -358,21 +389,24 @@ export async function generateRegularRoutes(
 
   const notFoundPath = files.find((key) => key.endsWith('404.tsx') || key.endsWith('404.jsx'))
   if (notFoundPath) {
-    imports.push(
-      `import __404_comp from '${notFoundPath}?comp'`,
-      `import __404_meta from '${notFoundPath}?meta'`,
-    )
+    imports.push(`import __404_comp from '${notFoundPath}?comp'`)
+    if (!ssr) {
+      imports.push(`import __404_meta from '${notFoundPath}?meta'`)
+    }
   } else {
     logger.warn('No `404.jsx` or `404.tsx` found, fallback to `() => null`', {
       timestamp: true,
     })
-    imports.push(`const __404_comp = () => null`, `const __404_meta = undefined`)
+    imports.push(`const __404_comp = ${ssr ? '{ component: () => null }' : '() => null'}`)
+    if (!ssr) {
+      imports.push(`const __404_meta = undefined`)
+    }
   }
   regularRoutes.push({
     id: '*',
     path: '*',
-    component: wrapInline('__404_comp'),
-    __: wrapInline(`...__404_meta`),
+    component: wrapInline(ssr ? '__404_comp.component' : '__404_comp'),
+    ...(ssr ? {} : { __: wrapInline(`...__404_meta`) }),
   })
 
   return [imports, regularRoutes]
@@ -413,18 +447,38 @@ export async function generateDefinition(
     inheritLoading: true,
     inheritError: true,
   },
+  ssr = false,
+  ssgClient = false,
 ): Promise<string> {
-  const [imports, regularRoutes] = await generateRegularRoutes(files, verbose, inheritanceConfig)
-  const result = `import { createComponent, lazy } from 'solid-js'
-import { Router } from '@solidjs/router'
+  const [imports, regularRoutes] = await generateRegularRoutes(
+    files,
+    verbose,
+    inheritanceConfig,
+    ssr,
+    ssgClient,
+  )
+  const routerImport = ssr
+    ? `import { StaticRouter } from '@solidjs/router'`
+    : `import { Router } from '@solidjs/router'`
+  const routerComponent = ssr ? 'StaticRouter' : 'Router'
+  const routerUrlProp = ssr ? 'url' : 'base'
+  const solidImports =
+    ssr || ssgClient
+      ? `import { createComponent } from 'solid-js'`
+      : `import { createComponent, lazy } from 'solid-js'`
+  const rootExpr = ssr
+    ? `export const Root = __app_comp.component`
+    : `export const Root = __comp(__app_comp.component, __app_load.loadingComponent, __app_error.errorComponent)`
+  const result = `${solidImports}
+${routerImport}
 ${imports.join('\n')}
 
-export const Root = __comp(__app_comp.component, __app_load.loadingComponent, __app_error.errorComponent)
+${rootExpr}
 
 export const fileRoutes = ${unwrapInline(regularRoutes)}
-export const FileRouter = (props) => createComponent(Router, {
-  get base() {
-    return props.base
+export const FileRouter = (props) => createComponent(${routerComponent}, {
+  get ${routerUrlProp}() {
+    return props.${routerUrlProp}
   },
   get root() {
     return Root

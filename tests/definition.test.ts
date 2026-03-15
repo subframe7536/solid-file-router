@@ -125,6 +125,16 @@ describe('generateDefinition', () => {
     `)
   })
 
+  it('generates SSG client routes (static imports with __comp)', async () => {
+    const module = await generateDefinition(files, false, undefined, false, true)
+    expect(module).toContain("import { createComponent } from 'solid-js'")
+    expect(module).not.toContain('lazy')
+    expect(module).toContain("import { Router } from '@solidjs/router'")
+    expect(module).toContain('__comp(__route')
+    expect(module).toContain('import __route0_comp from')
+    expect(module).toContain('get base()')
+  })
+
   it('generate fallback if no _app.tsx present', async () => {
     expect(await generateDefinition([] as any)).toMatchInlineSnapshot(`
       "import { createComponent, lazy } from 'solid-js'

@@ -13,7 +13,7 @@ const chunk = result[0].chunks[0]
 
 export default defineConfig({
   entry: { plugin: './src/index.ts', index: './src/runtime.ts' },
-  deps: { neverBundle: ['@babel/core', 'vite'] },
+  deps: { neverBundle: ['@babel/core', 'vite', 'vite-plugin-solid'] },
   define:
     chunk.type === 'chunk'
       ? {

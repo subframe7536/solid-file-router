@@ -71,6 +71,25 @@ export default createRoute({
                 </div>
               </A>
             </li>
+
+            <li style={{ 'margin-bottom': '15px' }}>
+              <A
+                href="/dynamic"
+                style={{
+                  display: 'block',
+                  padding: '15px',
+                  background: '#e8f5e9',
+                  'border-radius': '8px',
+                  'text-decoration': 'none',
+                  color: '#2e7d32',
+                }}
+              >
+                <strong>SSG vs SPA Demo</strong>
+                <div style={{ 'font-size': '14px', color: '#666', 'margin-top': '5px' }}>
+                  See how the same layout renders differently in SSG and SPA modes
+                </div>
+              </A>
+            </li>
           </ul>
         </nav>
       </div>

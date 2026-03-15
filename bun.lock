@@ -16,10 +16,10 @@
         "oxlint": "^1.55.0",
         "solid-js": "^1.9.11",
         "tinyglobby": "*",
-        "tsdown": "^0.21.2",
+        "tsdown": "^0.21.3",
         "typescript": "^5.9.3",
         "vite": "^8.0.0",
-        "vite-plugin-solid": "^2.11.10",
+        "vite-plugin-solid": "^2.11.11",
         "vitest": "^4.1.0",
       },
       "peerDependencies": {
@@ -754,7 +754,7 @@
 
     "ts-api-utils": ["ts-api-utils@2.1.0", "https://registry.npmmirror.com/ts-api-utils/-/ts-api-utils-2.1.0.tgz", { "peerDependencies": { "typescript": "5.9.3" } }, "sha512-CUgTZL1irw8u29bzrOD/nH85jqyc74D6SshFgujOIA7osm2Rz7dYH77agkx7H4FBNxDq7Cjf+IjaX/8zwFW+ZQ=="],
 
-    "tsdown": ["tsdown@0.21.2", "https://registry.npmmirror.com/tsdown/-/tsdown-0.21.2.tgz", { "dependencies": { "ansis": "^4.2.0", "cac": "^7.0.0", "defu": "^6.1.4", "empathic": "^2.0.0", "hookable": "^6.0.1", "import-without-cache": "^0.2.5", "obug": "^2.1.1", "picomatch": "^4.0.3", "rolldown": "1.0.0-rc.9", "rolldown-plugin-dts": "^0.22.5", "semver": "^7.7.4", "tinyexec": "^1.0.2", "tinyglobby": "^0.2.15", "tree-kill": "^1.2.2", "unconfig-core": "^7.5.0", "unrun": "^0.2.32" }, "peerDependencies": { "@arethetypeswrong/core": "^0.18.1", "@tsdown/css": "0.21.2", "@tsdown/exe": "0.21.2", "@vitejs/devtools": "*", "publint": "^0.3.0", "typescript": "^5.0.0", "unplugin-unused": "^0.5.0" }, "optionalPeers": ["@arethetypeswrong/core", "@tsdown/css", "@tsdown/exe", "@vitejs/devtools", "publint", "typescript", "unplugin-unused"], "bin": { "tsdown": "dist/run.mjs" } }, "sha512-pP8eAcd1XAWjl5gjosuJs0BAuVoheUe3V8VDHx31QK7YOgXjcCMsBSyFWO3CMh/CSUkjRUzR96JtGH3WJFTExQ=="],
+    "tsdown": ["tsdown@0.21.3", "https://registry.npmmirror.com/tsdown/-/tsdown-0.21.3.tgz", { "dependencies": { "ansis": "^4.2.0", "cac": "^7.0.0", "defu": "^6.1.4", "empathic": "^2.0.0", "hookable": "^6.0.1", "import-without-cache": "^0.2.5", "obug": "^2.1.1", "picomatch": "^4.0.3", "rolldown": "1.0.0-rc.9", "rolldown-plugin-dts": "^0.22.5", "semver": "^7.7.4", "tinyexec": "^1.0.4", "tinyglobby": "^0.2.15", "tree-kill": "^1.2.2", "unconfig-core": "^7.5.0", "unrun": "^0.2.32" }, "peerDependencies": { "@arethetypeswrong/core": "^0.18.1", "@tsdown/css": "0.21.3", "@tsdown/exe": "0.21.3", "@vitejs/devtools": "*", "publint": "^0.3.0", "typescript": "^5.0.0", "unplugin-unused": "^0.5.0" }, "optionalPeers": ["@arethetypeswrong/core", "@tsdown/css", "@tsdown/exe", "@vitejs/devtools", "publint", "typescript", "unplugin-unused"], "bin": { "tsdown": "dist/run.mjs" } }, "sha512-oKKeMC8+IgNsB+81hvF5VBsqhqL/nr0g9vse+ujbK40vv0i3ReFI6gUts7hQH7J53ylQNjMgf2Vu6n0+P/uddA=="],
 
     "tslib": ["tslib@2.8.1", "https://registry.npmmirror.com/tslib/-/tslib-2.8.1.tgz", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
@@ -774,7 +774,7 @@
 
     "vite": ["vite@8.0.0", "https://registry.npmmirror.com/vite/-/vite-8.0.0.tgz", { "dependencies": { "@oxc-project/runtime": "0.115.0", "lightningcss": "^1.32.0", "picomatch": "^4.0.3", "postcss": "^8.5.8", "rolldown": "1.0.0-rc.9", "tinyglobby": "^0.2.15" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^20.19.0 || >=22.12.0", "@vitejs/devtools": "^0.0.0-alpha.31", "esbuild": "^0.27.0", "jiti": ">=1.21.0", "less": "^4.0.0", "sass": "^1.70.0", "sass-embedded": "^1.70.0", "stylus": ">=0.54.8", "sugarss": "^5.0.0", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "@vitejs/devtools", "esbuild", "jiti", "less", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-fPGaRNj9Zytaf8LEiBhY7Z6ijnFKdzU/+mL8EFBaKr7Vw1/FWcTBAMW0wLPJAGMPX38ZPVCVgLceWiEqeoqL2Q=="],
 
-    "vite-plugin-solid": ["vite-plugin-solid@2.11.10", "https://registry.npmmirror.com/vite-plugin-solid/-/vite-plugin-solid-2.11.10.tgz", { "dependencies": { "@babel/core": "7.28.5", "@types/babel__core": "7.20.5", "babel-preset-solid": "1.9.10", "merge-anything": "5.1.7", "solid-refresh": "0.6.3", "vitefu": "1.1.1" }, "peerDependencies": { "solid-js": "1.9.10", "vite": "npm:rolldown-vite@7.2.5" } }, "sha512-Yr1dQybmtDtDAHkii6hXuc1oVH9CPcS/Zb2jN/P36qqcrkNnVPsMTzQ06jyzFPFjj3U1IYKMVt/9ZqcwGCEbjw=="],
+    "vite-plugin-solid": ["vite-plugin-solid@2.11.11", "https://registry.npmmirror.com/vite-plugin-solid/-/vite-plugin-solid-2.11.11.tgz", { "dependencies": { "@babel/core": "^7.23.3", "@types/babel__core": "^7.20.4", "babel-preset-solid": "^1.8.4", "merge-anything": "^5.1.7", "solid-refresh": "^0.6.3", "vitefu": "^1.0.4" }, "peerDependencies": { "@testing-library/jest-dom": "^5.16.6 || ^5.17.0 || ^6.*", "solid-js": "^1.7.2", "vite": "^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0" }, "optionalPeers": ["@testing-library/jest-dom"] }, "sha512-YMZCXsLw9kyuvQFEdwLP27fuTQJLmjNoHy90AOJnbRuJ6DwShUxKFo38gdFrWn9v11hnGicKCZEaeI/TFs6JKw=="],
 
     "vitefu": ["vitefu@1.1.1", "https://registry.npmmirror.com/vitefu/-/vitefu-1.1.1.tgz", { "optionalDependencies": { "vite": "rolldown-vite@7.2.5" } }, "sha512-B/Fegf3i8zh0yFbpzZ21amWzHmuNlLlmJT6n7bu5e+pCHUKQIfXSYokrqOBGEMMe9UG2sostKQF9mml/vYaWJQ=="],
 
@@ -821,6 +821,8 @@
     "tsdown/cac": ["cac@7.0.0", "https://registry.npmmirror.com/cac/-/cac-7.0.0.tgz", {}, "sha512-tixWYgm5ZoOD+3g6UTea91eow5z6AAHaho3g0V9CNSNb45gM8SmflpAc+GRd1InC4AqN/07Unrgp56Y94N9hJQ=="],
 
     "tsdown/semver": ["semver@7.7.4", "https://registry.npmmirror.com/semver/-/semver-7.7.4.tgz", { "bin": { "semver": "bin/semver.js" } }, "sha512-vFKC2IEtQnVhpT78h1Yp8wzwrf8CM+MzKMHGJZfBtzhZNycRFnXsHk6E5TxIkkMsgNS7mdX3AGB7x2QM2di4lA=="],
+
+    "tsdown/tinyexec": ["tinyexec@1.0.4", "https://registry.npmmirror.com/tinyexec/-/tinyexec-1.0.4.tgz", {}, "sha512-u9r3uZC0bdpGOXtlxUIdwf9pkmvhqJdrVCH9fapQtgy/OeTTMZ1nqH7agtvEfmGui6e1XxjcdrlxvxJvc3sMqw=="],
 
     "vitefu/vite": ["vite@7.3.0", "https://registry.npmmirror.com/vite/-/vite-7.3.0.tgz", { "dependencies": { "esbuild": "^0.27.0", "fdir": "^6.5.0", "picomatch": "^4.0.3", "postcss": "^8.5.6", "rollup": "^4.43.0", "tinyglobby": "^0.2.15" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^20.19.0 || >=22.12.0", "jiti": ">=1.21.0", "less": "^4.0.0", "lightningcss": "^1.21.0", "sass": "^1.70.0", "sass-embedded": "^1.70.0", "stylus": ">=0.54.8", "sugarss": "^5.0.0", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "jiti", "less", "lightningcss", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-dZwN5L1VlUBewiP6H9s2+B3e3Jg96D0vzN+Ry73sOefebhYr9f94wwkMNN/9ouoU8pV1BqA1d1zGk8928cx0rg=="],
 

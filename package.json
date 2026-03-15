@@ -36,6 +36,8 @@
     "test": "bun --bun vitest",
     "test:run": "bun --bun vitest --run",
     "play": "bun --bun vite serve playground",
+    "play:build": "bun --bun vite build playground",
+    "play:preview": "bun --bun vite preview playground",
     "lint": "bun --bun oxlint",
     "format": "bun --bun oxfmt",
     "typecheck": "bun --bun tsc --noEmit",
@@ -57,10 +59,10 @@
     "oxlint": "^1.55.0",
     "solid-js": "^1.9.11",
     "tinyglobby": "*",
-    "tsdown": "^0.21.2",
+    "tsdown": "^0.21.3",
     "typescript": "^5.9.3",
     "vite": "^8.0.0",
-    "vite-plugin-solid": "^2.11.10",
+    "vite-plugin-solid": "^2.11.11",
     "vitest": "^4.1.0"
   },
   "peerDependencies": {

@@ -173,6 +173,10 @@ export function invalidateCache(id: string): void {
   }
 }
 
+export function clearCache(): void {
+  astPromiseCache.clear()
+}
+
 export async function extract(code: string, id: string, config: ExtractConfig, verbose = false) {
   const babel = await import('@babel/core')
 

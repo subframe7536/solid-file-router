@@ -92,6 +92,16 @@ export type RouteConfig<T = unknown> = Pick<
         loading?: boolean
         error?: boolean
       }
+  /**
+   * Whether to prerender this route during static site generation (SSG).
+   *
+   * - `true`: Prerender this route
+   * - `false`: Explicitly exclude from prerendering
+   * - `{ params: Record<string, string | string[]> }`: Prerender with specific parameter values for dynamic routes
+   *
+   * @default undefined (not prerendered unless specified in plugin config)
+   */
+  prerender?: boolean | { params: Record<string, string | string[]> }
 }
 
 /**
