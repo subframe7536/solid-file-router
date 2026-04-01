@@ -12,6 +12,23 @@ import { collectRoutesFromConfig, collectRoutesFromPrerender, crawlLinks } from 
 import { injectHTML, readTemplate, writeRoute } from './render'
 import type { SSGConfig, SSGRenderResult } from './types'
 
+export function assertAllFulfilled<T = any>(
+  results: Array<PromiseSettledResult<T>>,
+  batch: string[],
+) {
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i]
+    if (r.status !== 'fulfilled') {
+      const url = batch[i]
+      const reason = (r as PromiseRejectedResult).reason
+      const msg = reason instanceof Error ? reason.message : String(reason)
+      const err = new Error(`SSG prerender failed for ${url}: ${msg}`)
+      ;(err as any).cause = reason
+      throw err
+    }
+  }
+}
+
 // oxlint-disable-next-line no-shadow-restricted-names
 declare const globalThis: { __SOLID_FILE_ROUTER_SSG__?: boolean }
 
@@ -158,38 +175,37 @@ export async function render(url) {
             }),
           )
 
-          for (const settled of results) {
-            if (settled.status === 'fulfilled') {
-              const { url, result } = settled.value
-              const html = injectHTML(template, result, mountId)
-              writeRoute(outDir, url, html)
-              rendered++
+          // If any render failed, abort the build by throwing.
+          assertAllFulfilled(results, batch)
 
-              if (crawl) {
-                const newLinks = crawlLinks(result.html, visited)
-                for (const link of newLinks) {
-                  visited.add(link)
-                  queue.push(link)
-                }
+          for (const settled of results as PromiseFulfilledResult<any>[]) {
+            const { url, result } = settled.value
+            const html = injectHTML(template, result, mountId)
+            writeRoute(outDir, url, html)
+            rendered++
+
+            if (crawl) {
+              const newLinks = crawlLinks(result.html, visited)
+              for (const link of newLinks) {
+                visited.add(link)
+                queue.push(link)
               }
-            } else {
-              const url = batch[results.indexOf(settled)]
-              logger.warn(`  SSG: Skipped ${url}: ${settled.reason}`, { timestamp: false })
             }
           }
         }
-
-        logger.info(`SSG: Completed! Generated ${rendered} page(s)`, { timestamp: true })
 
         // 5. Generate 404.html (always, for static file servers)
         try {
           const notFoundResult = await renderFn('/__ssg_not_found__')
           const notFoundHtml = injectHTML(template, notFoundResult, mountId)
           writeFileSync(join(outDir, '404.html'), notFoundHtml)
-          logger.info(`  /404 -> ${join(outDir, '404.html')}`)
+          logger.info(`  /404 -> /404.html`)
+          rendered++
         } catch {
           // No 404 route defined, skip
         }
+
+        logger.info(`SSG: Completed! Generated ${rendered} page(s)`, { timestamp: true })
 
         // 6. Cleanup
         rmSync(tempDir, { recursive: true, force: true })

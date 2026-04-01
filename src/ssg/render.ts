@@ -22,17 +22,12 @@ export function injectHTML(template: string, result: SSGRenderResult, mountId: s
 }
 
 export function writeRoute(outDir: string, routePath: string, html: string): void {
-  let filePath: string
-  if (routePath === '/') {
-    filePath = join(outDir, 'index.html')
-  } else {
-    const clean = routePath.replace(/^\/|\/$/g, '')
-    filePath = join(outDir, clean + '.html')
-  }
+  const path = routePath === '/' ? 'index.html' : routePath.replace(/^\/|\/$/g, '') + '.html'
+  const filePath = join(outDir, path)
 
   mkdirSync(dirname(filePath), { recursive: true })
   writeFileSync(filePath, html)
-  logger.info(`  ${routePath} -> ${filePath}`)
+  logger.info(`  ${routePath} -> /${path}`)
 }
 
 export function readTemplate(outDir: string): string {

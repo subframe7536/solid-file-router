@@ -1,4 +1,5 @@
 import { createRoute } from 'solid-file-router'
+import { onMount } from 'solid-js'
 
 function createInfo(name: string, usr: any) {
   return { name, role: usr.role }
@@ -19,13 +20,10 @@ export default createRoute({
   },
   loadingComponent: (props) => <div>Loading {props.location.hash}</div>,
   component: () => {
-    return (
-      <>
-        {(() => {
-          throw new Error('Test Error')
-        })()}
-        <button>data</button>
-      </>
-    )
+    onMount(() => {
+      throw new Error('Test Error')
+    })
+
+    return <button>data</button>
   },
 })
