@@ -64,7 +64,7 @@ export function ssgPlugin(
       root = resolvedConfig.root
       outDir = join(root, resolvedConfig.build.outDir)
     },
-    async closeBundle() {
+    async writeBundle() {
       if (globalThis.__SOLID_FILE_ROUTER_SSG__) {
         return
       }
