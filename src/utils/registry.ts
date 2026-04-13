@@ -77,7 +77,7 @@ export class RouteRegistry {
     }
     invalidateCache(normalized)
     if (this.options.verboseLog) {
-      logger.info(`Invalidated route cache for ${normalized}`, { timestamp: false })
+      logger.info(`Invalidated route cache for ${normalized}`, { timestamp: true })
     }
   }
 
@@ -116,7 +116,7 @@ export class RouteRegistry {
     const cached = this.definitionCache.get(key)
     if (cached?.version === this.version) {
       if (this.options.verboseLog) {
-        logger.info(`Reused cached virtual:routes module for ${key}`, { timestamp: false })
+        logger.info(`Reused cached virtual:routes module for ${key}`, { timestamp: true })
       }
       return cached.code
     }
@@ -152,7 +152,7 @@ export class RouteRegistry {
     await this.ensureInitialized()
     if (this.routeInfoVersion === this.version) {
       if (this.options.verboseLog) {
-        logger.info(`Reused cached virtual:route-info module`, { timestamp: false })
+        logger.info(`Reused cached virtual:route-info module`, { timestamp: true })
       }
       return this.routeInfoCache
     }
