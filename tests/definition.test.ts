@@ -55,12 +55,27 @@ describe('generateDefinition', () => {
 
   it('generates route info module', () => {
     const module = generateRouteInfoModule(files)
-    expect(module).toContain("import __route0_route from '/root/project/src/pages/index.tsx?route'")
-    expect(module).toContain('export const routeInfo = {')
-    expect(module).toMatch(/'\/': __route\d+_route\.info/)
-    expect(module).toMatch(/'\/next': __route\d+_route\.info/)
-    expect(module).toMatch(/'\/nest\/:id': __route\d+_route\.info/)
-    expect(module).toMatch(/'\/404': __route\d+_route\.info/)
-    expect(module).toContain('export default routeInfo')
+    expect(module).toMatchInlineSnapshot(`
+      "import __route0_route from '/root/project/src/pages/index.tsx?route'
+      import __route1_route from '/root/project/src/pages/next.tsx?route'
+      import __route2_route from '/root/project/src/pages/t.e.s.t.tsx?route'
+      import __route3_route from '/root/project/src/pages/(group)/data.tsx?route'
+      import __route4_route from '/root/project/src/pages/nest/index.tsx?route'
+      import __route5_route from '/root/project/src/pages/nest/[id].tsx?route'
+      import __route6_route from '/root/project/src/pages/404.tsx?route'
+      
+      export const routeInfo = {
+        '/': __route0_route.info,
+        '/next': __route1_route.info,
+        '/t/e/s/t': __route2_route.info,
+        '/data': __route3_route.info,
+        '/nest': __route4_route.info,
+        '/nest/:id': __route5_route.info,
+        '/404': __route6_route.info,
+      }
+      
+      export default routeInfo
+      "
+    `)
   })
 })

@@ -54,6 +54,12 @@ interface RouteLayoutMap {
   [routePath: string]: LayoutInfo[]
 }
 
+interface RouteInfoModuleEntry {
+  importName: string
+  importCode: string
+  path: string
+}
+
 /**
  * Builds a mapping of routes to their ancestor layouts for component inheritance.
  *
@@ -503,15 +509,7 @@ export function generateRouteInfoModule(files: string[]): string {
         path,
       }
     })
-    .filter(
-      (
-        route,
-      ): route is {
-        importName: string
-        importCode: string
-        path: string
-      } => !!route,
-    )
+    .filter((route): route is RouteInfoModuleEntry => !!route)
 
   return `${routes.map((route) => route.importCode).join('\n')}
 
