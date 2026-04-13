@@ -12,6 +12,33 @@ const REG_LAYOUT = /_layout\.(jsx|tsx)$/
 const REG_GROUP = /\([\w-]+\)/
 const REG_INSERT = /^\w|\//
 
+export function getRoutePath(key: string): string | undefined {
+  if (key.includes('/_') && !key.endsWith('/404.tsx') && !key.endsWith('/404.jsx')) {
+    return undefined
+  }
+
+  if (key.includes('/404.')) {
+    return '/404'
+  }
+
+  const path = key
+    .replace(...patterns.route)
+    .replace(...patterns.splat)
+    .replace(...patterns.param)
+    .replace(/\([\w-]+\)\/|\/?_layout/g, '')
+    .replace(/\/?index|\./g, '/')
+    .replace(/(\w)\/$/g, '$1')
+    .split('/')
+    .map((segment) => segment.replace(...patterns.optional))
+    .join('/')
+
+  if (!path) {
+    return undefined
+  }
+
+  return path.length > 1 ? `/${path}` : path
+}
+
 function wrapInline(code: string) {
   return `$###${code}###$`
 }
@@ -50,6 +77,12 @@ interface LayoutInfo {
  */
 interface RouteLayoutMap {
   [routePath: string]: LayoutInfo[]
+}
+
+interface RouteInfoModuleEntry {
+  importName: string
+  importCode: string
+  path: string
 }
 
 /**
@@ -149,11 +182,11 @@ function resolveInheritedComponents(
 ): { loadExpr: string; errorExpr: string } {
   const { enabled = true, inheritError = true, inheritLoading = true } = inheritanceConfig
   // Start with route's own components
-  const routeLoadImport = `__route${routeIndex}_load.loadingComponent`
-  const routeErrorImport = `__route${routeIndex}_error.errorComponent`
+  const routeLoadImport = `__route${routeIndex}_route.loadingComponent`
+  const routeErrorImport = `__route${routeIndex}_route.errorComponent`
 
   // Check route-level inheritance control
-  const routeInheritCheck = `__route${routeIndex}_meta.inherit`
+  const routeInheritCheck = `__route${routeIndex}_route.inherit`
 
   // Build fallback chain from nearest to farthest layout
   let loadExpr = routeLoadImport
@@ -204,7 +237,6 @@ export async function generateRegularRoutes(
     inheritError: true,
   },
   ssr = false,
-  ssgClient = false,
 ): Promise<[imports: string[], routs: BaseRoute[]]> {
   const imports: string[] = ssr ? [] : [`import __comp from '${VID_HELPER}'`]
   const layouts: LayoutInfo[] = []
@@ -213,12 +245,11 @@ export async function generateRegularRoutes(
   if (appPath) {
     imports.push(`import __app_comp from '${appPath}?comp'`)
     if (!ssr) {
-      imports.push(`import __app_load from '${appPath}?load'`)
-      imports.push(`import __app_error from '${appPath}?error'`)
+      imports.push(`import __app_route from '${appPath}?route'`)
       layouts.push({
         path: appPath,
-        loadImportName: '__app_load.loadingComponent',
-        errorImportName: '__app_error.errorComponent',
+        loadImportName: '__app_route.loadingComponent',
+        errorImportName: '__app_route.errorComponent',
       })
     }
   } else {
@@ -230,7 +261,8 @@ export async function generateRegularRoutes(
     } else {
       imports.push(
         `import { memo } from "solid-js/web";`,
-        `const __app_comp = (props) => memo(() => props.children)`,
+        `const __app_comp = { component: (props) => memo(() => props.children) }`,
+        `const __app_route = {}`,
       )
     }
   }
@@ -239,12 +271,11 @@ export async function generateRegularRoutes(
     // Find and import layout defaults (client only)
     const layoutFiles = files.filter((key) => REG_LAYOUT.test(key))
     layoutFiles.forEach((layoutPath, index) => {
-      imports.push(`import __layout${index}_load from '${layoutPath}?load'`)
-      imports.push(`import __layout${index}_error from '${layoutPath}?error'`)
+      imports.push(`import __layout${index}_route from '${layoutPath}?route'`)
       layouts.push({
         path: layoutPath,
-        loadImportName: `__layout${index}_load.loadingComponent`,
-        errorImportName: `__layout${index}_error.errorComponent`,
+        loadImportName: `__layout${index}_route.loadingComponent`,
+        errorImportName: `__layout${index}_route.errorComponent`,
       })
     })
   }
@@ -260,7 +291,7 @@ export async function generateRegularRoutes(
   for (let i = 0; i < filtered.length; i++) {
     const file = filtered[i]
 
-    imports.push(`import __route${i}_meta from '${file}?meta'`)
+    imports.push(`import __route${i}_route from '${file}?route'`)
 
     let route: BaseRoute
 
@@ -269,12 +300,9 @@ export async function generateRegularRoutes(
       route = {
         id: file.replace(...patterns.route),
         component: wrapInline(`__route${i}_comp.component`),
-        __: wrapInline(`...__route${i}_meta`),
+        __: wrapInline(`...__route${i}_route`),
       }
     } else {
-      imports.push(`import __route${i}_load from '${file}?load'`)
-      imports.push(`import __route${i}_error from '${file}?error'`)
-
       // Resolve inherited components
       const ancestorLayouts = routeLayoutMap[file] || []
       const { loadExpr, errorExpr } = resolveInheritedComponents(
@@ -317,21 +345,12 @@ export async function generateRegularRoutes(
         }
       }
 
-      if (ssgClient) {
-        imports.push(`import __route${i}_comp from '${file}?comp'`)
-        route = {
-          id: file.replace(...patterns.route),
-          component: wrapInline(`__comp(__route${i}_comp.component, ${loadExpr}, ${errorExpr})`),
-          __: wrapInline(`...__route${i}_meta`),
-        }
-      } else {
-        route = {
-          id: file.replace(...patterns.route),
-          component: wrapInline(
-            `__comp(lazy(() => import('${file}?comp').then(mod => ({ default: mod.default.component }))), ${loadExpr}, ${errorExpr})`,
-          ),
-          __: wrapInline(`...__route${i}_meta`),
-        }
+      route = {
+        id: file.replace(...patterns.route),
+        component: wrapInline(
+          `__comp(lazy(() => import('${file}?comp').then(mod => ({ default: mod.default.component }))), ${loadExpr}, ${errorExpr})`,
+        ),
+        __: wrapInline(`...__route${i}_route`),
       }
     }
 
@@ -391,7 +410,7 @@ export async function generateRegularRoutes(
   if (notFoundPath) {
     imports.push(`import __404_comp from '${notFoundPath}?comp'`)
     if (!ssr) {
-      imports.push(`import __404_meta from '${notFoundPath}?meta'`)
+      imports.push(`import __404_route from '${notFoundPath}?route'`)
     }
   } else {
     logger.warn('No `404.jsx` or `404.tsx` found, fallback to `() => null`', {
@@ -399,14 +418,14 @@ export async function generateRegularRoutes(
     })
     imports.push(`const __404_comp = ${ssr ? '{ component: () => null }' : '() => null'}`)
     if (!ssr) {
-      imports.push(`const __404_meta = undefined`)
+      imports.push(`const __404_route = undefined`)
     }
   }
   regularRoutes.push({
     id: '*',
     path: '*',
     component: wrapInline(ssr ? '__404_comp.component' : '__404_comp'),
-    ...(ssr ? {} : { __: wrapInline(`...__404_meta`) }),
+    ...(ssr ? {} : { __: wrapInline(`...__404_route`) }),
   })
 
   return [imports, regularRoutes]
@@ -448,27 +467,24 @@ export async function generateDefinition(
     inheritError: true,
   },
   ssr = false,
-  ssgClient = false,
 ): Promise<string> {
   const [imports, regularRoutes] = await generateRegularRoutes(
     files,
     verbose,
     inheritanceConfig,
     ssr,
-    ssgClient,
   )
   const routerImport = ssr
     ? `import { StaticRouter } from '@solidjs/router'`
     : `import { Router } from '@solidjs/router'`
   const routerComponent = ssr ? 'StaticRouter' : 'Router'
   const routerUrlProp = ssr ? 'url' : 'base'
-  const solidImports =
-    ssr || ssgClient
-      ? `import { createComponent } from 'solid-js'`
-      : `import { createComponent, lazy } from 'solid-js'`
+  const solidImports = ssr
+    ? `import { createComponent } from 'solid-js'`
+    : `import { createComponent, lazy } from 'solid-js'`
   const rootExpr = ssr
     ? `export const Root = __app_comp.component`
-    : `export const Root = __comp(__app_comp.component, __app_load.loadingComponent, __app_error.errorComponent)`
+    : `export const Root = __comp(__app_comp.component, __app_route.loadingComponent, __app_route.errorComponent)`
   const result = `${solidImports}
 ${routerImport}
 ${imports.join('\n')}
@@ -489,4 +505,30 @@ export const FileRouter = (props) => createComponent(${routerComponent}, {
 })
 `
   return result
+}
+
+export function generateRouteInfoModule(files: string[]): string {
+  const routes = files
+    .filter((file) => !file.includes('/_'))
+    .map((file, index) => {
+      const path = getRoutePath(file)
+      if (!path) {
+        return undefined
+      }
+      return {
+        importName: `__route${index}_route`,
+        importCode: `import __route${index}_route from '${file}?route'`,
+        path,
+      }
+    })
+    .filter((route): route is RouteInfoModuleEntry => !!route)
+
+  return `${routes.map((route) => route.importCode).join('\n')}
+
+export const routeInfo = {
+${routes.map((route) => `  '${route.path}': ${route.importName}.info,`).join('\n')}
+}
+
+export default routeInfo
+`
 }

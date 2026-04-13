@@ -1,15 +1,18 @@
-import { glob } from 'tinyglobby'
-import { normalizePath } from 'vite'
 import type { Plugin } from 'vite'
 
-import { ID_EXTRACT, logger, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
+import {
+  ID_EXTRACT,
+  VID_EXTRACT,
+  VID_EXTRACT_RESOLVED,
+  VID_ROUTE_INFO,
+  VID_ROUTE_INFO_RESOLVED,
+} from './const'
 import { helper } from './helper'
 import { ssgPlugin } from './ssg'
 import type { SSGConfig } from './ssg/types'
 import type { InheritanceConfig } from './utils/definition'
-import { generateDefinition } from './utils/definition'
-import { extract, invalidateCache } from './utils/extract'
-import { generateRouteTypes } from './utils/route-type'
+import { extract } from './utils/extract'
+import { RouteRegistry } from './utils/registry'
 import type { InfoTypeDefinition } from './utils/route-type'
 
 interface FileRouterPluginOption {
@@ -97,10 +100,23 @@ export const DEFAULT_IGNORES = ['**/components/**', '**/node_modules/**', '**/di
 
 const queryMap = new Map<string, string[]>([
   ['meta', ['info', 'preload', 'matchFilters', 'inherit', 'prerender']],
+  [
+    'route',
+    [
+      'info',
+      'preload',
+      'matchFilters',
+      'inherit',
+      'prerender',
+      'loadingComponent',
+      'errorComponent',
+    ],
+  ],
   ['comp', ['component']],
   ['load', ['loadingComponent']],
   ['error', ['errorComponent']],
 ])
+const REG_ROUTE_QUERY = /\?(meta|route|comp|load|error)$/
 
 /**
  * Vite plugin for page generation
@@ -123,83 +139,88 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     inheritError: inheritance.inheritError ?? true,
   }
 
-  const routesFilter = `${normalizePath(baseDir).replace(/\/$/, '')}/src/pages/**/[\\w[-]*.{jsx,tsx,mdx}`
-  let root: string
   let isSSR = false
-  let isBuild = false
-  async function generate(): Promise<string> {
-    const start = Date.now()
-    const files = await glob(routesFilter, {
-      cwd: root,
-      ignore,
-      absolute: true,
-    })
-
-    const ssgClient = !!ssg && !isSSR && isBuild
-    const module = await generateDefinition(files, verboseLog, inheritanceConfig, isSSR, ssgClient)
-    if (!isSSR) {
-      const count = generateRouteTypes(files, normalizePath(`${root}/${output}`), infoDts)
-      logger.info(`Scanned ${count} routes in ${Date.now() - start} ms`, {
-        timestamp: true,
-      })
-    }
-    return module
-  }
+  const registry = new RouteRegistry({
+    baseDir,
+    ignore,
+    output,
+    infoDts,
+    verboseLog,
+    inheritance: inheritanceConfig,
+  })
 
   const plugins: Plugin[] = [
     helper,
     {
       name: ID_EXTRACT,
       configResolved(config) {
-        root = config.root
         isSSR = !!config.build.ssr
-        isBuild = config.command === 'build'
+        registry.setRoot(config.root)
       },
       resolveId: {
         filter: {
-          id: new RegExp(VID_EXTRACT),
+          id: new RegExp(`${VID_EXTRACT}|${VID_ROUTE_INFO}`),
         },
-        handler() {
+        handler(id) {
+          if (id === VID_ROUTE_INFO) {
+            return VID_ROUTE_INFO_RESOLVED
+          }
           return VID_EXTRACT_RESOLVED
         },
       },
       configureServer(server) {
-        const handleFileEvent = (gen: boolean) => async (file: string) => {
-          if (file.includes('/src/pages/')) {
-            if (gen) {
-              await generate()
-            } else {
-              invalidateCache(file)
-            }
-
-            // Invalidate the virtual module for add/unlink events
-            const module = server.moduleGraph.getModuleById(VID_EXTRACT_RESOLVED)
-            if (module) {
-              server.moduleGraph.invalidateModule(module)
-              server.ws.send({
-                type: 'full-reload',
-              })
-            }
+        const invalidateVirtualModule = (id: string) => {
+          const module = server.moduleGraph.getModuleById(id)
+          if (module) {
+            server.moduleGraph.invalidateModule(module)
           }
         }
 
-        server.watcher.on('add', handleFileEvent(true)).on('unlink', handleFileEvent(true))
+        const handleStructureEvent =
+          (handler: (file: string) => Promise<boolean>) => async (file: string) => {
+            if (!(await handler(file))) {
+              return
+            }
 
-        if (reloadOnChange) {
-          server.watcher.on('change', handleFileEvent(false))
-        }
+            invalidateVirtualModule(VID_EXTRACT_RESOLVED)
+            invalidateVirtualModule(VID_ROUTE_INFO_RESOLVED)
+            server.ws.send({
+              type: 'full-reload',
+            })
+          }
+
+        server.watcher
+          .on(
+            'add',
+            handleStructureEvent((file) => registry.addFile(file)),
+          )
+          .on(
+            'unlink',
+            handleStructureEvent((file) => registry.removeFile(file)),
+          )
+          .on('change', (file) => {
+            if (!reloadOnChange && !registry.isRouteFile(file)) {
+              return
+            }
+            registry.markChanged(file)
+          })
       },
       load: {
         filter: {
-          id: new RegExp(VID_EXTRACT_RESOLVED),
+          id: new RegExp(`${VID_EXTRACT_RESOLVED}|${VID_ROUTE_INFO_RESOLVED}`),
         },
-        handler() {
-          return generate()
+        handler(id) {
+          if (id === VID_ROUTE_INFO_RESOLVED) {
+            return registry.getRouteInfoModule()
+          }
+          return registry.getDefinition({
+            ssr: isSSR,
+          })
         },
       },
       transform: {
         filter: {
-          id: [/\?meta$/, /\?comp$/, /\?load$/, /\?error$/],
+          id: REG_ROUTE_QUERY,
         },
         async handler(code, fullId) {
           const [id, query] = fullId.split('?')

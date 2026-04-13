@@ -401,6 +401,20 @@ export function NavigationButton() {
 
 ---
 
+### `readRouteInfo(matches)`
+
+Helper to read the current route info from router matches without coupling your code to the generated route tree.
+
+```tsx
+import { useCurrentMatches } from '@solidjs/router'
+import { readRouteInfo } from 'solid-file-router'
+
+const matches = useCurrentMatches()
+const currentInfo = () => readRouteInfo(matches())
+```
+
+---
+
 ### `virtual:routes`
 
 The virtual module that exposes the generated routing configuration.
@@ -451,6 +465,17 @@ In `tsconfig.json`
     "types": ["solid-file-router/client"]
   }
 }
+```
+
+### `virtual:route-info`
+
+The virtual module that exposes a flat route-path to `info` map.
+
+```ts
+import routeInfo from 'virtual:route-info'
+
+console.log(routeInfo['/'])
+console.log(routeInfo['/blog/:id'])
 ```
 
 ## Configuration
