@@ -1,8 +1,6 @@
 import { createComponent } from 'solid-js'
 import { generateHydrationScript, renderToStringAsync } from 'solid-js/web'
-import { FileRouter, fileRoutes } from 'virtual:routes'
-
-export { fileRoutes }
+import { FileRouter } from 'virtual:routes'
 
 export async function render(url: string) {
   let renderError: unknown

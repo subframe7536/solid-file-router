@@ -1,6 +1,7 @@
 import { glob } from 'tinyglobby'
 import { normalizePath } from 'vite'
 
+import { logger } from '../const'
 import { generateDefinition, generateRouteInfoModule } from './definition'
 import type { InfoTypeDefinition } from './route-type'
 import { generateRouteTypes } from './route-type'
@@ -51,6 +52,7 @@ export class RouteRegistry {
       return
     }
 
+    const start = Date.now()
     const files = await glob(this.routesFilter, {
       cwd: this.root,
       ignore: this.options.ignore,
@@ -60,6 +62,12 @@ export class RouteRegistry {
     this.files = new Set(files.map((file) => normalizePath(file)))
     this.initialized = true
     this.version++
+    if (this.options.verboseLog) {
+      logger.info(
+        `Initialized route registry with ${this.files.size} files in ${Date.now() - start} ms`,
+        { timestamp: true },
+      )
+    }
   }
 
   markChanged(file: string) {
@@ -68,6 +76,9 @@ export class RouteRegistry {
       return
     }
     invalidateCache(normalized)
+    if (this.options.verboseLog) {
+      logger.info(`Invalidated route cache for ${normalized}`, { timestamp: false })
+    }
   }
 
   async addFile(file: string): Promise<boolean> {
@@ -78,6 +89,9 @@ export class RouteRegistry {
     }
     this.files.add(normalized)
     this.bumpVersion()
+    if (this.options.verboseLog) {
+      logger.info(`Added route file ${normalized}`, { timestamp: true })
+    }
     return true
   }
 
@@ -89,6 +103,9 @@ export class RouteRegistry {
     }
     invalidateCache(normalized)
     this.bumpVersion()
+    if (this.options.verboseLog) {
+      logger.info(`Removed route file ${normalized}`, { timestamp: true })
+    }
     return true
   }
 
@@ -98,10 +115,14 @@ export class RouteRegistry {
     const key = `${mode.ssr}:${mode.ssgClient}`
     const cached = this.definitionCache.get(key)
     if (cached?.version === this.version) {
+      if (this.options.verboseLog) {
+        logger.info(`Reused cached virtual:routes module for ${key}`, { timestamp: false })
+      }
       return cached.code
     }
 
     const files = this.getFiles()
+    const start = Date.now()
     const code = await generateDefinition(
       files,
       this.options.verboseLog,
@@ -113,20 +134,37 @@ export class RouteRegistry {
     if (!mode.ssr && this.typesVersion !== this.version) {
       generateRouteTypes(files, normalizePath(`${this.root}/${this.options.output}`), this.options.infoDts)
       this.typesVersion = this.version
+      if (this.options.verboseLog) {
+        logger.info(`Generated route types for ${files.length} routes`, { timestamp: false })
+      }
     }
 
     this.definitionCache.set(key, { version: this.version, code })
+    if (this.options.verboseLog) {
+      logger.info(`Generated virtual:routes module for ${files.length} routes in ${Date.now() - start} ms`, {
+        timestamp: true,
+      })
+    }
     return code
   }
 
   async getRouteInfoModule() {
     await this.ensureInitialized()
     if (this.routeInfoVersion === this.version) {
+      if (this.options.verboseLog) {
+        logger.info(`Reused cached virtual:route-info module`, { timestamp: false })
+      }
       return this.routeInfoCache
     }
 
+    const start = Date.now()
     this.routeInfoCache = generateRouteInfoModule(this.getFiles())
     this.routeInfoVersion = this.version
+    if (this.options.verboseLog) {
+      logger.info(`Generated virtual:route-info module in ${Date.now() - start} ms`, {
+        timestamp: true,
+      })
+    }
     return this.routeInfoCache
   }
 

@@ -6,6 +6,7 @@ import {
   collectRoutesFromPrerender,
   crawlLinks,
 } from '../src/ssg/collect'
+import { createRouteManifestEntryCode, getSSRBuildOutputPath } from '../src/ssg'
 import { injectHTML } from '../src/ssg/render'
 
 const mockFileRoutes = [
@@ -224,5 +225,16 @@ describe('injectHTML', () => {
     const result = { html: '<p>Content</p>', head: '' }
     const output = injectHTML(customTemplate, result, '#root')
     expect(output).toContain('<div id="root"><p>Content</p></div>')
+  })
+})
+
+describe('ssg helpers', () => {
+  it('derives the SSR output path from the entry file name', () => {
+    expect(getSSRBuildOutputPath('/tmp/out', 'src/entry-server.tsx')).toBe('/tmp/out/entry-server.js')
+    expect(getSSRBuildOutputPath('/tmp/out', 'src/custom.server.ts')).toBe('/tmp/out/custom.server.js')
+  })
+
+  it('generates a dedicated route manifest entry', () => {
+    expect(createRouteManifestEntryCode()).toBe("export { fileRoutes } from 'virtual:routes'\n")
   })
 })

@@ -108,6 +108,7 @@ const queryMap = new Map<string, string[]>([
   ['load', ['loadingComponent']],
   ['error', ['errorComponent']],
 ])
+const REG_ROUTE_QUERY = /\?(meta|route|comp|load|error)$/
 
 /**
  * Vite plugin for page generation
@@ -207,7 +208,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
       },
       transform: {
         filter: {
-          id: [/\?meta$/, /\?route$/, /\?comp$/, /\?load$/, /\?error$/],
+          id: REG_ROUTE_QUERY,
         },
         async handler(code, fullId) {
           const [id, query] = fullId.split('?')

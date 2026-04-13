@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, parse } from 'node:path'
 
 import { build } from 'vite'
 import type { Plugin, PluginOption } from 'vite'
@@ -11,6 +11,14 @@ import { clearCache } from '../utils/extract'
 import { collectRoutesFromConfig, collectRoutesFromPrerender, crawlLinks } from './collect'
 import { injectHTML, readTemplate, writeRoute } from './render'
 import type { SSGConfig, SSGRenderResult } from './types'
+
+export function getSSRBuildOutputPath(outDir: string, entry: string) {
+  return join(outDir, `${parse(entry).name}.js`)
+}
+
+export function createRouteManifestEntryCode() {
+  return `export { fileRoutes } from 'virtual:routes'\n`
+}
 
 export function assertAllFulfilled<T = any>(
   results: Array<PromiseSettledResult<T>>,
@@ -64,6 +72,11 @@ export function ssgPlugin(
 
       let generatedEntry = false
       let entryPath: string
+      let generatedRouteManifestEntry = false
+      const tempDir = join(outDir, '.ssg-temp')
+      const ssrServerDir = join(tempDir, 'server')
+      const ssrRoutesDir = join(tempDir, 'routes')
+      const routeManifestEntryPath = join(tempDir, 'route-manifest.ts')
 
       try {
         entryPath = join(root, serverEntry)
@@ -72,9 +85,7 @@ export function ssgPlugin(
             entryPath,
             `import { createComponent } from 'solid-js'
 import { generateHydrationScript, renderToStringAsync } from 'solid-js/web'
-import { FileRouter, fileRoutes } from 'virtual:routes'
-
-export { fileRoutes }
+import { FileRouter } from 'virtual:routes'
 
 export async function render(url) {
   const html = await renderToStringAsync(() => createComponent(FileRouter, { url }))
@@ -90,8 +101,10 @@ export async function render(url) {
         }
 
         // 1. SSR build
-        const tempDir = join(outDir, '.ssg-temp')
-        mkdirSync(tempDir, { recursive: true })
+        mkdirSync(ssrServerDir, { recursive: true })
+        mkdirSync(ssrRoutesDir, { recursive: true })
+        writeFileSync(routeManifestEntryPath, createRouteManifestEntryCode())
+        generatedRouteManifestEntry = true
 
         clearCache()
 
@@ -106,21 +119,38 @@ export async function render(url) {
           plugins: ssrPlugins,
           build: {
             ssr: entryPath,
-            outDir: tempDir,
+            outDir: ssrServerDir,
+            minify: false,
+          },
+          logLevel: 'warn',
+        })
+
+        await build({
+          configFile: false,
+          root,
+          plugins: ssrPlugins,
+          build: {
+            ssr: routeManifestEntryPath,
+            outDir: ssrRoutesDir,
             minify: false,
           },
           logLevel: 'warn',
         })
 
         // 2. Import SSR module
-        const ssrModulePath = join(tempDir, 'entry-server.js')
+        const ssrModulePath = getSSRBuildOutputPath(ssrServerDir, serverEntry)
         if (!existsSync(ssrModulePath)) {
           throw new Error(`SSR build output not found at ${ssrModulePath}`)
         }
+        const routeManifestPath = getSSRBuildOutputPath(ssrRoutesDir, routeManifestEntryPath)
+        if (!existsSync(routeManifestPath)) {
+          throw new Error(`Route manifest build output not found at ${routeManifestPath}`)
+        }
 
         const ssrModule = await import(ssrModulePath)
+        const routeManifestModule = await import(routeManifestPath)
         const renderFn = ssrModule.render as (url: string) => Promise<SSGRenderResult>
-        const fileRoutes = ssrModule.fileRoutes as any[]
+        const fileRoutes = routeManifestModule.fileRoutes as any[]
 
         // 3. Collect routes
         const visited = new Set<string>()
@@ -214,7 +244,6 @@ export async function render(url) {
         }
       } catch (error) {
         logger.error(`SSG failed: ${error}`)
-        const tempDir = join(outDir, '.ssg-temp')
         if (existsSync(tempDir)) {
           rmSync(tempDir, { recursive: true, force: true })
         }
@@ -222,6 +251,9 @@ export async function render(url) {
       } finally {
         if (generatedEntry && existsSync(entryPath!)) {
           rmSync(entryPath!, { force: true })
+        }
+        if (generatedRouteManifestEntry && existsSync(routeManifestEntryPath)) {
+          rmSync(routeManifestEntryPath, { force: true })
         }
         globalThis.__SOLID_FILE_ROUTER_SSG__ = false
       }
