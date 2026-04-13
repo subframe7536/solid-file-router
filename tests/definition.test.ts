@@ -56,9 +56,11 @@ describe('generateDefinition', () => {
   it('generates route info module', () => {
     const module = generateRouteInfoModule(files)
     expect(module).toContain("import __route0_route from '/root/project/src/pages/index.tsx?route'")
+    expect(module).toContain('export const routeInfo = {')
     expect(module).toMatch(/'\/': __route\d+_route\.info/)
     expect(module).toMatch(/'\/next': __route\d+_route\.info/)
     expect(module).toMatch(/'\/nest\/:id': __route\d+_route\.info/)
     expect(module).toMatch(/'\/404': __route\d+_route\.info/)
+    expect(module).toContain('export default routeInfo')
   })
 })
