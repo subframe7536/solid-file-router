@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest'
 
+import { createRouteManifestEntryCode, getSSRBuildOutputPath } from '../src/ssg'
 import {
   expandDynamicRoute,
   collectRoutesFromConfig,
   collectRoutesFromPrerender,
   crawlLinks,
 } from '../src/ssg/collect'
-import { createRouteManifestEntryCode, getSSRBuildOutputPath } from '../src/ssg'
 import { injectHTML } from '../src/ssg/render'
 
 const mockFileRoutes = [
@@ -230,8 +230,12 @@ describe('injectHTML', () => {
 
 describe('ssg helpers', () => {
   it('derives the SSR output path from the entry file name', () => {
-    expect(getSSRBuildOutputPath('/tmp/out', 'src/entry-server.tsx')).toBe('/tmp/out/entry-server.js')
-    expect(getSSRBuildOutputPath('/tmp/out', 'src/custom.server.ts')).toBe('/tmp/out/custom.server.js')
+    expect(getSSRBuildOutputPath('/tmp/out', 'src/entry-server.tsx')).toBe(
+      '/tmp/out/entry-server.js',
+    )
+    expect(getSSRBuildOutputPath('/tmp/out', 'src/custom.server.ts')).toBe(
+      '/tmp/out/custom.server.js',
+    )
   })
 
   it('generates a dedicated route manifest entry', () => {

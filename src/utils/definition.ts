@@ -1,7 +1,5 @@
 import { logger, VID_HELPER } from '../const'
 
-import { getRoutePath } from './route-type'
-
 export const patterns = {
   optional: [/^-(:?[\w-]+|\*)/, '$1?'],
   param: [/\[([^\]]+)]/g, ':$1'],
@@ -13,6 +11,33 @@ export const patterns = {
 const REG_LAYOUT = /_layout\.(jsx|tsx)$/
 const REG_GROUP = /\([\w-]+\)/
 const REG_INSERT = /^\w|\//
+
+export function getRoutePath(key: string): string | undefined {
+  if (key.includes('/_') && !key.endsWith('/404.tsx') && !key.endsWith('/404.jsx')) {
+    return undefined
+  }
+
+  if (key.includes('/404.')) {
+    return '/404'
+  }
+
+  const path = key
+    .replace(...patterns.route)
+    .replace(...patterns.splat)
+    .replace(...patterns.param)
+    .replace(/\([\w-]+\)\/|\/?_layout/g, '')
+    .replace(/\/?index|\./g, '/')
+    .replace(/(\w)\/$/g, '$1')
+    .split('/')
+    .map((segment) => segment.replace(...patterns.optional))
+    .join('/')
+
+  if (!path) {
+    return undefined
+  }
+
+  return path.length > 1 ? `/${path}` : path
+}
 
 function wrapInline(code: string) {
   return `$###${code}###$`

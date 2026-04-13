@@ -3,7 +3,9 @@ import type { Component } from 'solid-js'
 
 export interface FileRoutePath {}
 export interface FileRouteInfo {}
-export type FileRouteInfoMap = Partial<Record<keyof FileRoutePath & string, FileRouteInfo | undefined>>
+export type FileRouteInfoMap = Partial<
+  Record<keyof FileRoutePath & string, FileRouteInfo | undefined>
+>
 export interface FileRouteMatch {
   info?: FileRouteInfo
   route?: {

@@ -2,37 +2,10 @@ import { writeFileSync } from 'node:fs'
 
 import { PACKAGE_NAME } from '../const'
 
-import { patterns } from './definition'
+import { getRoutePath } from './definition'
 
 export interface InfoTypeDefinition {
   [key: string]: string | InfoTypeDefinition
-}
-
-export function getRoutePath(key: string): string | undefined {
-  if (key.includes('/_') && !key.endsWith('/404.tsx') && !key.endsWith('/404.jsx')) {
-    return undefined
-  }
-
-  if (key.includes('/404.')) {
-    return '/404'
-  }
-
-  const path = key
-    .replace(...patterns.route)
-    .replace(...patterns.splat)
-    .replace(...patterns.param)
-    .replace(/\([\w-]+\)\/|\/?_layout/g, '')
-    .replace(/\/?index|\./g, '/')
-    .replace(/(\w)\/$/g, '$1')
-    .split('/')
-    .map((segment) => segment.replace(...patterns.optional))
-    .join('/')
-
-  if (!path) {
-    return undefined
-  }
-
-  return path.length > 1 ? `/${path}` : path
 }
 
 export function parseParams(files: string[]) {

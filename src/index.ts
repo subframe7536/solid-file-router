@@ -102,7 +102,15 @@ const queryMap = new Map<string, string[]>([
   ['meta', ['info', 'preload', 'matchFilters', 'inherit', 'prerender']],
   [
     'route',
-    ['info', 'preload', 'matchFilters', 'inherit', 'prerender', 'loadingComponent', 'errorComponent'],
+    [
+      'info',
+      'preload',
+      'matchFilters',
+      'inherit',
+      'prerender',
+      'loadingComponent',
+      'errorComponent',
+    ],
   ],
   ['comp', ['component']],
   ['load', ['loadingComponent']],
@@ -132,7 +140,6 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
   }
 
   let isSSR = false
-  let isBuild = false
   const registry = new RouteRegistry({
     baseDir,
     ignore,
@@ -148,7 +155,6 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
       name: ID_EXTRACT,
       configResolved(config) {
         isSSR = !!config.build.ssr
-        isBuild = config.command === 'build'
         registry.setRoot(config.root)
       },
       resolveId: {
@@ -170,21 +176,28 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
           }
         }
 
-        const handleStructureEvent = (handler: (file: string) => Promise<boolean>) => async (file: string) => {
-          if (!(await handler(file))) {
-            return
+        const handleStructureEvent =
+          (handler: (file: string) => Promise<boolean>) => async (file: string) => {
+            if (!(await handler(file))) {
+              return
+            }
+
+            invalidateVirtualModule(VID_EXTRACT_RESOLVED)
+            invalidateVirtualModule(VID_ROUTE_INFO_RESOLVED)
+            server.ws.send({
+              type: 'full-reload',
+            })
           }
 
-          invalidateVirtualModule(VID_EXTRACT_RESOLVED)
-          invalidateVirtualModule(VID_ROUTE_INFO_RESOLVED)
-          server.ws.send({
-            type: 'full-reload',
-          })
-        }
-
         server.watcher
-          .on('add', handleStructureEvent((file) => registry.addFile(file)))
-          .on('unlink', handleStructureEvent((file) => registry.removeFile(file)))
+          .on(
+            'add',
+            handleStructureEvent((file) => registry.addFile(file)),
+          )
+          .on(
+            'unlink',
+            handleStructureEvent((file) => registry.removeFile(file)),
+          )
           .on('change', (file) => {
             if (!reloadOnChange && !registry.isRouteFile(file)) {
               return

@@ -19,7 +19,9 @@ describe('generateDefinition', () => {
   it('generates fileRoutes and imports', async () => {
     const module = await generateDefinition(files)
     expect(module).toContain("import __app_route from '/root/project/src/pages/_app.tsx?route'")
-    expect(module).toContain("import __layout0_route from '/root/project/src/pages/(group)/_layout.tsx?route'")
+    expect(module).toContain(
+      "import __layout0_route from '/root/project/src/pages/(group)/_layout.tsx?route'",
+    )
     expect(module).toContain("import __route0_route from '/root/project/src/pages/index.tsx?route'")
     expect(module).toContain(
       'export const Root = __comp(__app_comp.component, __app_route.loadingComponent, __app_route.errorComponent)',
@@ -27,9 +29,7 @@ describe('generateDefinition', () => {
     expect(module).toContain(
       "__comp(lazy(() => import('/root/project/src/pages/index.tsx?comp').then(mod => ({ default: mod.default.component }))), __route0_route.loadingComponent || ((__route0_route.inherit === false || __route0_route.inherit?.loading === false) ? undefined : (__app_route.loadingComponent)), __route0_route.errorComponent || ((__route0_route.inherit === false || __route0_route.inherit?.error === false) ? undefined : (__app_route.errorComponent)))",
     )
-    expect(module).toContain(
-      "...__route4_route",
-    )
+    expect(module).toContain('...__route4_route')
     expect(module).toContain("import __404_route from '/root/project/src/pages/404.tsx?route'")
   })
 
@@ -45,7 +45,9 @@ describe('generateDefinition', () => {
 
   it('generate fallback if no _app.tsx present', async () => {
     const module = await generateDefinition([] as any)
-    expect(module).toContain(`const __app_comp = { component: (props) => memo(() => props.children) }`)
+    expect(module).toContain(
+      `const __app_comp = { component: (props) => memo(() => props.children) }`,
+    )
     expect(module).toContain(`const __app_route = {}`)
     expect(module).toContain(`const __404_route = undefined`)
     expect(module).toContain(

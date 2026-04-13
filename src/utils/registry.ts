@@ -2,11 +2,12 @@ import { glob } from 'tinyglobby'
 import { normalizePath } from 'vite'
 
 import { logger } from '../const'
+
 import { generateDefinition, generateRouteInfoModule } from './definition'
+import type { InheritanceConfig } from './definition'
+import { invalidateCache } from './extract'
 import type { InfoTypeDefinition } from './route-type'
 import { generateRouteTypes } from './route-type'
-import { invalidateCache } from './extract'
-import type { InheritanceConfig } from './definition'
 
 interface RouteRegistryOption {
   baseDir: string
@@ -124,13 +125,19 @@ export class RouteRegistry {
     )
 
     if (!mode.ssr && this.typesVersion !== this.version) {
-      generateRouteTypes(files, normalizePath(`${this.root}/${this.options.output}`), this.options.infoDts)
+      generateRouteTypes(
+        files,
+        normalizePath(`${this.root}/${this.options.output}`),
+        this.options.infoDts,
+      )
       this.typesVersion = this.version
       this.logVerbose(`generated route types (${files.length} routes)`, false)
     }
 
     this.definitionCache.set(key, { version: this.version, code })
-    this.logVerbose(`generated virtual:routes module (${files.length} routes, ${Date.now() - start} ms)`)
+    this.logVerbose(
+      `generated virtual:routes module (${files.length} routes, ${Date.now() - start} ms)`,
+    )
     return code
   }
 
