@@ -1,19 +1,18 @@
-import { createComponent } from 'solid-js'
 import { hydrate, render } from 'solid-js/web'
 import type { JSX } from 'solid-js'
 
-type MountableComponent = (props: Record<string, never>) => JSX.Element
+type RootComponent = () => JSX.Element
 
-export function mountApp(component: MountableComponent, elementId = 'app') {
+export function mountApp(component: RootComponent, elementId = 'app') {
   const element = document.getElementById(elementId)
   if (!element) {
     throw new Error(`Mount element with id "${elementId}" not found`)
   }
 
-  const app = () => createComponent(component, {})
-  if (element.hasChildNodes()) {
-    return hydrate(app, element)
+  const hasHydrationMarker = !!element.querySelector('[data-hk]')
+  if (hasHydrationMarker) {
+    return hydrate(component, element)
   }
 
-  return render(app, element)
+  return render(component, element)
 }
