@@ -357,10 +357,10 @@ src/pages/
 
 ### Benefits
 
-✅ **Less Boilerplate** - Define defaults once, use everywhere  
-✅ **Consistent UX** - All routes in a section share the same loading/error experience  
-✅ **Full Control** - Override at any level when you need custom behavior  
-✅ **Type Safe** - Full TypeScript support with proper type inference  
+✅ **Less Boilerplate** - Define defaults once, use everywhere
+✅ **Consistent UX** - All routes in a section share the same loading/error experience
+✅ **Full Control** - Override at any level when you need custom behavior
+✅ **Type Safe** - Full TypeScript support with proper type inference
 ✅ **Zero Runtime Cost** - Inheritance resolved at build time
 
 ---
@@ -467,16 +467,42 @@ In `tsconfig.json`
 }
 ```
 
-### `virtual:route-info`
-
-The virtual module that exposes a flat route-path to `info` map.
+`routeInfo` is exported from `virtual:routes` as a named export.
 
 ```ts
-import routeInfo from 'virtual:route-info'
+import { routeInfo } from 'virtual:routes'
 
 console.log(routeInfo['/'])
 console.log(routeInfo['/blog/:id'])
 ```
+
+### `virtual:router-entry`
+
+Utility virtual module for client mount and server rendering.
+
+```ts
+import { renderClient } from 'virtual:router-entry'
+import { FileRouter } from 'virtual:routes'
+
+renderClient(() => <FileRouter />)
+```
+
+`renderClient()` uses `hydrate()` automatically when the mount element already contains SSR or SSG markup, and falls back to `render()` for client-only mounts.
+
+```ts
+import { renderServer } from 'virtual:router-entry'
+
+export default function render(url: string) {
+  return renderServer({
+    url,
+    extraHead() {
+      return '<meta name="x-rendered" content="true" />'
+    },
+  })
+}
+```
+
+`renderServer()` always includes `generateHydrationScript()` in `head`. Use `extraHead()` to append additional head content, including output from `@solidjs/meta` such as `getAssets()`.
 
 ## Configuration
 

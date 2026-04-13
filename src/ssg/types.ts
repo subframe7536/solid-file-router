@@ -18,7 +18,9 @@ export interface SSGConfig {
   routes?: (RoutePaths | '*' | (string & {}) | SSGRouteEntry)[]
   /**
    * Path to the server entry file.
-   * Must export `render(url: string): Promise<SSGRenderResult>`
+   * Must default-export `(url: string) => Promise<SSGRenderResult>`
+   *
+   * You can use `renderServer` from `virtual:router-entry` for advanced customization.
    *
    * If not set or the file doesn't exist, a default entry will be generated automatically.
    * @default 'src/entry-server.tsx'

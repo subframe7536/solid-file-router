@@ -136,8 +136,8 @@ src/
 ### Virtual Modules
 
 The plugin uses Vite virtual modules for route injection:
-- `virtual:routes` - resolved to `\0virtual:routes`, exports `FileRouter`, `fileRoutes`, `Root`
-- `virtual:solid-file-router-helper` - component wrapper utility
+- `virtual:routes` - resolved to `\0virtual:routes`, exports `FileRouter`, `fileRoutes`, `Root`, `routeInfo`
+- `virtual:router-entry` - client/server helper exports `renderClient`, `renderServer`
 
 ### AST Extraction
 

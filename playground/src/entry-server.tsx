@@ -1,19 +1,13 @@
-import { createComponent } from 'solid-js'
-import { generateHydrationScript, renderToStringAsync } from 'solid-js/web'
-import { FileRouter } from 'virtual:routes'
+import { renderServer } from 'virtual:router-entry'
 
-export async function render(url: string) {
-  let renderError: unknown
-  const html = await renderToStringAsync(() => {
-    try {
-      return createComponent(FileRouter, { url })
-    } catch (e) {
-      renderError = e
-      return '' as unknown as ReturnType<typeof FileRouter>
-    }
+export default async function render(url: string) {
+  return renderServer({
+    url,
+    onRenderError(error) {
+      throw error
+    },
+    extraHead(context) {
+      return `<meta name="x-route" content="${context.url}" />`
+    },
   })
-  if (renderError) {
-    throw renderError
-  }
-  return { html, head: generateHydrationScript() }
 }

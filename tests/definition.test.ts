@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { generateDefinition, generateRouteInfoModule } from '../src/utils/definition'
+import { generateDefinition } from '../src/utils/definition'
 
 const root = '/root/project'
 const files = [
@@ -31,6 +31,9 @@ describe('generateDefinition', () => {
     )
     expect(module).toContain('...__route4_route')
     expect(module).toContain("import __404_route from '/root/project/src/pages/404.tsx?route'")
+    expect(module).toContain('export const routeInfo = {')
+    expect(module).toContain('"/": __route0_route.info')
+    expect(module).toContain('"/404": __404_route.info')
   })
 
   it('generates SSG client routes with lazy route components', async () => {
@@ -55,29 +58,12 @@ describe('generateDefinition', () => {
     )
   })
 
-  it('generates route info module', () => {
-    const module = generateRouteInfoModule(files)
-    expect(module).toMatchInlineSnapshot(`
-      "import __route0_route from '/root/project/src/pages/index.tsx?route'
-      import __route1_route from '/root/project/src/pages/next.tsx?route'
-      import __route2_route from '/root/project/src/pages/t.e.s.t.tsx?route'
-      import __route3_route from '/root/project/src/pages/(group)/data.tsx?route'
-      import __route4_route from '/root/project/src/pages/nest/index.tsx?route'
-      import __route5_route from '/root/project/src/pages/nest/[id].tsx?route'
-      import __route6_route from '/root/project/src/pages/404.tsx?route'
-      
-      export const routeInfo = {
-        '/': __route0_route.info,
-        '/next': __route1_route.info,
-        '/t/e/s/t': __route2_route.info,
-        '/data': __route3_route.info,
-        '/nest': __route4_route.info,
-        '/nest/:id': __route5_route.info,
-        '/404': __route6_route.info,
-      }
-      
-      export default routeInfo
-      "
-    `)
+  it('includes routeInfo in generated module', async () => {
+    const module = await generateDefinition(files)
+    expect(module).toContain('"/next": __route1_route.info')
+    expect(module).toContain('"/t/e/s/t": __route2_route.info')
+    expect(module).toContain('"/data": __route4_route.info')
+    expect(module).toContain('"/nest": __route5_route.info')
+    expect(module).toContain('"/nest/:id": __route6_route.info')
   })
 })

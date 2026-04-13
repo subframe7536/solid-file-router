@@ -3,7 +3,7 @@ import { normalizePath } from 'vite'
 
 import { logger } from '../const'
 
-import { generateDefinition, generateRouteInfoModule } from './definition'
+import { generateDefinition } from './definition'
 import type { InheritanceConfig } from './definition'
 import { invalidateCache } from './extract'
 import type { InfoTypeDefinition } from './route-type'
@@ -27,10 +27,8 @@ export class RouteRegistry {
   private initialized = false
   private version = 0
   private typesVersion = -1
-  private routeInfoVersion = -1
   private files = new Set<string>()
   private readonly definitionCache = new Map<string, { version: number; code: string }>()
-  private routeInfoCache = ''
   private readonly routesFilter: string
 
   constructor(private readonly options: RouteRegistryOption) {
@@ -141,20 +139,6 @@ export class RouteRegistry {
     return code
   }
 
-  async getRouteInfoModule() {
-    await this.ensureInitialized()
-    if (this.routeInfoVersion === this.version) {
-      this.logVerbose(`reused virtual:route-info module`)
-      return this.routeInfoCache
-    }
-
-    const start = Date.now()
-    this.routeInfoCache = generateRouteInfoModule(this.getFiles())
-    this.routeInfoVersion = this.version
-    this.logVerbose(`generated virtual:route-info module (${Date.now() - start} ms)`)
-    return this.routeInfoCache
-  }
-
   private getFiles() {
     return [...this.files].sort()
   }
@@ -162,7 +146,6 @@ export class RouteRegistry {
   private bumpVersion() {
     this.version++
     this.typesVersion = -1
-    this.routeInfoVersion = -1
     this.definitionCache.clear()
   }
 

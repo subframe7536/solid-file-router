@@ -1,12 +1,6 @@
 import type { Plugin } from 'vite'
 
-import {
-  ID_EXTRACT,
-  VID_EXTRACT,
-  VID_EXTRACT_RESOLVED,
-  VID_ROUTE_INFO,
-  VID_ROUTE_INFO_RESOLVED,
-} from './const'
+import { ID_EXTRACT, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
 import { helper } from './helper'
 import { ssgPlugin } from './ssg'
 import type { SSGConfig } from './ssg/types'
@@ -99,7 +93,6 @@ interface FileRouterPluginOption {
 export const DEFAULT_IGNORES = ['**/components/**', '**/node_modules/**', '**/dist/**']
 
 const queryMap = new Map<string, string[]>([
-  ['meta', ['info', 'preload', 'matchFilters', 'inherit', 'prerender']],
   [
     'route',
     [
@@ -113,10 +106,8 @@ const queryMap = new Map<string, string[]>([
     ],
   ],
   ['comp', ['component']],
-  ['load', ['loadingComponent']],
-  ['error', ['errorComponent']],
 ])
-const REG_ROUTE_QUERY = /\?(meta|route|comp|load|error)$/
+const REG_ROUTE_QUERY = /\?(route|comp)$/
 
 /**
  * Vite plugin for page generation
@@ -159,12 +150,9 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
       },
       resolveId: {
         filter: {
-          id: new RegExp(`${VID_EXTRACT}|${VID_ROUTE_INFO}`),
+          id: new RegExp(`${VID_EXTRACT}`),
         },
-        handler(id) {
-          if (id === VID_ROUTE_INFO) {
-            return VID_ROUTE_INFO_RESOLVED
-          }
+        handler() {
           return VID_EXTRACT_RESOLVED
         },
       },
@@ -183,7 +171,6 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
             }
 
             invalidateVirtualModule(VID_EXTRACT_RESOLVED)
-            invalidateVirtualModule(VID_ROUTE_INFO_RESOLVED)
             server.ws.send({
               type: 'full-reload',
             })
@@ -207,12 +194,9 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
       },
       load: {
         filter: {
-          id: new RegExp(`${VID_EXTRACT_RESOLVED}|${VID_ROUTE_INFO_RESOLVED}`),
+          id: new RegExp(`${VID_EXTRACT_RESOLVED}`),
         },
-        handler(id) {
-          if (id === VID_ROUTE_INFO_RESOLVED) {
-            return registry.getRouteInfoModule()
-          }
+        handler() {
           return registry.getDefinition({
             ssr: isSSR,
           })

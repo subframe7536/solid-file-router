@@ -12,6 +12,10 @@ const REG_LAYOUT = /_layout\.(jsx|tsx)$/
 const REG_GROUP = /\([\w-]+\)/
 const REG_INSERT = /^\w|\//
 
+function isNotFoundRoute(file: string) {
+  return file.endsWith('404.tsx') || file.endsWith('404.jsx')
+}
+
 export function getRoutePath(key: string): string | undefined {
   if (key.includes('/_') && !key.endsWith('/404.tsx') && !key.endsWith('/404.jsx')) {
     return undefined
@@ -81,7 +85,6 @@ interface RouteLayoutMap {
 
 interface RouteInfoModuleEntry {
   importName: string
-  importCode: string
   path: string
 }
 
@@ -281,7 +284,7 @@ export async function generateRegularRoutes(
   }
 
   const filtered = files.filter(
-    (key) => (!key.includes('/_') || REG_LAYOUT.test(key)) && !key.endsWith('404.tsx'),
+    (key) => (!key.includes('/_') || REG_LAYOUT.test(key)) && !isNotFoundRoute(key),
   )
 
   // Build route-to-layout mapping
@@ -406,20 +409,16 @@ export async function generateRegularRoutes(
     }, {} as BaseRoute)
   }
 
-  const notFoundPath = files.find((key) => key.endsWith('404.tsx') || key.endsWith('404.jsx'))
+  const notFoundPath = files.find((key) => isNotFoundRoute(key))
   if (notFoundPath) {
     imports.push(`import __404_comp from '${notFoundPath}?comp'`)
-    if (!ssr) {
-      imports.push(`import __404_route from '${notFoundPath}?route'`)
-    }
+    imports.push(`import __404_route from '${notFoundPath}?route'`)
   } else {
     logger.warn('No `404.jsx` or `404.tsx` found, fallback to `() => null`', {
       timestamp: true,
     })
     imports.push(`const __404_comp = ${ssr ? '{ component: () => null }' : '() => null'}`)
-    if (!ssr) {
-      imports.push(`const __404_route = undefined`)
-    }
+    imports.push(`const __404_route = undefined`)
   }
   regularRoutes.push({
     id: '*',
@@ -485,6 +484,37 @@ export async function generateDefinition(
   const rootExpr = ssr
     ? `export const Root = __app_comp.component`
     : `export const Root = __comp(__app_comp.component, __app_route.loadingComponent, __app_route.errorComponent)`
+
+  const regularFiles = files.filter(
+    (key) => (!key.includes('/_') || REG_LAYOUT.test(key)) && !isNotFoundRoute(key),
+  )
+  const routeInfoEntries = files
+    .filter((file) => !file.includes('/_'))
+    .map((file) => {
+      const path = getRoutePath(file)
+      if (!path) {
+        return undefined
+      }
+
+      if (isNotFoundRoute(file)) {
+        return { path, importName: '__404_route' }
+      }
+
+      const index = regularFiles.indexOf(file)
+      if (index < 0) {
+        return undefined
+      }
+
+      return { path, importName: `__route${index}_route` }
+    })
+    .filter((entry): entry is RouteInfoModuleEntry => !!entry)
+
+  const routeInfo = unwrapInline(
+    Object.fromEntries(
+      routeInfoEntries.map((entry) => [entry.path, wrapInline(`${entry.importName}.info`)]),
+    ),
+  )
+
   const result = `${solidImports}
 ${routerImport}
 ${imports.join('\n')}
@@ -492,6 +522,7 @@ ${imports.join('\n')}
 ${rootExpr}
 
 export const fileRoutes = ${unwrapInline(regularRoutes)}
+export const routeInfo = ${routeInfo}
 export const FileRouter = (props) => createComponent(${routerComponent}, {
   get ${routerUrlProp}() {
     return props.${routerUrlProp}
@@ -505,30 +536,4 @@ export const FileRouter = (props) => createComponent(${routerComponent}, {
 })
 `
   return result
-}
-
-export function generateRouteInfoModule(files: string[]): string {
-  const routes = files
-    .filter((file) => !file.includes('/_'))
-    .map((file, index) => {
-      const path = getRoutePath(file)
-      if (!path) {
-        return undefined
-      }
-      return {
-        importName: `__route${index}_route`,
-        importCode: `import __route${index}_route from '${file}?route'`,
-        path,
-      }
-    })
-    .filter((route): route is RouteInfoModuleEntry => !!route)
-
-  return `${routes.map((route) => route.importCode).join('\n')}
-
-export const routeInfo = {
-${routes.map((route) => `  '${route.path}': ${route.importName}.info,`).join('\n')}
-}
-
-export default routeInfo
-`
 }

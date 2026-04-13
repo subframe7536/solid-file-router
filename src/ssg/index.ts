@@ -92,13 +92,10 @@ export function ssgPlugin(
         if (!existsSync(entryPath)) {
           writeFileSync(
             entryPath,
-            `import { createComponent } from 'solid-js'
-import { generateHydrationScript, renderToStringAsync } from 'solid-js/web'
-import { FileRouter } from 'virtual:routes'
+            `import { renderServer } from 'virtual:router-entry'
 
-export async function render(url) {
-  const html = await renderToStringAsync(() => createComponent(FileRouter, { url }))
-  return { html, head: generateHydrationScript() }
+export default async function render(url) {
+  return renderServer({ url })
 }
 `,
           )
@@ -164,7 +161,12 @@ export async function render(url) {
 
         const ssrModule = await import(ssrModulePath)
         const routeManifestModule = await import(routeManifestPath)
-        const renderFn = ssrModule.render as (url: string) => Promise<SSGRenderResult>
+        const renderFn = ssrModule.default as
+          | ((url: string) => Promise<SSGRenderResult>)
+          | undefined
+        if (typeof renderFn !== 'function') {
+          throw new Error(`SSG server entry must default export a render function: ${serverEntry}`)
+        }
         const fileRoutes = routeManifestModule.fileRoutes as any[]
 
         // 3. Collect routes
