@@ -212,7 +212,6 @@ export async function generateRegularRoutes(
     inheritError: true,
   },
   ssr = false,
-  ssgClient = false,
 ): Promise<[imports: string[], routs: BaseRoute[]]> {
   const imports: string[] = ssr ? [] : [`import __comp from '${VID_HELPER}'`]
   const layouts: LayoutInfo[] = []
@@ -321,21 +320,12 @@ export async function generateRegularRoutes(
         }
       }
 
-      if (ssgClient) {
-        imports.push(`import __route${i}_comp from '${file}?comp'`)
-        route = {
-          id: file.replace(...patterns.route),
-          component: wrapInline(`__comp(__route${i}_comp.component, ${loadExpr}, ${errorExpr})`),
-          __: wrapInline(`...__route${i}_route`),
-        }
-      } else {
-        route = {
-          id: file.replace(...patterns.route),
-          component: wrapInline(
-            `__comp(lazy(() => import('${file}?comp').then(mod => ({ default: mod.default.component }))), ${loadExpr}, ${errorExpr})`,
-          ),
-          __: wrapInline(`...__route${i}_route`),
-        }
+      route = {
+        id: file.replace(...patterns.route),
+        component: wrapInline(
+          `__comp(lazy(() => import('${file}?comp').then(mod => ({ default: mod.default.component }))), ${loadExpr}, ${errorExpr})`,
+        ),
+        __: wrapInline(`...__route${i}_route`),
       }
     }
 
@@ -452,24 +442,21 @@ export async function generateDefinition(
     inheritError: true,
   },
   ssr = false,
-  ssgClient = false,
 ): Promise<string> {
   const [imports, regularRoutes] = await generateRegularRoutes(
     files,
     verbose,
     inheritanceConfig,
     ssr,
-    ssgClient,
   )
   const routerImport = ssr
     ? `import { StaticRouter } from '@solidjs/router'`
     : `import { Router } from '@solidjs/router'`
   const routerComponent = ssr ? 'StaticRouter' : 'Router'
   const routerUrlProp = ssr ? 'url' : 'base'
-  const solidImports =
-    ssr || ssgClient
-      ? `import { createComponent } from 'solid-js'`
-      : `import { createComponent, lazy } from 'solid-js'`
+  const solidImports = ssr
+    ? `import { createComponent } from 'solid-js'`
+    : `import { createComponent, lazy } from 'solid-js'`
   const rootExpr = ssr
     ? `export const Root = __app_comp.component`
     : `export const Root = __comp(__app_comp.component, __app_route.loadingComponent, __app_route.errorComponent)`

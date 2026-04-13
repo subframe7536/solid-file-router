@@ -12,3 +12,9 @@ declare module 'virtual:route-info' {
   export const routeInfo: FileRouteInfoMap
   export default routeInfo
 }
+
+declare module 'virtual:solid-file-router-client-entry' {
+  import type { JSX } from 'solid-js'
+
+  export function mountRouterApp(component: () => JSX.Element, elementId?: string): unknown
+}

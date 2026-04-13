@@ -1,11 +1,12 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join, parse } from 'node:path'
 
 import { build } from 'vite'
 import type { Plugin, PluginOption } from 'vite'
 import solidPlugin from 'vite-plugin-solid'
 
-import { logger } from '../const'
+import { PACKAGE_NAME, logger } from '../const'
 import { clearCache } from '../utils/extract'
 
 import { collectRoutesFromConfig, collectRoutesFromPrerender, crawlLinks } from './collect'
@@ -39,6 +40,14 @@ export function assertAllFulfilled<T = any>(
 
 // oxlint-disable-next-line no-shadow-restricted-names
 declare const globalThis: { __SOLID_FILE_ROUTER_SSG__?: boolean }
+
+const require = createRequire(import.meta.url)
+
+function getRuntimeAlias() {
+  return {
+    [PACKAGE_NAME]: require.resolve(PACKAGE_NAME),
+  }
+}
 
 export function ssgPlugin(
   config: SSGConfig,
@@ -116,6 +125,9 @@ export async function render(url) {
         await build({
           configFile: false,
           root,
+          resolve: {
+            alias: getRuntimeAlias(),
+          },
           plugins: ssrPlugins,
           build: {
             ssr: entryPath,
@@ -128,6 +140,9 @@ export async function render(url) {
         await build({
           configFile: false,
           root,
+          resolve: {
+            alias: getRuntimeAlias(),
+          },
           plugins: ssrPlugins,
           build: {
             ssr: routeManifestEntryPath,

@@ -1,7 +1,6 @@
 import './style.css'
 
 import { FileRouter } from 'virtual:routes'
+import { mountRouterApp } from 'virtual:solid-file-router-client-entry'
 
-import { mountApp } from './utils/entry'
-
-mountApp(() => <FileRouter />)
+mountRouterApp(() => <FileRouter />)

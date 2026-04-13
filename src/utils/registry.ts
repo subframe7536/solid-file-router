@@ -19,7 +19,6 @@ interface RouteRegistryOption {
 
 interface DefinitionMode {
   ssr: boolean
-  ssgClient: boolean
 }
 
 export class RouteRegistry {
@@ -108,7 +107,7 @@ export class RouteRegistry {
   async getDefinition(mode: DefinitionMode) {
     await this.ensureInitialized()
 
-    const key = `${mode.ssr}:${mode.ssgClient}`
+    const key = `${mode.ssr}`
     const cached = this.definitionCache.get(key)
     if (cached?.version === this.version) {
       this.logVerbose(`reused virtual:routes module (${key})`)
@@ -122,7 +121,6 @@ export class RouteRegistry {
       this.options.verboseLog,
       this.options.inheritance,
       mode.ssr,
-      mode.ssgClient,
     )
 
     if (!mode.ssr && this.typesVersion !== this.version) {

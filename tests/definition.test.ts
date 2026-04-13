@@ -33,13 +33,13 @@ describe('generateDefinition', () => {
     expect(module).toContain("import __404_route from '/root/project/src/pages/404.tsx?route'")
   })
 
-  it('generates SSG client routes (static imports with __comp)', async () => {
-    const module = await generateDefinition(files, false, undefined, false, true)
-    expect(module).toContain("import { createComponent } from 'solid-js'")
-    expect(module).not.toContain('lazy')
+  it('generates SSG client routes with lazy route components', async () => {
+    const module = await generateDefinition(files, false, undefined, false)
+    expect(module).toContain("import { createComponent, lazy } from 'solid-js'")
     expect(module).toContain("import { Router } from '@solidjs/router'")
-    expect(module).toContain('__comp(__route')
-    expect(module).toContain('import __route0_comp from')
+    expect(module).toContain('export const Root = __comp(__app_comp.component')
+    expect(module).toContain("import __route0_route from '/root/project/src/pages/index.tsx?route'")
+    expect(module).toContain("lazy(() => import('/root/project/src/pages/index.tsx?comp')")
     expect(module).toContain('get base()')
   })
 

@@ -202,7 +202,6 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
           }
           return registry.getDefinition({
             ssr: isSSR,
-            ssgClient: !!ssg && !isSSR && isBuild,
           })
         },
       },
