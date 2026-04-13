@@ -3,6 +3,13 @@ import type { Component } from 'solid-js'
 
 export interface FileRoutePath {}
 export interface FileRouteInfo {}
+export type FileRouteInfoMap = Partial<Record<keyof FileRoutePath & string, FileRouteInfo | undefined>>
+export interface FileRouteMatch {
+  info?: FileRouteInfo
+  route?: {
+    info?: FileRouteInfo
+  }
+}
 
 interface ErrorComponentProps {
   error: Error
@@ -114,6 +121,13 @@ export type RouteConfig<T = unknown> = Pick<
  */
 export function createRoute<T>(config: RouteConfig<T>): RouteConfig<T> {
   return config
+}
+
+export function readRouteInfo<T extends FileRouteInfo = FileRouteInfo>(
+  matches: readonly FileRouteMatch[],
+): T | undefined {
+  const route = matches.at(-1)
+  return (route?.route?.info ?? route?.info) as T | undefined
 }
 
 export function generatePath<T extends keyof FileRoutePath & string>(

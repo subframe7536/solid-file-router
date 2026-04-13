@@ -166,6 +166,12 @@ export function extractPlugin({ types: t }: typeof Babel): Babel.PluginObj<State
 
 // Promise-based AST cache
 const astPromiseCache = new Map<string, Promise<Babel.types.File | null>>()
+let babelModulePromise: Promise<typeof Babel> | undefined
+
+async function getBabel() {
+  babelModulePromise ??= import('@babel/core')
+  return await babelModulePromise
+}
 
 export function invalidateCache(id: string): void {
   if (astPromiseCache.has(id)) {
@@ -178,7 +184,7 @@ export function clearCache(): void {
 }
 
 export async function extract(code: string, id: string, config: ExtractConfig, verbose = false) {
-  const babel = await import('@babel/core')
+  const babel = await getBabel()
 
   // Get or create AST parsing promise
   let astPromise = astPromiseCache.get(id)

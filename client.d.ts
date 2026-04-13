@@ -5,3 +5,10 @@ declare module 'virtual:routes' {
   export const fileRoutes: RouteDefinition
   export const FileRouter: (props: { base?: string; url?: string }) => JSXElement
 }
+
+declare module 'virtual:route-info' {
+  import type { FileRouteInfoMap } from 'solid-file-router'
+
+  export const routeInfo: FileRouteInfoMap
+  export default routeInfo
+}

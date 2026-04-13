@@ -8,6 +8,8 @@ export const VID_RESOLVED_PREFIX = `\0`
 export const ID_EXTRACT = `${name}:extract`
 export const VID_EXTRACT = `virtual:routes`
 export const VID_EXTRACT_RESOLVED = VID_RESOLVED_PREFIX + VID_EXTRACT
+export const VID_ROUTE_INFO = `virtual:route-info`
+export const VID_ROUTE_INFO_RESOLVED = VID_RESOLVED_PREFIX + VID_ROUTE_INFO
 
 export const ID_HELPER = `${name}:helper`
 export const VID_HELPER = `virtual:${name}-helper`

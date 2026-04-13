@@ -8,23 +8,39 @@ export interface InfoTypeDefinition {
   [key: string]: string | InfoTypeDefinition
 }
 
+export function getRoutePath(key: string): string | undefined {
+  if (key.includes('/_') && !key.endsWith('/404.tsx') && !key.endsWith('/404.jsx')) {
+    return undefined
+  }
+
+  if (key.includes('/404.')) {
+    return '/404'
+  }
+
+  const path = key
+    .replace(...patterns.route)
+    .replace(...patterns.splat)
+    .replace(...patterns.param)
+    .replace(/\([\w-]+\)\/|\/?_layout/g, '')
+    .replace(/\/?index|\./g, '/')
+    .replace(/(\w)\/$/g, '$1')
+    .split('/')
+    .map((segment) => segment.replace(...patterns.optional))
+    .join('/')
+
+  if (!path) {
+    return undefined
+  }
+
+  return path.length > 1 ? `/${path}` : path
+}
+
 export function parseParams(files: string[]) {
-  const filtered = files.filter((key) => !key.includes('/_') && !key.includes('/404'))
   const params: string[] = []
 
-  for (const key of filtered) {
-    const path = key
-      .replace(...patterns.route)
-      .replace(...patterns.splat)
-      .replace(...patterns.param)
-      .replace(/\([\w-]+\)\/|\/?_layout/g, '')
-      .replace(/\/?index|\./g, '/')
-      .replace(/(\w)\/$/g, '$1')
-      .split('/')
-      .map((segment) => segment.replace(...patterns.optional))
-      .join('/')
-
-    if (path) {
+  for (const key of files) {
+    const path = getRoutePath(key)
+    if (path && path !== '/404') {
       const param = path.split('/').filter((segment) => segment.startsWith(':'))
 
       if (param.length || path.includes('*')) {
@@ -32,10 +48,9 @@ export function parseParams(files: string[]) {
           ? param.map((p) => '$' + p.replace(/:(.+)(\?)?/, '$1$2:') + ' string')
           : []
         const splat = path.includes('*') ? ["'*': string"] : []
-        params.push(`'/${path}': { ${[...dynamic, ...splat].join('; ')} }`)
+        params.push(`'${path}': { ${[...dynamic, ...splat].join('; ')} }`)
       } else {
-        const key = path.length > 1 ? `/${path}` : path
-        params.push(`'${key}': never`)
+        params.push(`'${path}': never`)
       }
     }
   }
