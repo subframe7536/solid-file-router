@@ -128,8 +128,8 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     infoDts,
     verboseLog,
     inheritance = { enabled: true },
-    ssg,
-    clientHydrate = Boolean(ssg),
+    ssg: ssgConfig,
+    clientHydrate = Boolean(ssgConfig),
   } = options
 
   const inheritanceConfig = {
@@ -149,7 +149,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
   })
 
   const plugins: Plugin[] = [
-    createHelperPlugin(clientHydrate),
+    ...createHelperPlugin(clientHydrate),
     {
       name: ID_EXTRACT,
       configResolved(config) {
@@ -158,10 +158,18 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
       },
       resolveId: {
         filter: {
-          id: new RegExp(`${VID_EXTRACT}`),
+          id: new RegExp(VID_EXTRACT),
         },
         handler() {
           return VID_EXTRACT_RESOLVED
+        },
+      },
+      load: {
+        filter: {
+          id: new RegExp(VID_EXTRACT_RESOLVED),
+        },
+        handler() {
+          return registry.getDefinition({ ssr: isSSR })
         },
       },
       configureServer(server) {
@@ -200,16 +208,6 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
             registry.markChanged(file)
           })
       },
-      load: {
-        filter: {
-          id: new RegExp(`${VID_EXTRACT_RESOLVED}`),
-        },
-        handler() {
-          return registry.getDefinition({
-            ssr: isSSR,
-          })
-        },
-      },
       transform: {
         filter: {
           id: REG_ROUTE_QUERY,
@@ -225,10 +223,10 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     },
   ]
 
-  if (ssg && !(globalThis as any).__SOLID_FILE_ROUTER_SSG__) {
+  if (ssgConfig && !(globalThis as any).__SOLID_FILE_ROUTER_SSG__) {
     plugins.push(
       ssgPlugin(
-        ssg,
+        ssgConfig,
         {
           output,
           baseDir,

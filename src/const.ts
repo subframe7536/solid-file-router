@@ -10,6 +10,7 @@ export const VID_EXTRACT = `virtual:routes`
 export const VID_EXTRACT_RESOLVED = VID_RESOLVED_PREFIX + VID_EXTRACT
 
 export const ID_HELPER = `${name}:helper`
+export const ID_ROUTER_ENTRY = `${name}:router-entry`
 export const VID_HELPER = `virtual:${name}-helper`
 export const VID_HELPER_RESOLVED = VID_RESOLVED_PREFIX + VID_HELPER
 export const VID_ROUTER_ENTRY = `virtual:router-entry`

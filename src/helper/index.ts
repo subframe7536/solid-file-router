@@ -2,6 +2,7 @@ import type { Plugin } from 'vite'
 
 import {
   ID_HELPER,
+  ID_ROUTER_ENTRY,
   VID_HELPER,
   VID_HELPER_RESOLVED,
   VID_ROUTER_ENTRY,
@@ -70,30 +71,45 @@ export function renderServer(options = {}) {
 `
 }
 
-export function createHelperPlugin(useHydrate: boolean): Plugin {
-  return {
-    name: ID_HELPER,
-    resolveId: {
-      filter: {
-        id: new RegExp(`${VID_HELPER}|${VID_ROUTER_ENTRY}`),
+export function createHelperPlugin(useHydrate: boolean): Plugin[] {
+  return [
+    {
+      name: ID_HELPER,
+      resolveId: {
+        filter: {
+          id: new RegExp(VID_HELPER),
+        },
+        handler() {
+          return VID_HELPER_RESOLVED
+        },
       },
-      handler(id) {
-        if (id === VID_ROUTER_ENTRY) {
+      load: {
+        filter: {
+          id: new RegExp(VID_HELPER_RESOLVED),
+        },
+        handler() {
+          return __LOADER__
+        },
+      },
+    },
+    {
+      name: ID_ROUTER_ENTRY,
+      resolveId: {
+        filter: {
+          id: new RegExp(VID_ROUTER_ENTRY),
+        },
+        handler() {
           return VID_ROUTER_ENTRY_RESOLVED
-        }
-        return VID_HELPER_RESOLVED
+        },
       },
-    },
-    load: {
-      filter: {
-        id: new RegExp(`${VID_HELPER_RESOLVED}|${VID_ROUTER_ENTRY_RESOLVED}`),
-      },
-      handler(id) {
-        if (id === VID_ROUTER_ENTRY_RESOLVED) {
+      load: {
+        filter: {
+          id: new RegExp(VID_ROUTER_ENTRY_RESOLVED),
+        },
+        handler() {
           return buildRouterEntryHelper(useHydrate)
-        }
-        return __LOADER__
+        },
       },
     },
-  }
+  ]
 }
