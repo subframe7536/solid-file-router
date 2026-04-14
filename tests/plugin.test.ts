@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 
 import { ID_ROUTER_ENTRY } from '../src/const'
-import { fileRouter } from '../src/index'
+import { fileRouter, resolveSolidPluginOptions } from '../src/index'
 
 type PluginWithObjectLoad = {
   load?: {
@@ -27,6 +27,8 @@ describe('fileRouter mode handling', () => {
     expect(code).toContain('import { generateHydrationScript, render, renderToStringAsync }')
     expect(code).toContain('return render(component, element)')
     expect(plugins.some((plugin) => plugin.name.includes('solid'))).toBe(true)
+    expect(resolveSolidPluginOptions('spa')).toBeUndefined()
+    expect(resolveSolidPluginOptions('spa', { ssr: true })).toEqual({ ssr: true })
   })
 
   it('uses hydrate() for SSR mode', () => {
@@ -35,6 +37,9 @@ describe('fileRouter mode handling', () => {
     expect(code).toContain('import { generateHydrationScript, hydrate, renderToStringAsync }')
     expect(code).toContain('return hydrate(component, element)')
     expect(plugins.some((plugin) => plugin.name.includes('solid'))).toBe(true)
+    expect(resolveSolidPluginOptions('ssr')).toEqual({ ssr: true })
+    expect(resolveSolidPluginOptions('ssg')).toEqual({ ssr: true })
+    expect(resolveSolidPluginOptions('ssr', { ssr: false })).toEqual({ ssr: true })
   })
 
   it('defaults to SSG mode when ssg config is provided', () => {

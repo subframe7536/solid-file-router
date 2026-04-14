@@ -144,6 +144,13 @@ function resolveRouterMode(mode: FileRouterMode | undefined, hasSSG: boolean): F
   return hasSSG ? 'ssg' : 'spa'
 }
 
+export function resolveSolidPluginOptions(
+  mode: FileRouterMode,
+  options?: SolidPluginOptions,
+): SolidPluginOptions | undefined {
+  return mode === 'spa' ? options : createSolidSSROptions(options)
+}
+
 interface FileRouterCorePluginOptions {
   output: string
   baseDir: string
@@ -244,8 +251,7 @@ function createRouteRegistryPlugin(options: FileRouterCorePluginOptions) {
 }
 
 function createFileRouterCorePlugins(options: FileRouterCorePluginOptions): Plugin[] {
-  const solidOptions =
-    options.mode === 'spa' ? options.solid : createSolidSSROptions(options.solid)
+  const solidOptions = resolveSolidPluginOptions(options.mode, options.solid)
   return [
     solidPlugin(solidOptions),
     ...createHelperPlugin(options.clientHydrate),
