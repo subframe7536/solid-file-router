@@ -13,6 +13,9 @@ import { collectRoutesFromConfig, collectRoutesFromPrerender, crawlLinks } from 
 import { injectHTML, readTemplate, writeRoute } from './render'
 import type { SSGConfig, SSGRenderResult } from './types'
 
+const DEFAULT_SSG_ROUTE_LABEL = '/404'
+const UNKNOWN_SSG_ROUTE_LABEL = '<unknown>'
+
 export function getSSRBuildOutputPath(outDir: string, entry: string) {
   // Always return posix-style paths for tests and downstream usage
   return join(outDir, `${parse(entry).name}.js`).replace(/\\/g, '/')
@@ -23,7 +26,7 @@ export function createRouteManifestEntryCode() {
 }
 
 export function createSolidSSROptions(options?: SolidPluginOptions): SolidPluginOptions {
-  return { ...options, ssr: true }
+  return options ? { ...options, ssr: true } : { ssr: true }
 }
 
 export function assertAllFulfilled<T = any>(
@@ -166,7 +169,7 @@ export default renderServer()
         // 3. Collect routes
         const visited = new Set<string>()
         const queue: string[] = []
-        let routeLogWidth = '/404'.length
+        let routeLogWidth = DEFAULT_SSG_ROUTE_LABEL.length
         const updateRouteLogWidth = (route: string) => {
           routeLogWidth = Math.max(routeLogWidth, route.length)
         }
@@ -229,11 +232,12 @@ export default renderServer()
           for (const settled of results) {
             if (settled.status === 'rejected') {
               const url = batch[results.indexOf(settled)]
+              const routePath = url || UNKNOWN_SSG_ROUTE_LABEL
               const reason =
                 settled.reason instanceof Error ? settled.reason.message : String(settled.reason)
               failed++
-              failedRoutes.push(url!)
-              logger.error(`  ✗ ${formatRouteLogLabel(url || '<unknown>')} → Failed: ${reason}`, {
+              failedRoutes.push(routePath)
+              logger.error(`  ✗ ${formatRouteLogLabel(routePath)} → Failed: ${reason}`, {
                 timestamp: false,
               })
               continue
@@ -266,7 +270,7 @@ export default renderServer()
           const notFoundResult = await renderFn('/__ssg_not_found__')
           const notFoundHtml = injectHTML(template, notFoundResult, mountId)
           writeFileSync(join(outDir, '404.html'), notFoundHtml)
-          logger.info(`  ✓ ${formatRouteLogLabel('/404')} → 404.html`, {
+          logger.info(`  ✓ ${formatRouteLogLabel(DEFAULT_SSG_ROUTE_LABEL)} → 404.html`, {
             timestamp: false,
           })
           rendered++
