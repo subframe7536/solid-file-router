@@ -45,9 +45,6 @@ export function assertAllFulfilled<T = any>(
   }
 }
 
-// oxlint-disable-next-line no-shadow-restricted-names
-declare const globalThis: { __SOLID_FILE_ROUTER_SSG__?: boolean }
-
 const require = createRequire(import.meta.url)
 
 function getRuntimeAlias() {
@@ -56,10 +53,13 @@ function getRuntimeAlias() {
   }
 }
 
+interface SSGPluginOption {
+  createSSRPlugins: () => PluginOption[]
+}
+
 export function ssgPlugin(
   config: SSGConfig,
-  fileRouterOptions: Record<string, any>,
-  createFileRouter: (options: Record<string, any>) => Plugin[],
+  options: SSGPluginOption,
 ): Plugin {
   const {
     routes: configRoutes = [],
@@ -81,11 +81,6 @@ export function ssgPlugin(
       outDir = join(root, resolvedConfig.build.outDir)
     },
     async writeBundle() {
-      if (globalThis.__SOLID_FILE_ROUTER_SSG__) {
-        return
-      }
-      globalThis.__SOLID_FILE_ROUTER_SSG__ = true
-
       let generatedEntry = false
       let entryPath: string
       let generatedRouteManifestEntry = false
@@ -119,15 +114,7 @@ export default renderServer()
 
         clearCache()
 
-        const ssrPlugins: PluginOption[] = [
-          solidPlugin(createSolidSSROptions(fileRouterOptions.solid)),
-          ...createFileRouter({
-            ...fileRouterOptions,
-            mode: 'ssr',
-            ssg: undefined,
-            clientHydrate: true,
-          }),
-        ]
+        const ssrPlugins = options.createSSRPlugins()
 
         await build({
           configFile: false,
@@ -324,7 +311,6 @@ ${alignKeyValue(summaryLines)}`,
         if (generatedRouteManifestEntry && existsSync(routeManifestEntryPath)) {
           rmSync(routeManifestEntryPath, { force: true })
         }
-        globalThis.__SOLID_FILE_ROUTER_SSG__ = false
       }
     },
   }

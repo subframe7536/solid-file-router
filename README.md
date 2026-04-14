@@ -33,13 +33,14 @@ bun add solid-file-router
 
 ```typescript
 import { defineConfig } from 'vite'
-import solid from 'vite-plugin-solid'
 import { fileRouter } from 'solid-file-router/plugin'
 
 export default defineConfig({
-  plugins: [solid(), fileRouter()],
+  plugins: [fileRouter()],
 })
 ```
+
+`fileRouter()` already includes `vite-plugin-solid` internally.
 
 2. **Create your pages directory** at `src/pages/`
 

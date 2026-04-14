@@ -20,21 +20,21 @@ function getRouterEntryCodeFromPlugins(plugins: ReturnType<typeof fileRouter>) {
   return load.handler() as string
 }
 
-function getRouterEntryCode(options?: Parameters<typeof fileRouter>[0]) {
-  return getRouterEntryCodeFromPlugins(fileRouter(options))
-}
-
 describe('fileRouter mode handling', () => {
   it('uses render() by default for SPA mode', () => {
-    const code = getRouterEntryCode()
+    const plugins = fileRouter()
+    const code = getRouterEntryCodeFromPlugins(plugins)
     expect(code).toContain('import { generateHydrationScript, render, renderToStringAsync }')
     expect(code).toContain('return render(component, element)')
+    expect(plugins.some((plugin) => plugin.name.includes('solid'))).toBe(true)
   })
 
   it('uses hydrate() for SSR mode', () => {
-    const code = getRouterEntryCode({ mode: 'ssr' })
+    const plugins = fileRouter({ mode: 'ssr' })
+    const code = getRouterEntryCodeFromPlugins(plugins)
     expect(code).toContain('import { generateHydrationScript, hydrate, renderToStringAsync }')
     expect(code).toContain('return hydrate(component, element)')
+    expect(plugins.some((plugin) => plugin.name.includes('solid'))).toBe(true)
   })
 
   it('defaults to SSG mode when ssg config is provided', () => {

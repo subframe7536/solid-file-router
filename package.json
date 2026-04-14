@@ -47,6 +47,9 @@
     "release": "bun run build && bun run lint && bun run test:run && bumpp",
     "init": "bun link && bun i && bun run build"
   },
+  "dependencies": {
+    "vite-plugin-solid": "^2.11.12"
+  },
   "devDependencies": {
     "@solidjs/meta": "^0.29.4",
     "@solidjs/router": "^0.16.1",
@@ -62,7 +65,6 @@
     "tsdown": "^0.21.7",
     "typescript": "^5.9.3",
     "vite": "^8.0.8",
-    "vite-plugin-solid": "^2.11.12",
     "vitest": "^4.1.4"
   },
   "peerDependencies": {
