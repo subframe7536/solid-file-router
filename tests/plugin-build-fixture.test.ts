@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -13,12 +14,11 @@ const FIXTURE_ROOT = fileURLToPath(new URL('./fixtures/modes/basic', import.meta
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const DIST_PLUGIN_PATH = fileURLToPath(new URL('../dist/plugin.mjs', import.meta.url))
 const DIST_RUNTIME_PATH = fileURLToPath(new URL('../dist/index.mjs', import.meta.url))
-
 let cachedFileRouter: FileRouterFn | undefined
 
 async function getBuiltFileRouter() {
   if (!existsSync(DIST_PLUGIN_PATH)) {
-    execFileSync('npx', ['tsdown'], { cwd: REPO_ROOT, stdio: 'pipe' })
+    execFileSync('bun', ['--bun', 'run', 'build'], { cwd: REPO_ROOT, stdio: 'pipe' })
   }
   if (!cachedFileRouter) {
     const mod = (await import(DIST_PLUGIN_PATH)) as { fileRouter: FileRouterFn }
@@ -31,7 +31,10 @@ function resolveClientEntryCode(outDir: string) {
   const indexHtmlPath = join(outDir, 'index.html')
   expect(existsSync(indexHtmlPath)).toBe(true)
   const html = readFileSync(indexHtmlPath, 'utf-8')
-  const match = html.match(/<script[^>]*type="module"[^>]*src="([^"]+\.js)"/)
+  // Vite build emits a module script entry tag in index.html.
+  const scriptTag = html.match(/<script[^>]*type=['"]module['"][^>]*>/)?.[0]
+  expect(scriptTag).toBeDefined()
+  const match = scriptTag?.match(/src=['"]([^'"]+\.js)['"]/)
   expect(match?.[1]).toBeDefined()
   const jsPath = join(outDir, match![1]!.replace(/^\//, ''))
   return readFileSync(jsPath, 'utf-8')
@@ -39,7 +42,7 @@ function resolveClientEntryCode(outDir: string) {
 
 async function buildModeFixture(mode: Mode) {
   const fileRouter = await getBuiltFileRouter()
-  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const suffix = randomUUID()
   const outDirName = `.tmp-dist-${mode}-${suffix}`
   const outputPath = `src/routes-${mode}-${suffix}.d.ts`
   await build({
