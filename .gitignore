@@ -1,4 +1,35 @@
-node_modules
-dist
+```
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+*.js.map
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Logs
 *.log
-.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Python (if applicable)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+.env
+```

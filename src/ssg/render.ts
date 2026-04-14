@@ -27,7 +27,6 @@ export function writeRoute(outDir: string, routePath: string, html: string): voi
 
   mkdirSync(dirname(filePath), { recursive: true })
   writeFileSync(filePath, html)
-  logger.info(`  ${routePath} -> /${path}`)
 }
 
 export function readTemplate(outDir: string): string {

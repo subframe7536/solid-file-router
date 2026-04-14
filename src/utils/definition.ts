@@ -1,4 +1,4 @@
-import { logger, VID_HELPER } from '../const'
+import { alignKeyValue, createLogHeader, logger, VID_HELPER } from '../const'
 
 export const patterns = {
   optional: [/^-(:?[\w-]+|\*)/, '$1?'],
@@ -333,19 +333,14 @@ export async function generateRegularRoutes(
           }
         }
 
-        logger.info(`Route "${routeId}" component inheritance:`, {
-          timestamp: true,
-        })
-        if (loadChain.length > 1) {
-          logger.info(`  loadingComponent: ${loadChain.join(' -> ')}`, {
-            timestamp: false,
-          })
-        }
-        if (errorChain.length > 1) {
-          logger.info(`  errorComponent: ${errorChain.join(' -> ')}`, {
-            timestamp: false,
-          })
-        }
+        logger.info(
+          `${createLogHeader(`Route: ${routeId}`)}
+${alignKeyValue([
+  ['loadingComponent', loadChain.join(' → ')],
+  ['errorComponent', errorChain.join(' → ')],
+])}`,
+          { timestamp: true },
+        )
       }
 
       route = {
