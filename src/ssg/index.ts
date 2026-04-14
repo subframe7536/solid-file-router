@@ -249,7 +249,7 @@ export default renderServer()
             rendered++
 
             // Log individual route rendering (TanStack Start style)
-            const outputPath = url === '/' ? 'index.html' : `${url}.html`
+            const outputPath = url === '/' ? '/index.html' : `${url}.html`
             logger.info(`  ✓ ${formatRouteLogLabel(url)} → ${outputPath}`, {
               timestamp: false,
             })
@@ -270,7 +270,7 @@ export default renderServer()
           const notFoundResult = await renderFn('/__ssg_not_found__')
           const notFoundHtml = injectHTML(template, notFoundResult, mountId)
           writeFileSync(join(outDir, '404.html'), notFoundHtml)
-          logger.info(`  ✓ ${formatRouteLogLabel(DEFAULT_SSG_ROUTE_LABEL)} → 404.html`, {
+          logger.info(`  ✓ ${formatRouteLogLabel(DEFAULT_SSG_ROUTE_LABEL)} → /404.html`, {
             timestamp: false,
           })
           rendered++
