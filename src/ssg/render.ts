@@ -1,8 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
-import { logger } from '../const'
-
 import type { SSGRenderResult } from './types'
 
 export function injectHTML(template: string, result: SSGRenderResult, mountId: string): string {

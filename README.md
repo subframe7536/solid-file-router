@@ -492,14 +492,11 @@ renderClient(() => <FileRouter />)
 ```ts
 import { renderServer } from 'virtual:router-entry'
 
-export default function render(url: string) {
-  return renderServer({
-    url,
-    extraHead() {
-      return '<meta name="x-rendered" content="true" />'
-    },
-  })
-}
+export default renderServer({
+  extraHead() {
+    return '<meta name="x-rendered" content="true" />'
+  },
+})
 ```
 
 `renderServer()` always includes `generateHydrationScript()` in `head`. Use `extraHead()` to append additional head content, including output from `@solidjs/meta` such as `getAssets()`.

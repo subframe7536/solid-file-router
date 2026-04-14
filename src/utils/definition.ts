@@ -160,23 +160,6 @@ function buildRouteLayoutMap(routeFiles: string[], layouts: LayoutInfo[]): Route
  * @param routeIndex - Index of the route in the routes array
  * @param layouts - Ordered array of ancestor layouts (nearest first)
  * @param inheritanceConfig - Build-time inheritance configuration from plugin options
- * @returns Object with loadExpr and errorExpr containing the fallback chain expressions
- *
- * @example
- * // With inheritance enabled and layouts [dashboard/_layout, _app]
- * // Returns:
- * // {
- * //   loadExpr: '__route5_load.loadingComponent || ((__route5_meta.inherit === false || __route5_meta.inherit?.loading === false) ? undefined : (__layout0_load.loadingComponent || __app_load.loadingComponent))',
- * //   errorExpr: '__route5_error.errorComponent || ((__route5_meta.inherit === false || __route5_meta.inherit?.error === false) ? undefined : (__layout0_error.errorComponent || __app_error.errorComponent))'
- * // }
- *
- * @example
- * // With inheritance disabled globally
- * // Returns:
- * // {
- * //   loadExpr: '__route5_load.loadingComponent',
- * //   errorExpr: '__route5_error.errorComponent'
- * // }
  */
 function resolveInheritedComponents(
   routeIndex: number,

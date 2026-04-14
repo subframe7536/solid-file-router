@@ -1,7 +1,7 @@
 import type { Plugin } from 'vite'
 
 import { ID_EXTRACT, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
-import { helper } from './helper'
+import { createHelperPlugin } from './helper'
 import { ssgPlugin } from './ssg'
 import type { SSGConfig } from './ssg/types'
 import type { InheritanceConfig } from './utils/definition'
@@ -88,6 +88,13 @@ interface FileRouterPluginOption {
    * ```
    */
   ssg?: SSGConfig
+  /**
+   * Whether the client runtime should use `hydrate()` (true) or `render()` (false).
+   * Determined at build time by the plugin and inlines the choice into the generated
+   * `virtual:router-entry` module.
+   * @default Boolean(options.ssg)
+   */
+  clientHydrate?: boolean
 }
 
 export const DEFAULT_IGNORES = ['**/components/**', '**/node_modules/**', '**/dist/**']
@@ -122,6 +129,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     verboseLog,
     inheritance = { enabled: true },
     ssg,
+    clientHydrate = Boolean(ssg),
   } = options
 
   const inheritanceConfig = {
@@ -141,7 +149,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
   })
 
   const plugins: Plugin[] = [
-    helper,
+    createHelperPlugin(clientHydrate),
     {
       name: ID_EXTRACT,
       configResolved(config) {

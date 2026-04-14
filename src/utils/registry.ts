@@ -169,10 +169,7 @@ ${alignKeyValue([
   }
 }
 
-function alignKeyValue(
-  entries: Array<[string, string | number]>,
-  minKeyWidth = 12,
-): string {
+function alignKeyValue(entries: Array<[string, string | number]>, minKeyWidth = 12): string {
   const maxKeyLen = Math.max(...entries.map(([key]) => key.length), minKeyWidth)
   return entries.map(([key, value]) => `${String(key).padEnd(maxKeyLen)} : ${value}`).join('\n')
 }

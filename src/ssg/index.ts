@@ -14,7 +14,8 @@ import { injectHTML, readTemplate, writeRoute } from './render'
 import type { SSGConfig, SSGRenderResult } from './types'
 
 export function getSSRBuildOutputPath(outDir: string, entry: string) {
-  return join(outDir, `${parse(entry).name}.js`)
+  // Always return posix-style paths for tests and downstream usage
+  return join(outDir, `${parse(entry).name}.js`).replace(/\\/g, '/')
 }
 
 export function createRouteManifestEntryCode() {
@@ -94,9 +95,7 @@ export function ssgPlugin(
             entryPath,
             `import { renderServer } from 'virtual:router-entry'
 
-export default async function render(url) {
-  return renderServer({ url })
-}
+export default renderServer()
 `,
           )
           generatedEntry = true
@@ -230,7 +229,8 @@ export default async function render(url) {
           for (const settled of results) {
             if (settled.status === 'rejected') {
               const url = batch[results.indexOf(settled)]
-              const reason = settled.reason instanceof Error ? settled.reason.message : String(settled.reason)
+              const reason =
+                settled.reason instanceof Error ? settled.reason.message : String(settled.reason)
               failed++
               failedRoutes.push(url!)
               logger.error(`  ✗ ${url?.padEnd(45)} → Failed: ${reason}`, {
@@ -274,17 +274,17 @@ export default async function render(url) {
         }
 
         const totalDuration = Date.now() - renderStart
-        
+
         // Build completion summary
         let summaryLines: [string, any][] = [
           ['Pages generated', rendered],
           ['Total time', formatDuration(totalDuration)],
         ]
-        
+
         if (rendered > 0) {
           summaryLines.push(['Avg per page', formatDuration(totalDuration / rendered)])
         }
-        
+
         if (failed > 0) {
           summaryLines.unshift(['Failed', failed])
         }

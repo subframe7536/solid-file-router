@@ -18,7 +18,6 @@ declare module 'virtual:router-entry' {
   }
 
   export interface RenderServerOptions {
-    url: string
     Router?: Component<{ url?: string }>
     renderApp?: (
       app: () => JSX.Element,
@@ -28,7 +27,6 @@ declare module 'virtual:router-entry' {
       url: string
       Router: Component<{ url?: string }>
       html: string
-      hydrationScript: string
     }) => Promise<string | void> | string | void
     onRenderError?: (
       error: unknown,
@@ -41,5 +39,7 @@ declare module 'virtual:router-entry' {
   }
 
   export function renderClient(component: () => JSX.Element, elementId?: string): unknown
-  export function renderServer(options: RenderServerOptions): Promise<RenderServerResult>
+  export function renderServer(
+    options?: RenderServerOptions,
+  ): (url: string) => Promise<RenderServerResult>
 }

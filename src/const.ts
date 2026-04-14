@@ -41,10 +41,7 @@ export function formatDuration(ms: number): string {
 /**
  * Aligns key-value pairs for clean tabular output
  */
-export function alignKeyValue(
-  entries: Array<[string, string | number]>,
-  minKeyWidth = 12,
-): string {
+export function alignKeyValue(entries: Array<[string, string | number]>, minKeyWidth = 12): string {
   const maxKeyLen = Math.max(...entries.map(([key]) => key.length), minKeyWidth)
   return entries.map(([key, value]) => `${String(key).padEnd(maxKeyLen)} : ${value}`).join('\n')
 }
