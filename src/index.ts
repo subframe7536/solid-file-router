@@ -144,7 +144,7 @@ function resolveRouterMode(mode: FileRouterMode | undefined, hasSSG: boolean): F
   return hasSSG ? 'ssg' : 'spa'
 }
 
-export function resolveSolidPluginOptions(
+function resolveSolidPluginOptions(
   mode: FileRouterMode,
   options?: SolidPluginOptions,
 ): SolidPluginOptions | undefined {
