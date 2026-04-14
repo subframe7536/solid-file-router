@@ -1,10 +1,10 @@
 import type { Plugin } from 'vite'
 import solidPlugin from 'vite-plugin-solid'
+import type { Options as SolidPluginOptions } from 'vite-plugin-solid'
 
 import { ID_EXTRACT, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
 import { createHelperPlugin } from './helper'
 import { createSolidSSROptions, ssgPlugin } from './ssg'
-import type { SolidPluginOptions } from './ssg'
 import type { SSGConfig } from './ssg/types'
 import type { InheritanceConfig } from './utils/definition'
 import { extract } from './utils/extract'
@@ -109,13 +109,6 @@ interface FileRouterPluginOption {
    * stays aligned with the main plugin configuration.
    */
   solid?: SolidPluginOptions
-  /**
-   * Whether the client runtime should use `hydrate()` (true) or `render()` (false).
-   * Determined at build time by the plugin and inlines the choice into the generated
-   * `virtual:router-entry` module.
-   * @default options.mode === 'spa' ? false : true
-   */
-  clientHydrate?: boolean
 }
 
 export const DEFAULT_IGNORES = ['**/components/**', '**/node_modules/**', '**/dist/**']
@@ -142,13 +135,6 @@ function resolveRouterMode(mode: FileRouterMode | undefined, hasSSG: boolean): F
     return mode
   }
   return hasSSG ? 'ssg' : 'spa'
-}
-
-function resolveSolidPluginOptions(
-  mode: FileRouterMode,
-  options?: SolidPluginOptions,
-): SolidPluginOptions | undefined {
-  return mode === 'spa' ? options : createSolidSSROptions(options)
 }
 
 interface FileRouterCorePluginOptions {
@@ -251,9 +237,8 @@ function createRouteRegistryPlugin(options: FileRouterCorePluginOptions) {
 }
 
 function createFileRouterCorePlugins(options: FileRouterCorePluginOptions): Plugin[] {
-  const solidOptions = resolveSolidPluginOptions(options.mode, options.solid)
   return [
-    solidPlugin(solidOptions),
+    solidPlugin(options.solid),
     ...createHelperPlugin(options.clientHydrate),
     createRouteRegistryPlugin(options),
   ]
@@ -274,11 +259,10 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     ssg: ssgConfig,
     mode,
     solid: solidOptions,
-    clientHydrate,
   } = options
 
   const routerMode = resolveRouterMode(mode, Boolean(ssgConfig))
-  const shouldHydrate = clientHydrate ?? routerMode !== 'spa'
+  const shouldHydrate = routerMode !== 'spa'
 
   const inheritanceConfig = {
     enabled: inheritance.enabled ?? true,
@@ -309,6 +293,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
             ...coreOptions,
             mode: 'ssr',
             clientHydrate: true,
+            solid: createSolidSSROptions(solidOptions),
           })
         },
       }),

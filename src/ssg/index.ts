@@ -4,7 +4,7 @@ import { join, parse } from 'node:path'
 
 import { build } from 'vite'
 import type { Plugin, PluginOption } from 'vite'
-import solidPlugin from 'vite-plugin-solid'
+import type { Options as SolidPluginOptions } from 'vite-plugin-solid'
 
 import { alignKeyValue, createLogHeader, formatDuration, PACKAGE_NAME, logger } from '../const'
 import { clearCache } from '../utils/extract'
@@ -21,8 +21,6 @@ export function getSSRBuildOutputPath(outDir: string, entry: string) {
 export function createRouteManifestEntryCode() {
   return `export { fileRoutes } from 'virtual:routes'\n`
 }
-
-export type SolidPluginOptions = NonNullable<Parameters<typeof solidPlugin>[0]>
 
 export function createSolidSSROptions(options?: SolidPluginOptions): SolidPluginOptions {
   return { ...(options ?? {}), ssr: true }

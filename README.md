@@ -507,6 +507,8 @@ export default renderServer({
 Options passed to the `fileRouter()` plugin in `vite.config.ts`.
 
 ````ts
+import type { Options as SolidPluginOptions } from 'vite-plugin-solid'
+
 interface FileRouterPluginOption {
   /**
    * The output file path where the page types will be saved.
@@ -591,12 +593,7 @@ interface FileRouterPluginOption {
    * These options are reused by internal SSG SSR builds so Solid plugin behavior
    * stays aligned with the main plugin configuration.
    */
-  solid?: Record<string, unknown>
-  /**
-   * Whether the client runtime should use `hydrate()` (true) or `render()` (false).
-   * @default options.mode === 'spa' ? false : true
-   */
-  clientHydrate?: boolean
+  solid?: SolidPluginOptions
 }
 ````
 
