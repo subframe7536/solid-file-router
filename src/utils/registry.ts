@@ -1,7 +1,7 @@
 import { glob } from 'tinyglobby'
 import { normalizePath } from 'vite'
 
-import { logger } from '../const'
+import { createLogHeader, formatDuration, logger } from '../const'
 
 import { generateDefinition } from './definition'
 import type { InheritanceConfig } from './definition'
@@ -68,7 +68,14 @@ export class RouteRegistry {
     this.files = new Set(files.map((file) => normalizePath(file)))
     this.initialized = true
     this.version++
-    this.logVerbose(`initialized registry (${this.files.size} files, ${Date.now() - start} ms)`)
+    this.logVerbose(
+      `${createLogHeader('Registry Initialized')}
+${alignKeyValue([
+  ['Files', this.files.size],
+  ['Time', formatDuration(Date.now() - start)],
+])}`,
+      false,
+    )
   }
 
   markChanged(file: string) {
@@ -77,7 +84,7 @@ export class RouteRegistry {
       return
     }
     invalidateCache(normalized)
-    this.logVerbose(`invalidated AST cache for ${normalized}`)
+    this.logVerbose(`Cache invalidated: ${normalized}`)
   }
 
   async addFile(file: string): Promise<boolean> {
@@ -88,7 +95,7 @@ export class RouteRegistry {
     }
     this.files.add(normalized)
     this.bumpVersion()
-    this.logVerbose(`added route file ${normalized}`)
+    this.logVerbose(`Route added: ${normalized}`)
     return true
   }
 
@@ -100,7 +107,7 @@ export class RouteRegistry {
     }
     invalidateCache(normalized)
     this.bumpVersion()
-    this.logVerbose(`removed route file ${normalized}`)
+    this.logVerbose(`Route removed: ${normalized}`)
     return true
   }
 
@@ -110,7 +117,7 @@ export class RouteRegistry {
     const key = `${mode.ssr}`
     const cached = this.definitionCache.get(key)
     if (cached?.version === this.version) {
-      this.logVerbose(`reused virtual:routes module (${key})`)
+      this.logVerbose(`Cache hit: virtual:routes (${key})`)
       return cached.code
     }
 
@@ -130,12 +137,18 @@ export class RouteRegistry {
         this.options.infoDts,
       )
       this.typesVersion = this.version
-      this.logVerbose(`generated route types (${files.length} routes)`, false)
+      this.logVerbose(`Route types generated for ${files.length} routes`, false)
     }
 
     this.definitionCache.set(key, { version: this.version, code })
     this.logVerbose(
-      `generated virtual:routes module (${files.length} routes, ${Date.now() - start} ms)`,
+      `${createLogHeader('Virtual Module Generated')}
+${alignKeyValue([
+  ['Routes', files.length],
+  ['Time', formatDuration(Date.now() - start)],
+  ['Mode', mode.ssr ? 'SSR' : 'Client'],
+])}`,
+      false,
     )
     return code
   }
@@ -154,4 +167,12 @@ export class RouteRegistry {
     const baseDir = normalizePath(this.options.baseDir).replace(/\/$/, '')
     return `${this.root}/${baseDir ? `${baseDir}/` : ''}src/pages`.replace(/\/+/g, '/')
   }
+}
+
+function alignKeyValue(
+  entries: Array<[string, string | number]>,
+  minKeyWidth = 12,
+): string {
+  const maxKeyLen = Math.max(...entries.map(([key]) => key.length), minKeyWidth)
+  return entries.map(([key, value]) => `${String(key).padEnd(maxKeyLen)} : ${value}`).join('\n')
 }

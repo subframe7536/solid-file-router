@@ -6,7 +6,7 @@ import { build } from 'vite'
 import type { Plugin, PluginOption } from 'vite'
 import solidPlugin from 'vite-plugin-solid'
 
-import { PACKAGE_NAME, logger } from '../const'
+import { alignKeyValue, createLogHeader, formatDuration, PACKAGE_NAME, logger } from '../const'
 import { clearCache } from '../utils/extract'
 
 import { collectRoutesFromConfig, collectRoutesFromPrerender, crawlLinks } from './collect'
@@ -194,15 +194,18 @@ export default async function render(url) {
         }
 
         if (queue.length === 0) {
-          logger.warn('SSG: No routes to prerender', { timestamp: true })
+          logger.warn('No routes to prerender', { timestamp: true })
           return
         }
 
         // 4. Render routes
         const template = readTemplate(outDir)
         let rendered = 0
+        let failed = 0
+        const renderStart = Date.now()
+        const failedRoutes: string[] = []
 
-        logger.info(`SSG: Prerendering routes...`, { timestamp: true })
+        logger.info(`${createLogHeader('SSG Prerendering Started')}`, { timestamp: true })
 
         while (queue.length > 0) {
           const batch = queue.splice(0, concurrency)
@@ -224,14 +227,28 @@ export default async function render(url) {
             }),
           )
 
-          // If any render failed, abort the build by throwing.
-          assertAllFulfilled(results, batch)
+          for (const settled of results) {
+            if (settled.status === 'rejected') {
+              const url = batch[results.indexOf(settled)]
+              const reason = settled.reason instanceof Error ? settled.reason.message : String(settled.reason)
+              failed++
+              failedRoutes.push(url!)
+              logger.error(`  ✗ ${url?.padEnd(45)} → Failed: ${reason}`, {
+                timestamp: false,
+              })
+              continue
+            }
 
-          for (const settled of results as PromiseFulfilledResult<any>[]) {
-            const { url, result } = settled.value
+            const { url, result } = (settled as PromiseFulfilledResult<any>).value
             const html = injectHTML(template, result, mountId)
             writeRoute(outDir, url, html)
             rendered++
+
+            // Log individual route rendering (TanStack Start style)
+            const outputPath = url === '/' ? 'index.html' : `${url}.html`
+            logger.info(`  ✓ ${url.padEnd(45)} → ${outputPath}`, {
+              timestamp: false,
+            })
 
             if (crawl) {
               const newLinks = crawlLinks(result.html, visited)
@@ -248,13 +265,35 @@ export default async function render(url) {
           const notFoundResult = await renderFn('/__ssg_not_found__')
           const notFoundHtml = injectHTML(template, notFoundResult, mountId)
           writeFileSync(join(outDir, '404.html'), notFoundHtml)
-          logger.info(`  /404 -> /404.html`)
+          logger.info(`  ✓ /404                                        → 404.html`, {
+            timestamp: false,
+          })
           rendered++
         } catch {
           // No 404 route defined, skip
         }
 
-        logger.info(`SSG: Completed! Generated ${rendered} page(s)`, { timestamp: true })
+        const totalDuration = Date.now() - renderStart
+        
+        // Build completion summary
+        let summaryLines: [string, any][] = [
+          ['Pages generated', rendered],
+          ['Total time', formatDuration(totalDuration)],
+        ]
+        
+        if (rendered > 0) {
+          summaryLines.push(['Avg per page', formatDuration(totalDuration / rendered)])
+        }
+        
+        if (failed > 0) {
+          summaryLines.unshift(['Failed', failed])
+        }
+
+        logger.info(
+          `${createLogHeader('SSG Prerendering Completed')}
+${alignKeyValue(summaryLines)}`,
+          { timestamp: true },
+        )
 
         // 6. Cleanup
         rmSync(tempDir, { recursive: true, force: true })
