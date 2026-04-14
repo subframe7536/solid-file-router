@@ -20,7 +20,7 @@ export default defineConfig({
       ssg: {
         routes: ['*'],
       },
-      // verboseLog: true,
+      verboseLog: true,
     }),
   ],
   build: {
