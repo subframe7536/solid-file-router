@@ -122,10 +122,10 @@ function buildRouteLayoutMap(routeFiles: string[], layouts: LayoutInfo[]): Route
       const layoutDir = layout.path.substring(0, layout.path.lastIndexOf('/'))
 
       // Check if layout is an ancestor of this route
-      if (layout.path.includes('_app.')) {
-        // App is always an ancestor
-        ancestorLayouts.push(layout)
-      } else if (routePath.startsWith(`${layoutDir}/`)) {
+      if (
+        layout.path !== routePath &&
+        (layout.path.includes('_app.') || routePath.startsWith(`${layoutDir}/`))
+      ) {
         // Layout is in an ancestor directory
         ancestorLayouts.push(layout)
       }
@@ -214,7 +214,7 @@ function resolveInheritedComponents(
   return { loadExpr, errorExpr }
 }
 
-export async function generateRegularRoutes(
+async function generateRegularRoutes(
   files: string[],
   verbose = false,
   inheritanceConfig: InheritanceConfig = {
