@@ -43,7 +43,7 @@
     "typecheck": "bun --bun tsc --noEmit",
     "fix-oxlint": "bun -e \"const p=process.argv[1],f=Bun.file(p),t=await f.text();await Bun.write(p,t.replace(/jsPlugins/g,'//jsPlugins'));await Bun.write(p,t)\" .oxlintrc.json",
     "oxc": "bun --bun oxlint --fix && bun --bun oxfmt",
-    "qa": "bun run --parallel oxc typecheck",
+    "qa": "bun run --parallel lint typecheck",
     "release": "bun run build && bun run lint && bun run test:run && bumpp",
     "init": "bun link && bun i && bun run build"
   },

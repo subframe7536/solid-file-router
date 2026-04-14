@@ -1,9 +1,9 @@
-import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { build as tsdownBuild } from 'tsdown'
 import { build } from 'vite'
 import { describe, expect, it } from 'vitest'
 
@@ -18,7 +18,7 @@ let cachedFileRouter: FileRouterFn | undefined
 
 async function getBuiltFileRouter() {
   if (!existsSync(DIST_PLUGIN_PATH)) {
-    execFileSync('bun', ['--bun', 'run', 'build'], { cwd: REPO_ROOT, stdio: 'pipe' })
+    await tsdownBuild({ cwd: REPO_ROOT })
   }
   if (!cachedFileRouter) {
     const mod = (await import(DIST_PLUGIN_PATH)) as { fileRouter: FileRouterFn }

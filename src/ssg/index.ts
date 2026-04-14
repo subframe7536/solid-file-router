@@ -23,7 +23,7 @@ export function createRouteManifestEntryCode() {
 }
 
 export function createSolidSSROptions(options?: SolidPluginOptions): SolidPluginOptions {
-  return { ...(options ?? {}), ssr: true }
+  return { ...options, ssr: true }
 }
 
 export function assertAllFulfilled<T = any>(
@@ -55,10 +55,7 @@ interface SSGPluginOptions {
   createSSRPlugins: () => PluginOption[]
 }
 
-export function ssgPlugin(
-  config: SSGConfig,
-  options: SSGPluginOptions,
-): Plugin {
+export function ssgPlugin(config: SSGConfig, options: SSGPluginOptions): Plugin {
   const {
     routes: configRoutes = [],
     serverEntry = 'src/entry-server.tsx',
@@ -169,11 +166,17 @@ export default renderServer()
         // 3. Collect routes
         const visited = new Set<string>()
         const queue: string[] = []
+        let routeLogWidth = '/404'.length
+        const updateRouteLogWidth = (route: string) => {
+          routeLogWidth = Math.max(routeLogWidth, route.length)
+        }
+        const formatRouteLogLabel = (route: string) => route.padEnd(routeLogWidth)
 
         const configCollected = collectRoutesFromConfig({ routes: configRoutes }, fileRoutes)
         for (const route of configCollected) {
           if (!visited.has(route.path)) {
             visited.add(route.path)
+            updateRouteLogWidth(route.path)
             queue.push(route.path)
           }
         }
@@ -183,6 +186,7 @@ export default renderServer()
           for (const route of prerenderCollected) {
             if (!visited.has(route.path)) {
               visited.add(route.path)
+              updateRouteLogWidth(route.path)
               queue.push(route.path)
             }
           }
@@ -229,7 +233,7 @@ export default renderServer()
                 settled.reason instanceof Error ? settled.reason.message : String(settled.reason)
               failed++
               failedRoutes.push(url!)
-              logger.error(`  ✗ ${url?.padEnd(45)} → Failed: ${reason}`, {
+              logger.error(`  ✗ ${formatRouteLogLabel(url || '<unknown>')} → Failed: ${reason}`, {
                 timestamp: false,
               })
               continue
@@ -242,7 +246,7 @@ export default renderServer()
 
             // Log individual route rendering (TanStack Start style)
             const outputPath = url === '/' ? 'index.html' : `${url}.html`
-            logger.info(`  ✓ ${url.padEnd(45)} → ${outputPath}`, {
+            logger.info(`  ✓ ${formatRouteLogLabel(url)} → ${outputPath}`, {
               timestamp: false,
             })
 
@@ -250,6 +254,7 @@ export default renderServer()
               const newLinks = crawlLinks(result.html, visited)
               for (const link of newLinks) {
                 visited.add(link)
+                updateRouteLogWidth(link)
                 queue.push(link)
               }
             }
@@ -261,7 +266,7 @@ export default renderServer()
           const notFoundResult = await renderFn('/__ssg_not_found__')
           const notFoundHtml = injectHTML(template, notFoundResult, mountId)
           writeFileSync(join(outDir, '404.html'), notFoundHtml)
-          logger.info(`  ✓ /404                                        → 404.html`, {
+          logger.info(`  ✓ ${formatRouteLogLabel('/404')} → 404.html`, {
             timestamp: false,
           })
           rendered++
