@@ -53,13 +53,13 @@ function getRuntimeAlias() {
   }
 }
 
-interface SSGPluginOption {
+interface SSGPluginOptions {
   createSSRPlugins: () => PluginOption[]
 }
 
 export function ssgPlugin(
   config: SSGConfig,
-  options: SSGPluginOption,
+  options: SSGPluginOptions,
 ): Plugin {
   const {
     routes: configRoutes = [],

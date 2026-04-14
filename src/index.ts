@@ -144,7 +144,7 @@ function resolveRouterMode(mode: FileRouterMode | undefined, hasSSG: boolean): F
   return hasSSG ? 'ssg' : 'spa'
 }
 
-interface FileRouterCorePluginOption {
+interface FileRouterCorePluginOptions {
   output: string
   baseDir: string
   ignore: string[]
@@ -157,7 +157,7 @@ interface FileRouterCorePluginOption {
   solid?: SolidPluginOptions
 }
 
-function createRoutePlugin(options: FileRouterCorePluginOption) {
+function createRouteRegistryPlugin(options: FileRouterCorePluginOptions) {
   const { baseDir, ignore, output, infoDts, verboseLog, inheritanceConfig, mode, reloadOnChange } =
     options
   let isSSR = mode === 'ssr'
@@ -243,13 +243,13 @@ function createRoutePlugin(options: FileRouterCorePluginOption) {
   } satisfies Plugin
 }
 
-function createFileRouterCorePlugins(options: FileRouterCorePluginOption): Plugin[] {
+function createFileRouterCorePlugins(options: FileRouterCorePluginOptions): Plugin[] {
   const solidOptions =
     options.mode === 'spa' ? options.solid : createSolidSSROptions(options.solid)
   return [
     solidPlugin(solidOptions),
     ...createHelperPlugin(options.clientHydrate),
-    createRoutePlugin(options),
+    createRouteRegistryPlugin(options),
   ]
 }
 
@@ -280,7 +280,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     inheritError: inheritance.inheritError ?? true,
   }
 
-  const coreOptions: FileRouterCorePluginOption = {
+  const coreOptions: FileRouterCorePluginOptions = {
     output,
     baseDir,
     ignore,
