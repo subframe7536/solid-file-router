@@ -3,13 +3,16 @@ import { describe, it, expect } from 'vitest'
 import { ID_ROUTER_ENTRY } from '../src/const'
 import { fileRouter } from '../src/index'
 
-function getRouterEntryCode(options?: Parameters<typeof fileRouter>[0]) {
-  const plugins = fileRouter(options)
+function getRouterEntryCodeFromPlugins(plugins: ReturnType<typeof fileRouter>) {
   const routerEntryPlugin = plugins.find((plugin) => plugin.name === ID_ROUTER_ENTRY)
   expect(routerEntryPlugin).toBeDefined()
   const load = (routerEntryPlugin as any).load
   expect(typeof load?.handler).toBe('function')
   return load.handler() as string
+}
+
+function getRouterEntryCode(options?: Parameters<typeof fileRouter>[0]) {
+  return getRouterEntryCodeFromPlugins(fileRouter(options))
 }
 
 describe('fileRouter mode handling', () => {
@@ -26,16 +29,13 @@ describe('fileRouter mode handling', () => {
   })
 
   it('defaults to SSG mode when ssg config is provided', () => {
-    const plugins = fileRouter({
+    const options = {
       ssg: {
         routes: ['/'],
       },
-    })
-    const code = getRouterEntryCode({
-      ssg: {
-        routes: ['/'],
-      },
-    })
+    } satisfies Parameters<typeof fileRouter>[0]
+    const plugins = fileRouter(options)
+    const code = getRouterEntryCodeFromPlugins(plugins)
     expect(code).toContain('import { generateHydrationScript, hydrate, renderToStringAsync }')
     expect(plugins.some((plugin) => plugin.name === 'solid-file-router:ssg')).toBe(true)
   })
