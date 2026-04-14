@@ -494,13 +494,13 @@ renderClient(() => <FileRouter />)
 import { renderServer } from 'virtual:router-entry'
 
 export default renderServer({
-  extraHead() {
-    return '<meta name="x-rendered" content="true" />'
+  async extraHead({ getAssets }) {
+    return `<meta name="x-rendered" content="true" />${await getAssets()}`
   },
 })
 ```
 
-`renderServer()` always includes `generateHydrationScript()` in `head`. Use `extraHead()` to append additional head content, including output from `@solidjs/meta` such as `getAssets()`.
+`renderServer()` always includes `generateHydrationScript()` in `head`. Use `extraHead()` to append additional head content. `getAssets()` is available in the render context and returns assets from `@solidjs/meta` when installed (otherwise returns an empty string).
 
 ## Configuration
 

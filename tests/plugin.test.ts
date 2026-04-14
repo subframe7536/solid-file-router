@@ -25,6 +25,8 @@ describe('fileRouter mode handling', () => {
     const plugins = fileRouter()
     const code = getRouterEntryCodeFromPlugins(plugins)
     expect(code).toContain('import { generateHydrationScript, render, renderToStringAsync }')
+    expect(code).toContain("const mod = await import('@solidjs/meta')")
+    expect(code).toContain('const renderContext = { url, Router, getAssets }')
     expect(code).toContain('return render(component, element)')
     expect(plugins.some((plugin) => plugin.name.includes('solid'))).toBe(true)
   })
