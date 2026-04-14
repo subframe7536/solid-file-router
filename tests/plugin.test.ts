@@ -3,11 +3,20 @@ import { describe, it, expect } from 'vitest'
 import { ID_ROUTER_ENTRY } from '../src/const'
 import { fileRouter } from '../src/index'
 
+type PluginWithObjectLoad = {
+  load?: {
+    handler?: () => string
+  }
+}
+
 function getRouterEntryCodeFromPlugins(plugins: ReturnType<typeof fileRouter>) {
   const routerEntryPlugin = plugins.find((plugin) => plugin.name === ID_ROUTER_ENTRY)
   expect(routerEntryPlugin).toBeDefined()
-  const load = (routerEntryPlugin as any).load
-  expect(typeof load?.handler).toBe('function')
+  const load = (routerEntryPlugin as PluginWithObjectLoad | undefined)?.load
+  expect(load && typeof load.handler === 'function').toBe(true)
+  if (!load?.handler) {
+    throw new TypeError('router entry plugin load handler is missing')
+  }
   return load.handler() as string
 }
 

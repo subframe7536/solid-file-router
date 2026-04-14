@@ -22,7 +22,9 @@ export function createRouteManifestEntryCode() {
   return `export { fileRoutes } from 'virtual:routes'\n`
 }
 
-export function createSolidSSROptions(options?: Record<string, unknown>) {
+export type SolidPluginOptions = NonNullable<Parameters<typeof solidPlugin>[0]>
+
+export function createSolidSSROptions(options?: SolidPluginOptions): SolidPluginOptions {
   return { ...(options ?? {}), ssr: true }
 }
 

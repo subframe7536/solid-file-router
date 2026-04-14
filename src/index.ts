@@ -3,6 +3,7 @@ import type { Plugin } from 'vite'
 import { ID_EXTRACT, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
 import { createHelperPlugin } from './helper'
 import { ssgPlugin } from './ssg'
+import type { SolidPluginOptions } from './ssg'
 import type { SSGConfig } from './ssg/types'
 import type { InheritanceConfig } from './utils/definition'
 import { extract } from './utils/extract'
@@ -106,7 +107,7 @@ interface FileRouterPluginOption {
    * These options are reused by internal SSG SSR builds so Solid plugin behavior
    * stays aligned with the main plugin configuration.
    */
-  solid?: Record<string, unknown>
+  solid?: SolidPluginOptions
   /**
    * Whether the client runtime should use `hydrate()` (true) or `render()` (false).
    * Determined at build time by the plugin and inlines the choice into the generated
