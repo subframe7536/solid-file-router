@@ -125,7 +125,7 @@ function buildRouteLayoutMap(routeFiles: string[], layouts: LayoutInfo[]): Route
       if (layout.path.includes('_app.')) {
         // App is always an ancestor
         ancestorLayouts.push(layout)
-      } else if (routePath.startsWith(layoutDir + '/')) {
+      } else if (routePath.startsWith(`${layoutDir}/`)) {
         // Layout is in an ancestor directory
         ancestorLayouts.push(layout)
       }
@@ -292,7 +292,7 @@ export async function generateRegularRoutes(
 
   const regularRoutes: BaseRoute[] = []
   for (let i = 0; i < filtered.length; i++) {
-    const file = filtered[i]
+    const file = filtered[i]!
 
     imports.push(`import __route${i}_route from '${file}?route'`)
 

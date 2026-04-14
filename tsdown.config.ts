@@ -9,7 +9,7 @@ const result = await build({
   config: false,
 })
 
-const chunk = result[0].chunks[0]
+const chunk = result[0]?.chunks[0]!
 
 export default defineConfig({
   entry: { plugin: './src/index.ts', index: './src/runtime.ts' },

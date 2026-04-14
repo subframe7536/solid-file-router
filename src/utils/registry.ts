@@ -22,6 +22,7 @@ interface DefinitionMode {
   ssr: boolean
 }
 
+const REG_IS_ROUTE_FILE = /\.(jsx|tsx|mdx)$/
 export class RouteRegistry {
   private root = ''
   private initialized = false
@@ -49,7 +50,7 @@ export class RouteRegistry {
 
   isRouteFile(file: string): boolean {
     const normalized = normalizePath(file)
-    return normalized.startsWith(this.pagesDir + '/') && /\.(jsx|tsx|mdx)$/.test(normalized)
+    return normalized.startsWith(`${this.pagesDir}/`) && REG_IS_ROUTE_FILE.test(normalized)
   }
 
   async ensureInitialized() {

@@ -145,7 +145,7 @@ export function generatePath<T extends keyof FileRoutePath & string>(
   let searchParam: URLSearchParams | undefined
   for (const [k, v] of Object.entries(params)) {
     if (k.startsWith('$')) {
-      result = result.replace(':' + k.slice(1), v as string)
+      result = result.replace(`:${k.slice(1)}`, v as string)
     } else {
       if (!searchParam) {
         searchParam = new URLSearchParams()
@@ -155,7 +155,7 @@ export function generatePath<T extends keyof FileRoutePath & string>(
   }
 
   if (searchParam) {
-    result += '?' + searchParam.toString()
+    result += `?${searchParam.toString()}`
   }
 
   return result

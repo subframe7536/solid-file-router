@@ -175,7 +175,7 @@ export function crawlLinks(html: string, visited: Set<string>): string[] {
   let match: RegExpExecArray | null
 
   while ((match = linkRegex.exec(html)) !== null) {
-    const href = match[1]
+    const href = match[1]!
 
     if (!href.startsWith('/')) {
       continue
@@ -184,7 +184,7 @@ export function crawlLinks(html: string, visited: Set<string>): string[] {
       continue
     }
 
-    const path = href.split(/[?#]/)[0]
+    const path = href.split(/[?#]/)[0]!
     const normalized = path === '' ? '/' : path
 
     if (!visited.has(normalized)) {

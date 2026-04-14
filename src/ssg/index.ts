@@ -26,7 +26,7 @@ export function assertAllFulfilled<T = any>(
   batch: string[],
 ) {
   for (let i = 0; i < results.length; i++) {
-    const r = results[i]
+    const r = results[i]!
     if (r.status !== 'fulfilled') {
       const url = batch[i]
       const reason = (r as PromiseRejectedResult).reason
@@ -165,7 +165,9 @@ export default async function render(url) {
           | ((url: string) => Promise<SSGRenderResult>)
           | undefined
         if (typeof renderFn !== 'function') {
-          throw new Error(`SSG server entry must default export a render function: ${serverEntry}`)
+          throw new TypeError(
+            `SSG server entry must default export a render function: ${serverEntry}`,
+          )
         }
         const fileRoutes = routeManifestModule.fileRoutes as any[]
 

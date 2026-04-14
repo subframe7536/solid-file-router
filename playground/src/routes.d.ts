@@ -28,7 +28,12 @@ declare module 'solid-file-router' {
 }
 
 declare module '@solidjs/router' {
-  import type { AnchorProps, NavigateOptions, RouterResponseInit, CustomResponse } from '@solidjs/router'
+  import type {
+    AnchorProps,
+    NavigateOptions,
+    RouterResponseInit,
+    CustomResponse,
+  } from '@solidjs/router'
 
   type Paths =
     | '/'
@@ -46,8 +51,11 @@ declare module '@solidjs/router' {
 
   export declare function A(props: Omit<AnchorProps, 'href'> & { href: Paths }): JSX.Element
   export interface Navigator {
-    (to: Paths, options?: Partial<NavigateOptions>): void;
-    (delta: number): void;
+    (to: Paths, options?: Partial<NavigateOptions>): void
+    (delta: number): void
   }
-  export declare function redirect(url: Paths, init?: number | RouterResponseInit): CustomResponse<never>
+  export declare function redirect(
+    url: Paths,
+    init?: number | RouterResponseInit,
+  ): CustomResponse<never>
 }

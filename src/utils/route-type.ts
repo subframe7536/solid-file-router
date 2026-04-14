@@ -18,7 +18,7 @@ export function parseParams(files: string[]) {
 
       if (param.length || path.includes('*')) {
         const dynamic = param.length
-          ? param.map((p) => '$' + p.replace(/:(.+)(\?)?/, '$1$2:') + ' string')
+          ? param.map((p) => `$${p.replace(/:(.+)(\?)?/, '$1$2:')} string`)
           : []
         const splat = path.includes('*') ? ["'*': string"] : []
         params.push(`'${path}': { ${[...dynamic, ...splat].join('; ')} }`)
@@ -92,7 +92,7 @@ export {}
 declare module '${PACKAGE_NAME}' {
   interface FileRoutePath {
     ${params.join('\n    ')}
-  }${infoDts ? '\n' + generateInlineType(infoDts, 'FileRouteInfo', 1) : ''}
+  }${infoDts ? `\n${generateInlineType(infoDts, 'FileRouteInfo', 1)}` : ''}
 }
 
 declare module '@solidjs/router' {

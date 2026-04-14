@@ -210,7 +210,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
           const [id, query] = fullId.split('?')
           if (query && queryMap.has(query)) {
             const pick = queryMap.get(query)!
-            return await extract(code, id, { entryFn: 'createRoute', pick }, verboseLog)
+            return await extract(code, id!, { entryFn: 'createRoute', pick }, verboseLog)
           }
         },
       },

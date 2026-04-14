@@ -1,18 +1,9 @@
 {
+  "extends": "@subf/config/tsconfig-lib",
   "compilerOptions": {
-    "target": "ESNext",
     "jsx": "preserve",
     "jsxImportSource": "solid-js",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
     "types": ["bun-types", "vite/client"],
-    "allowJs": true,
-    "strict": true,
-    "noEmit": true,
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
-    "isolatedModules": true,
-    "strictNullChecks": true,
-    "skipLibCheck": true,
-  },
+    "lib": ["DOM", "ESNext"]
+  }
 }

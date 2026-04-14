@@ -4,15 +4,15 @@ import { generateDefinition } from '../src/utils/definition'
 
 const root = '/root/project'
 const files = [
-  root + '/src/pages/_app.tsx',
-  root + '/src/pages/index.tsx',
-  root + '/src/pages/next.tsx',
-  root + '/src/pages/t.e.s.t.tsx',
-  root + '/src/pages/(group)/_layout.tsx',
-  root + '/src/pages/(group)/data.tsx',
-  root + '/src/pages/nest/index.tsx',
-  root + '/src/pages/nest/[id].tsx',
-  root + '/src/pages/404.tsx',
+  `${root}/src/pages/_app.tsx`,
+  `${root}/src/pages/index.tsx`,
+  `${root}/src/pages/next.tsx`,
+  `${root}/src/pages/t.e.s.t.tsx`,
+  `${root}/src/pages/(group)/_layout.tsx`,
+  `${root}/src/pages/(group)/data.tsx`,
+  `${root}/src/pages/nest/index.tsx`,
+  `${root}/src/pages/nest/[id].tsx`,
+  `${root}/src/pages/404.tsx`,
 ]
 
 describe('generateDefinition', () => {
