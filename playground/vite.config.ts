@@ -2,7 +2,6 @@ import { fileURLToPath } from 'node:url'
 
 import { fileRouter } from 'solid-file-router/plugin'
 import { defineConfig } from 'vite'
-import solid from 'vite-plugin-solid'
 
 export default defineConfig({
   resolve: {
@@ -11,8 +10,8 @@ export default defineConfig({
     },
   },
   plugins: [
-    solid({ ssr: true }),
     fileRouter({
+      mode: 'ssg',
       infoDts: {
         name: 'string',
         role: 'string',

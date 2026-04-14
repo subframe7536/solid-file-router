@@ -1,13 +1,17 @@
 import type { Plugin } from 'vite'
+import solidPlugin from 'vite-plugin-solid'
+import type { Options as SolidPluginOptions } from 'vite-plugin-solid'
 
 import { ID_EXTRACT, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
 import { createHelperPlugin } from './helper'
-import { ssgPlugin } from './ssg'
+import { createSolidSSROptions, ssgPlugin } from './ssg'
 import type { SSGConfig } from './ssg/types'
 import type { InheritanceConfig } from './utils/definition'
 import { extract } from './utils/extract'
 import { RouteRegistry } from './utils/registry'
 import type { InfoTypeDefinition } from './utils/route-type'
+
+export type FileRouterMode = 'spa' | 'ssr' | 'ssg'
 
 interface FileRouterPluginOption {
   /**
@@ -89,12 +93,22 @@ interface FileRouterPluginOption {
    */
   ssg?: SSGConfig
   /**
-   * Whether the client runtime should use `hydrate()` (true) or `render()` (false).
-   * Determined at build time by the plugin and inlines the choice into the generated
-   * `virtual:router-entry` module.
-   * @default Boolean(options.ssg)
+   * Router operating mode.
+   *
+   * - `spa`: client-only routes with `render()`
+   * - `ssr`: server-rendered routes with `hydrate()`
+   * - `ssg`: static site generation with prerendering
+   *
+   * @default options.ssg ? 'ssg' : 'spa'
    */
-  clientHydrate?: boolean
+  mode?: FileRouterMode
+  /**
+   * Shared options passed to `vite-plugin-solid`.
+   *
+   * These options are reused by internal SSG SSR builds so Solid plugin behavior
+   * stays aligned with the main plugin configuration.
+   */
+  solid?: SolidPluginOptions
 }
 
 export const DEFAULT_IGNORES = ['**/components/**', '**/node_modules/**', '**/dist/**']
@@ -116,6 +130,120 @@ const queryMap = new Map<string, string[]>([
 ])
 const REG_ROUTE_QUERY = /\?(route|comp)$/
 
+function resolveRouterMode(mode: FileRouterMode | undefined, hasSSG: boolean): FileRouterMode {
+  if (mode) {
+    return mode
+  }
+  return hasSSG ? 'ssg' : 'spa'
+}
+
+interface FileRouterCorePluginOptions {
+  output: string
+  baseDir: string
+  ignore: string[]
+  reloadOnChange: boolean
+  infoDts?: InfoTypeDefinition
+  verboseLog?: boolean
+  inheritanceConfig: Required<InheritanceConfig>
+  mode: FileRouterMode
+  clientHydrate: boolean
+  solid?: SolidPluginOptions
+}
+
+function createRouteRegistryPlugin(options: FileRouterCorePluginOptions) {
+  const { baseDir, ignore, output, infoDts, verboseLog, inheritanceConfig, mode, reloadOnChange } =
+    options
+  let isSSR = mode === 'ssr'
+  const registry = new RouteRegistry({
+    baseDir,
+    ignore,
+    output,
+    infoDts,
+    verboseLog,
+    inheritance: inheritanceConfig,
+  })
+
+  return {
+    name: ID_EXTRACT,
+    configResolved(config) {
+      isSSR = mode === 'ssr' || !!config.build.ssr
+      registry.setRoot(config.root)
+    },
+    resolveId: {
+      filter: {
+        id: new RegExp(VID_EXTRACT),
+      },
+      handler() {
+        return VID_EXTRACT_RESOLVED
+      },
+    },
+    load: {
+      filter: {
+        id: new RegExp(VID_EXTRACT_RESOLVED),
+      },
+      handler() {
+        return registry.getDefinition({ ssr: isSSR })
+      },
+    },
+    configureServer(server) {
+      const invalidateVirtualModule = (id: string) => {
+        const module = server.moduleGraph.getModuleById(id)
+        if (module) {
+          server.moduleGraph.invalidateModule(module)
+        }
+      }
+
+      const handleStructureEvent =
+        (handler: (file: string) => Promise<boolean>) => async (file: string) => {
+          if (!(await handler(file))) {
+            return
+          }
+
+          invalidateVirtualModule(VID_EXTRACT_RESOLVED)
+          server.ws.send({
+            type: 'full-reload',
+          })
+        }
+
+      server.watcher
+        .on(
+          'add',
+          handleStructureEvent((file) => registry.addFile(file)),
+        )
+        .on(
+          'unlink',
+          handleStructureEvent((file) => registry.removeFile(file)),
+        )
+        .on('change', (file) => {
+          if (!reloadOnChange && !registry.isRouteFile(file)) {
+            return
+          }
+          registry.markChanged(file)
+        })
+    },
+    transform: {
+      filter: {
+        id: REG_ROUTE_QUERY,
+      },
+      async handler(code, fullId) {
+        const [id, query] = fullId.split('?')
+        if (query && queryMap.has(query)) {
+          const pick = queryMap.get(query)!
+          return await extract(code, id!, { entryFn: 'createRoute', pick }, verboseLog)
+        }
+      },
+    },
+  } satisfies Plugin
+}
+
+function createFileRouterCorePlugins(options: FileRouterCorePluginOptions): Plugin[] {
+  return [
+    solidPlugin(options.solid),
+    ...createHelperPlugin(options.clientHydrate),
+    createRouteRegistryPlugin(options),
+  ]
+}
+
 /**
  * Vite plugin for page generation
  */
@@ -129,8 +257,12 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     verboseLog,
     inheritance = { enabled: true },
     ssg: ssgConfig,
-    clientHydrate = Boolean(ssgConfig),
+    mode,
+    solid: solidOptions,
   } = options
+
+  const routerMode = resolveRouterMode(mode, Boolean(ssgConfig))
+  const shouldHydrate = routerMode !== 'spa'
 
   const inheritanceConfig = {
     enabled: inheritance.enabled ?? true,
@@ -138,106 +270,33 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     inheritError: inheritance.inheritError ?? true,
   }
 
-  let isSSR = false
-  const registry = new RouteRegistry({
+  const coreOptions: FileRouterCorePluginOptions = {
+    output,
     baseDir,
     ignore,
-    output,
+    reloadOnChange,
     infoDts,
     verboseLog,
-    inheritance: inheritanceConfig,
-  })
+    inheritanceConfig,
+    mode: routerMode,
+    clientHydrate: shouldHydrate,
+    solid: solidOptions,
+  }
 
-  const plugins: Plugin[] = [
-    ...createHelperPlugin(clientHydrate),
-    {
-      name: ID_EXTRACT,
-      configResolved(config) {
-        isSSR = !!config.build.ssr
-        registry.setRoot(config.root)
-      },
-      resolveId: {
-        filter: {
-          id: new RegExp(VID_EXTRACT),
-        },
-        handler() {
-          return VID_EXTRACT_RESOLVED
-        },
-      },
-      load: {
-        filter: {
-          id: new RegExp(VID_EXTRACT_RESOLVED),
-        },
-        handler() {
-          return registry.getDefinition({ ssr: isSSR })
-        },
-      },
-      configureServer(server) {
-        const invalidateVirtualModule = (id: string) => {
-          const module = server.moduleGraph.getModuleById(id)
-          if (module) {
-            server.moduleGraph.invalidateModule(module)
-          }
-        }
+  const plugins = createFileRouterCorePlugins(coreOptions)
 
-        const handleStructureEvent =
-          (handler: (file: string) => Promise<boolean>) => async (file: string) => {
-            if (!(await handler(file))) {
-              return
-            }
-
-            invalidateVirtualModule(VID_EXTRACT_RESOLVED)
-            server.ws.send({
-              type: 'full-reload',
-            })
-          }
-
-        server.watcher
-          .on(
-            'add',
-            handleStructureEvent((file) => registry.addFile(file)),
-          )
-          .on(
-            'unlink',
-            handleStructureEvent((file) => registry.removeFile(file)),
-          )
-          .on('change', (file) => {
-            if (!reloadOnChange && !registry.isRouteFile(file)) {
-              return
-            }
-            registry.markChanged(file)
-          })
-      },
-      transform: {
-        filter: {
-          id: REG_ROUTE_QUERY,
-        },
-        async handler(code, fullId) {
-          const [id, query] = fullId.split('?')
-          if (query && queryMap.has(query)) {
-            const pick = queryMap.get(query)!
-            return await extract(code, id!, { entryFn: 'createRoute', pick }, verboseLog)
-          }
-        },
-      },
-    },
-  ]
-
-  if (ssgConfig && !(globalThis as any).__SOLID_FILE_ROUTER_SSG__) {
+  if (routerMode === 'ssg' && ssgConfig) {
     plugins.push(
-      ssgPlugin(
-        ssgConfig,
-        {
-          output,
-          baseDir,
-          ignore,
-          reloadOnChange,
-          infoDts,
-          verboseLog,
-          inheritance,
+      ssgPlugin(ssgConfig, {
+        createSSRPlugins() {
+          return createFileRouterCorePlugins({
+            ...coreOptions,
+            mode: 'ssr',
+            clientHydrate: true,
+            solid: createSolidSSROptions(solidOptions),
+          })
         },
-        fileRouter,
-      ),
+      }),
     )
   }
 

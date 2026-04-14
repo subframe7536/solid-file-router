@@ -4,7 +4,7 @@ import { join, parse } from 'node:path'
 
 import { build } from 'vite'
 import type { Plugin, PluginOption } from 'vite'
-import solidPlugin from 'vite-plugin-solid'
+import type { Options as SolidPluginOptions } from 'vite-plugin-solid'
 
 import { alignKeyValue, createLogHeader, formatDuration, PACKAGE_NAME, logger } from '../const'
 import { clearCache } from '../utils/extract'
@@ -13,6 +13,9 @@ import { collectRoutesFromConfig, collectRoutesFromPrerender, crawlLinks } from 
 import { injectHTML, readTemplate, writeRoute } from './render'
 import type { SSGConfig, SSGRenderResult } from './types'
 
+const DEFAULT_SSG_ROUTE_LABEL = '/404'
+const UNKNOWN_SSG_ROUTE_LABEL = '<unknown>'
+
 export function getSSRBuildOutputPath(outDir: string, entry: string) {
   // Always return posix-style paths for tests and downstream usage
   return join(outDir, `${parse(entry).name}.js`).replace(/\\/g, '/')
@@ -20,6 +23,10 @@ export function getSSRBuildOutputPath(outDir: string, entry: string) {
 
 export function createRouteManifestEntryCode() {
   return `export { fileRoutes } from 'virtual:routes'\n`
+}
+
+export function createSolidSSROptions(options?: SolidPluginOptions): SolidPluginOptions {
+  return options ? { ...options, ssr: true } : { ssr: true }
 }
 
 export function assertAllFulfilled<T = any>(
@@ -39,9 +46,6 @@ export function assertAllFulfilled<T = any>(
   }
 }
 
-// oxlint-disable-next-line no-shadow-restricted-names
-declare const globalThis: { __SOLID_FILE_ROUTER_SSG__?: boolean }
-
 const require = createRequire(import.meta.url)
 
 function getRuntimeAlias() {
@@ -50,11 +54,11 @@ function getRuntimeAlias() {
   }
 }
 
-export function ssgPlugin(
-  config: SSGConfig,
-  fileRouterOptions: Record<string, any>,
-  createFileRouter: (options: Record<string, any>) => Plugin[],
-): Plugin {
+interface SSGPluginOptions {
+  createSSRPlugins: () => PluginOption[]
+}
+
+export function ssgPlugin(config: SSGConfig, options: SSGPluginOptions): Plugin {
   const {
     routes: configRoutes = [],
     serverEntry = 'src/entry-server.tsx',
@@ -75,11 +79,6 @@ export function ssgPlugin(
       outDir = join(root, resolvedConfig.build.outDir)
     },
     async writeBundle() {
-      if (globalThis.__SOLID_FILE_ROUTER_SSG__) {
-        return
-      }
-      globalThis.__SOLID_FILE_ROUTER_SSG__ = true
-
       let generatedEntry = false
       let entryPath: string
       let generatedRouteManifestEntry = false
@@ -113,10 +112,7 @@ export default renderServer()
 
         clearCache()
 
-        const ssrPlugins: PluginOption[] = [
-          solidPlugin({ ssr: true }),
-          ...createFileRouter({ ...fileRouterOptions, ssg: undefined }),
-        ]
+        const ssrPlugins = options.createSSRPlugins()
 
         await build({
           configFile: false,
@@ -173,11 +169,17 @@ export default renderServer()
         // 3. Collect routes
         const visited = new Set<string>()
         const queue: string[] = []
+        let routeLogWidth = DEFAULT_SSG_ROUTE_LABEL.length
+        const updateRouteLogWidth = (route: string) => {
+          routeLogWidth = Math.max(routeLogWidth, route.length)
+        }
+        const formatRouteLogLabel = (route: string) => route.padEnd(routeLogWidth)
 
         const configCollected = collectRoutesFromConfig({ routes: configRoutes }, fileRoutes)
         for (const route of configCollected) {
           if (!visited.has(route.path)) {
             visited.add(route.path)
+            updateRouteLogWidth(route.path)
             queue.push(route.path)
           }
         }
@@ -187,6 +189,7 @@ export default renderServer()
           for (const route of prerenderCollected) {
             if (!visited.has(route.path)) {
               visited.add(route.path)
+              updateRouteLogWidth(route.path)
               queue.push(route.path)
             }
           }
@@ -229,11 +232,12 @@ export default renderServer()
           for (const settled of results) {
             if (settled.status === 'rejected') {
               const url = batch[results.indexOf(settled)]
+              const routePath = url || UNKNOWN_SSG_ROUTE_LABEL
               const reason =
                 settled.reason instanceof Error ? settled.reason.message : String(settled.reason)
               failed++
-              failedRoutes.push(url!)
-              logger.error(`  ✗ ${url?.padEnd(45)} → Failed: ${reason}`, {
+              failedRoutes.push(routePath)
+              logger.error(`  ✗ ${formatRouteLogLabel(routePath)} → Failed: ${reason}`, {
                 timestamp: false,
               })
               continue
@@ -245,8 +249,8 @@ export default renderServer()
             rendered++
 
             // Log individual route rendering (TanStack Start style)
-            const outputPath = url === '/' ? 'index.html' : `${url}.html`
-            logger.info(`  ✓ ${url.padEnd(45)} → ${outputPath}`, {
+            const outputPath = url === '/' ? '/index.html' : `${url}.html`
+            logger.info(`  ✓ ${formatRouteLogLabel(url)} → ${outputPath}`, {
               timestamp: false,
             })
 
@@ -254,6 +258,7 @@ export default renderServer()
               const newLinks = crawlLinks(result.html, visited)
               for (const link of newLinks) {
                 visited.add(link)
+                updateRouteLogWidth(link)
                 queue.push(link)
               }
             }
@@ -265,7 +270,7 @@ export default renderServer()
           const notFoundResult = await renderFn('/__ssg_not_found__')
           const notFoundHtml = injectHTML(template, notFoundResult, mountId)
           writeFileSync(join(outDir, '404.html'), notFoundHtml)
-          logger.info(`  ✓ /404                                        → 404.html`, {
+          logger.info(`  ✓ ${formatRouteLogLabel(DEFAULT_SSG_ROUTE_LABEL)} → /404.html`, {
             timestamp: false,
           })
           rendered++
@@ -313,7 +318,6 @@ ${alignKeyValue(summaryLines)}`,
         if (generatedRouteManifestEntry && existsSync(routeManifestEntryPath)) {
           rmSync(routeManifestEntryPath, { force: true })
         }
-        globalThis.__SOLID_FILE_ROUTER_SSG__ = false
       }
     },
   }

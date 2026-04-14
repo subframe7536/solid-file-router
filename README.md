@@ -33,13 +33,14 @@ bun add solid-file-router
 
 ```typescript
 import { defineConfig } from 'vite'
-import solid from 'vite-plugin-solid'
 import { fileRouter } from 'solid-file-router/plugin'
 
 export default defineConfig({
-  plugins: [solid(), fileRouter()],
+  plugins: [fileRouter()],
 })
 ```
+
+`fileRouter()` already includes `vite-plugin-solid` internally.
 
 2. **Create your pages directory** at `src/pages/`
 
@@ -493,19 +494,21 @@ renderClient(() => <FileRouter />)
 import { renderServer } from 'virtual:router-entry'
 
 export default renderServer({
-  extraHead() {
-    return '<meta name="x-rendered" content="true" />'
+  async extraHead({ getAssets }) {
+    return `<meta name="x-rendered" content="true" />${await getAssets()}`
   },
 })
 ```
 
-`renderServer()` always includes `generateHydrationScript()` in `head`. Use `extraHead()` to append additional head content, including output from `@solidjs/meta` such as `getAssets()`.
+`renderServer()` always includes `generateHydrationScript()` in `head`. Use `extraHead()` to append additional head content. `getAssets()` is available in the render context and returns assets from `@solidjs/meta` when installed (otherwise returns an empty string).
 
 ## Configuration
 
 Options passed to the `fileRouter()` plugin in `vite.config.ts`.
 
 ````ts
+import type { Options as SolidPluginOptions } from 'vite-plugin-solid'
+
 interface FileRouterPluginOption {
   /**
    * The output file path where the page types will be saved.
@@ -574,6 +577,23 @@ interface FileRouterPluginOption {
      */
     inheritError?: boolean
   }
+  /**
+   * Router operating mode.
+   *
+   * - `spa`: client-only routes with `render()`
+   * - `ssr`: server-rendered routes with `hydrate()`
+   * - `ssg`: static site generation with prerendering
+   *
+   * @default options.ssg ? 'ssg' : 'spa'
+   */
+  mode?: 'spa' | 'ssr' | 'ssg'
+  /**
+   * Shared options passed to `vite-plugin-solid`.
+   *
+   * These options are reused by internal SSG SSR builds so Solid plugin behavior
+   * stays aligned with the main plugin configuration.
+   */
+  solid?: SolidPluginOptions
 }
 ````
 

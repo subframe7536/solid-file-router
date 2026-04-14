@@ -36,8 +36,16 @@ export function renderServer(options = {}) {
   } = options
 
   return async (url) => {
+    const getAssets = async () => {
+      try {
+        const mod = await import('@solidjs/meta')
+        return typeof mod.getAssets === 'function' ? (mod.getAssets() ?? '') : ''
+      } catch {
+        return ''
+      }
+    }
     const app = () => createComponent(Router, { url })
-    const renderContext = { url, Router }
+    const renderContext = { url, Router, getAssets }
 
     let html
     try {
