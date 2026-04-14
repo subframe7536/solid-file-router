@@ -9,6 +9,8 @@ import { extract } from './utils/extract'
 import { RouteRegistry } from './utils/registry'
 import type { InfoTypeDefinition } from './utils/route-type'
 
+export type FileRouterMode = 'spa' | 'ssr' | 'ssg'
+
 interface FileRouterPluginOption {
   /**
    * The output file path where the page types will be saved.
@@ -89,10 +91,27 @@ interface FileRouterPluginOption {
    */
   ssg?: SSGConfig
   /**
+   * Router operating mode.
+   *
+   * - `spa`: client-only routes with `render()`
+   * - `ssr`: server-rendered routes with `hydrate()`
+   * - `ssg`: static site generation with prerendering
+   *
+   * @default options.ssg ? 'ssg' : 'spa'
+   */
+  mode?: FileRouterMode
+  /**
+   * Shared options passed to `vite-plugin-solid`.
+   *
+   * These options are reused by internal SSG SSR builds so Solid plugin behavior
+   * stays aligned with the main plugin configuration.
+   */
+  solid?: Record<string, unknown>
+  /**
    * Whether the client runtime should use `hydrate()` (true) or `render()` (false).
    * Determined at build time by the plugin and inlines the choice into the generated
    * `virtual:router-entry` module.
-   * @default Boolean(options.ssg)
+   * @default options.mode === 'spa' ? false : true
    */
   clientHydrate?: boolean
 }
@@ -116,6 +135,13 @@ const queryMap = new Map<string, string[]>([
 ])
 const REG_ROUTE_QUERY = /\?(route|comp)$/
 
+function resolveRouterMode(mode: FileRouterMode | undefined, hasSSG: boolean): FileRouterMode {
+  if (mode) {
+    return mode
+  }
+  return hasSSG ? 'ssg' : 'spa'
+}
+
 /**
  * Vite plugin for page generation
  */
@@ -129,8 +155,13 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     verboseLog,
     inheritance = { enabled: true },
     ssg: ssgConfig,
-    clientHydrate = Boolean(ssgConfig),
+    mode,
+    solid: solidOptions,
+    clientHydrate,
   } = options
+
+  const routerMode = resolveRouterMode(mode, Boolean(ssgConfig))
+  const shouldHydrate = clientHydrate ?? routerMode !== 'spa'
 
   const inheritanceConfig = {
     enabled: inheritance.enabled ?? true,
@@ -138,7 +169,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     inheritError: inheritance.inheritError ?? true,
   }
 
-  let isSSR = false
+  let isSSR = routerMode === 'ssr'
   const registry = new RouteRegistry({
     baseDir,
     ignore,
@@ -149,11 +180,11 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
   })
 
   const plugins: Plugin[] = [
-    ...createHelperPlugin(clientHydrate),
+    ...createHelperPlugin(shouldHydrate),
     {
       name: ID_EXTRACT,
       configResolved(config) {
-        isSSR = !!config.build.ssr
+        isSSR = routerMode === 'ssr' || !!config.build.ssr
         registry.setRoot(config.root)
       },
       resolveId: {
@@ -223,7 +254,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     },
   ]
 
-  if (ssgConfig && !(globalThis as any).__SOLID_FILE_ROUTER_SSG__) {
+  if (routerMode === 'ssg' && ssgConfig && !(globalThis as any).__SOLID_FILE_ROUTER_SSG__) {
     plugins.push(
       ssgPlugin(
         ssgConfig,
@@ -235,6 +266,9 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
           infoDts,
           verboseLog,
           inheritance,
+          mode: routerMode,
+          solid: solidOptions,
+          clientHydrate: shouldHydrate,
         },
         fileRouter,
       ),

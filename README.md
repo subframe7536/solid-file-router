@@ -574,6 +574,28 @@ interface FileRouterPluginOption {
      */
     inheritError?: boolean
   }
+  /**
+   * Router operating mode.
+   *
+   * - `spa`: client-only routes with `render()`
+   * - `ssr`: server-rendered routes with `hydrate()`
+   * - `ssg`: static site generation with prerendering
+   *
+   * @default options.ssg ? 'ssg' : 'spa'
+   */
+  mode?: 'spa' | 'ssr' | 'ssg'
+  /**
+   * Shared options passed to `vite-plugin-solid`.
+   *
+   * These options are reused by internal SSG SSR builds so Solid plugin behavior
+   * stays aligned with the main plugin configuration.
+   */
+  solid?: Record<string, unknown>
+  /**
+   * Whether the client runtime should use `hydrate()` (true) or `render()` (false).
+   * @default options.mode === 'spa' ? false : true
+   */
+  clientHydrate?: boolean
 }
 ````
 

@@ -22,6 +22,10 @@ export function createRouteManifestEntryCode() {
   return `export { fileRoutes } from 'virtual:routes'\n`
 }
 
+export function createSolidSSROptions(options?: Record<string, unknown>) {
+  return { ...(options ?? {}), ssr: true }
+}
+
 export function assertAllFulfilled<T = any>(
   results: Array<PromiseSettledResult<T>>,
   batch: string[],
@@ -114,8 +118,13 @@ export default renderServer()
         clearCache()
 
         const ssrPlugins: PluginOption[] = [
-          solidPlugin({ ssr: true }),
-          ...createFileRouter({ ...fileRouterOptions, ssg: undefined }),
+          solidPlugin(createSolidSSROptions(fileRouterOptions.solid)),
+          ...createFileRouter({
+            ...fileRouterOptions,
+            mode: 'ssr',
+            ssg: undefined,
+            clientHydrate: true,
+          }),
         ]
 
         await build({

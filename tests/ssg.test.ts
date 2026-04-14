@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
 
-import { createRouteManifestEntryCode, getSSRBuildOutputPath } from '../src/ssg'
+import {
+  createRouteManifestEntryCode,
+  createSolidSSROptions,
+  getSSRBuildOutputPath,
+} from '../src/ssg'
 import {
   expandDynamicRoute,
   collectRoutesFromConfig,
@@ -240,5 +244,13 @@ describe('ssg helpers', () => {
 
   it('generates a dedicated route manifest entry', () => {
     expect(createRouteManifestEntryCode()).toBe("export { fileRoutes } from 'virtual:routes'\n")
+  })
+
+  it('merges shared solid options for SSR build', () => {
+    expect(createSolidSSROptions({ hot: false, ssr: false })).toEqual({
+      hot: false,
+      ssr: true,
+    })
+    expect(createSolidSSROptions()).toEqual({ ssr: true })
   })
 })
