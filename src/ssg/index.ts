@@ -266,11 +266,12 @@ export function ssgPlugin(ssgConfig: SSGConfig): Plugin {
       }
     },
     configResolved(resolvedConfig) {
-      // configResolved fires once per environment config when sharedDuringBuild
-      // is true. The second call (for the SSR environment) patches build.outDir
-      // to the SSR-specific value, so we intentionally do NOT store outDir here.
-      // Instead, we derive the client outDir at prerender time from
-      // this.environment.getTopLevelConfig().
+      // configResolved is called twice when sharedDuringBuild is true: once for
+      // the client environment config and once for the SSR environment config
+      // (which patches build.outDir to the SSR-specific value).  We intentionally
+      // do NOT store outDir here to avoid picking up the SSR-patched value.
+      // Instead, clientOutDir is derived at prerender time from
+      // this.environment.getTopLevelConfig() inside closeBundle.
       root = resolvedConfig.root
       tempDir = join(root, '.ssg-temp')
       ssrDir = join(tempDir, 'server')
@@ -293,7 +294,7 @@ export function ssgPlugin(ssgConfig: SSGConfig): Plugin {
         )
         generatedEntry = true
         logger.warn(
-          'No ssg.serverEntry setup and default serverEntry path not exists, use default code',
+          'No ssg.serverEntry setup and default serverEntry path does not exist, use default code',
           { timestamp: true },
         )
       }
