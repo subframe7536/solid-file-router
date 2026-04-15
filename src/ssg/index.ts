@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { join, parse, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import type { Plugin, ViteBuilder } from 'vite'
+import type { Plugin } from 'vite'
 
 import { alignKeyValue, createLogHeader, formatDuration, PACKAGE_NAME, logger } from '../const'
 
@@ -54,10 +54,10 @@ function getRuntimeAlias() {
 }
 
 async function runPrerender(
-  builder: ViteBuilder,
   config: SSGConfig,
   root: string,
   outDir: string,
+  ssrOutputPath: string,
 ) {
   const {
     routes: configRoutes = [],
@@ -68,246 +68,197 @@ async function runPrerender(
     concurrency = 4,
   } = config
 
-  let generatedEntry = false
-  const entryPath = join(root, serverEntry)
-  const tempDir = join(outDir, '.ssg-temp')
-  const ssrDir = join(tempDir, 'server')
-  const combinedEntryPath = join(tempDir, 'ssr-entry.ts')
+  // Import combined SSR module (built by Vite's SSR environment before closeBundle fires)
+  if (!existsSync(ssrOutputPath)) {
+    throw new Error(`SSR build output not found at ${ssrOutputPath}`)
+  }
 
-  try {
-    if (!existsSync(entryPath)) {
-      writeFileSync(
-        entryPath,
-        `import { renderServer } from 'virtual:router-entry'
+  const combinedModule = await importModule(ssrOutputPath)
+  const renderFn = combinedModule.default as
+    | ((url: string) => Promise<SSGRenderResult>)
+    | undefined
+  if (typeof renderFn !== 'function') {
+    throw new TypeError(
+      `SSG server entry must default export a render function: ${serverEntry}`,
+    )
+  }
+  const fileRoutes = combinedModule.fileRoutes as any[]
 
-export default renderServer()
-`,
-      )
-      generatedEntry = true
-      logger.warn(
-        'No ssg.serverEntry setup and default serverEntry path not exists, use default code',
-        { timestamp: true },
-      )
+  // Collect routes
+  const visited = new Set<string>()
+  const queue: string[] = []
+  let routeLogWidth = DEFAULT_SSG_ROUTE_LABEL.length
+  const updateRouteLogWidth = (route: string) => {
+    routeLogWidth = Math.max(routeLogWidth, route.length)
+  }
+  const formatRouteLogLabel = (route: string) => route.padEnd(routeLogWidth)
+
+  const configCollected = collectRoutesFromConfig({ routes: configRoutes }, fileRoutes)
+  for (const route of configCollected) {
+    if (!visited.has(route.path)) {
+      visited.add(route.path)
+      updateRouteLogWidth(route.path)
+      queue.push(route.path)
     }
+  }
 
-    // 1. Build client environment
-    await builder.build(builder.environments.client!)
-
-    // 2. Create combined SSR entry (re-exports render fn + fileRoutes) and build SSR environment
-    mkdirSync(ssrDir, { recursive: true })
-    writeFileSync(combinedEntryPath, createSSREntryCode(entryPath))
-
-    const ssrEnv = builder.environments.ssr
-    if (!ssrEnv) {
-      throw new Error(
-        'SSR build environment not found. Ensure the ssgPlugin config() hook ran before buildApp.',
-      )
-    }
-    await builder.build(ssrEnv)
-
-    // 3. Import combined SSR module
-    const combinedModulePath = getSSRBuildOutputPath(ssrDir, combinedEntryPath)
-    if (!existsSync(combinedModulePath)) {
-      throw new Error(`SSR build output not found at ${combinedModulePath}`)
-    }
-
-    const combinedModule = await importModule(combinedModulePath)
-    const renderFn = combinedModule.default as
-      | ((url: string) => Promise<SSGRenderResult>)
-      | undefined
-    if (typeof renderFn !== 'function') {
-      throw new TypeError(
-        `SSG server entry must default export a render function: ${serverEntry}`,
-      )
-    }
-    const fileRoutes = combinedModule.fileRoutes as any[]
-
-    // 4. Collect routes
-    const visited = new Set<string>()
-    const queue: string[] = []
-    let routeLogWidth = DEFAULT_SSG_ROUTE_LABEL.length
-    const updateRouteLogWidth = (route: string) => {
-      routeLogWidth = Math.max(routeLogWidth, route.length)
-    }
-    const formatRouteLogLabel = (route: string) => route.padEnd(routeLogWidth)
-
-    const configCollected = collectRoutesFromConfig({ routes: configRoutes }, fileRoutes)
-    for (const route of configCollected) {
+  if (fileRoutes) {
+    const prerenderCollected = collectRoutesFromPrerender(fileRoutes)
+    for (const route of prerenderCollected) {
       if (!visited.has(route.path)) {
         visited.add(route.path)
         updateRouteLogWidth(route.path)
         queue.push(route.path)
       }
     }
+  }
 
-    if (fileRoutes) {
-      const prerenderCollected = collectRoutesFromPrerender(fileRoutes)
-      for (const route of prerenderCollected) {
-        if (!visited.has(route.path)) {
-          visited.add(route.path)
-          updateRouteLogWidth(route.path)
-          queue.push(route.path)
-        }
-      }
-    }
+  if (queue.length === 0) {
+    logger.warn('No routes to prerender', { timestamp: true })
+    return
+  }
 
-    if (queue.length === 0) {
-      logger.warn('No routes to prerender', { timestamp: true })
-      return
-    }
+  // Render routes
+  const template = readTemplate(outDir)
+  writeFallback(outDir, template)
+  let rendered = 0
+  let failed = 0
+  const renderStart = Date.now()
 
-    // 5. Render routes
-    const template = readTemplate(outDir)
-    writeFallback(outDir, template)
-    let rendered = 0
-    let failed = 0
-    const renderStart = Date.now()
-    const failedRoutes: string[] = []
+  logger.info(`${createLogHeader('SSG Prerendering Started')}`, { timestamp: true })
 
-    logger.info(`${createLogHeader('SSG Prerendering Started')}`, { timestamp: true })
-
-    while (queue.length > 0) {
-      const batch = queue.splice(0, concurrency)
-      const results = await Promise.allSettled(
-        batch.map(async (url) => {
-          let timer: ReturnType<typeof setTimeout>
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            timer = setTimeout(
-              () => reject(new Error(`SSG render timeout (${timeout}ms)`)),
-              timeout,
-            )
-          })
-          try {
-            const result = await Promise.race([renderFn(url), timeoutPromise])
-            return { url, result }
-          } finally {
-            clearTimeout(timer!)
-          }
-        }),
-      )
-
-      for (const settled of results) {
-        if (settled.status === 'rejected') {
-          const url = batch[results.indexOf(settled)]
-          const routePath = url || UNKNOWN_SSG_ROUTE_LABEL
-          const reason =
-            settled.reason instanceof Error ? settled.reason.message : String(settled.reason)
-          failed++
-          failedRoutes.push(routePath)
-          logger.error(`  ✗ ${formatRouteLogLabel(routePath)} → Failed: ${reason}`, {
-            timestamp: false,
-          })
-          continue
-        }
-
-        const { url, result } = (settled as PromiseFulfilledResult<any>).value
-        const html = injectHTML(template, result, mountId)
-        writeRoute(outDir, url, html)
-        rendered++
-
-        const outputPath = url === '/' ? '/index.html' : `${url}.html`
-        logger.info(`  ✓ ${formatRouteLogLabel(url)} → ${outputPath}`, {
-          timestamp: false,
+  while (queue.length > 0) {
+    const batch = queue.splice(0, concurrency)
+    const results = await Promise.allSettled(
+      batch.map(async (url) => {
+        let timer: ReturnType<typeof setTimeout>
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`SSG render timeout (${timeout}ms)`)),
+            timeout,
+          )
         })
-
-        if (crawl) {
-          const newLinks = crawlLinks(result.html, visited)
-          for (const link of newLinks) {
-            visited.add(link)
-            updateRouteLogWidth(link)
-            queue.push(link)
-          }
+        try {
+          const result = await Promise.race([renderFn(url), timeoutPromise])
+          return { url, result }
+        } finally {
+          clearTimeout(timer!)
         }
-      }
-    }
-
-    // 6. Generate 404.html (always, for static file servers)
-    try {
-      const notFoundResult = await renderFn('/__ssg_not_found__')
-      const notFoundHtml = injectHTML(template, notFoundResult, mountId)
-      writeFileSync(join(outDir, '404.html'), notFoundHtml)
-      logger.info(`  ✓ ${formatRouteLogLabel(DEFAULT_SSG_ROUTE_LABEL)} → /404.html`, {
-        timestamp: false,
-      })
-      rendered++
-    } catch {
-      // No 404 route defined, skip
-    }
-
-    const totalDuration = Date.now() - renderStart
-
-    const summaryLines: [string, any][] = [
-      ['Pages generated', rendered],
-      ['Total time', formatDuration(totalDuration)],
-    ]
-
-    if (rendered > 0) {
-      summaryLines.push(['Avg per page', formatDuration(totalDuration / rendered)])
-    }
-
-    if (failed > 0) {
-      summaryLines.unshift(['Failed', failed])
-    }
-
-    logger.info(
-      `${createLogHeader('SSG Prerendering Completed')}
-${alignKeyValue(summaryLines)}`,
-      { timestamp: true },
+      }),
     )
 
-    // 7. Cleanup temp files
-    rmSync(tempDir, { recursive: true, force: true })
-    if (generatedEntry) {
-      rmSync(entryPath, { force: true })
-    }
-  } catch (error) {
-    logger.error(`SSG failed: ${error}`)
-    if (existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true, force: true })
-    }
-    throw error
-  } finally {
-    if (generatedEntry && existsSync(entryPath)) {
-      rmSync(entryPath, { force: true })
+    for (const settled of results) {
+      if (settled.status === 'rejected') {
+        const url = batch[results.indexOf(settled)]
+        const routePath = url || UNKNOWN_SSG_ROUTE_LABEL
+        const reason =
+          settled.reason instanceof Error ? settled.reason.message : String(settled.reason)
+        failed++
+        logger.error(`  ✗ ${formatRouteLogLabel(routePath)} → Failed: ${reason}`, {
+          timestamp: false,
+        })
+        continue
+      }
+
+      const { url, result } = (settled as PromiseFulfilledResult<any>).value
+      const html = injectHTML(template, result, mountId)
+      writeRoute(outDir, url, html)
+      rendered++
+
+      const outputPath = url === '/' ? '/index.html' : `${url}.html`
+      logger.info(`  ✓ ${formatRouteLogLabel(url)} → ${outputPath}`, {
+        timestamp: false,
+      })
+
+      if (crawl) {
+        const newLinks = crawlLinks(result.html, visited)
+        for (const link of newLinks) {
+          visited.add(link)
+          updateRouteLogWidth(link)
+          queue.push(link)
+        }
+      }
     }
   }
+
+  // Generate 404.html (always, for static file servers)
+  try {
+    const notFoundResult = await renderFn('/__ssg_not_found__')
+    const notFoundHtml = injectHTML(template, notFoundResult, mountId)
+    writeFileSync(join(outDir, '404.html'), notFoundHtml)
+    logger.info(`  ✓ ${formatRouteLogLabel(DEFAULT_SSG_ROUTE_LABEL)} → /404.html`, {
+      timestamp: false,
+    })
+    rendered++
+  } catch {
+    // No 404 route defined, skip
+  }
+
+  const totalDuration = Date.now() - renderStart
+
+  const summaryLines: [string, any][] = [
+    ['Pages generated', rendered],
+    ['Total time', formatDuration(totalDuration)],
+  ]
+
+  if (rendered > 0) {
+    summaryLines.push(['Avg per page', formatDuration(totalDuration / rendered)])
+  }
+
+  if (failed > 0) {
+    summaryLines.unshift(['Failed', failed])
+  }
+
+  logger.info(
+    `${createLogHeader('SSG Prerendering Completed')}
+${alignKeyValue(summaryLines)}`,
+    { timestamp: true },
+  )
 }
 
 export function ssgPlugin(ssgConfig: SSGConfig): Plugin {
   const { serverEntry = 'src/entry-server.tsx' } = ssgConfig
 
+  // Paths derived from root (not from build.outDir) so they are stable across
+  // the two configResolved calls that happen when sharedDuringBuild is true.
   let root: string
-  let outDir: string
+  let tempDir: string
+  let ssrDir: string
+  let combinedEntryPath: string
+  let ssrOutputPath: string
+  // Track whether we auto-generated the server entry so we can clean it up.
+  let generatedEntry = false
 
   return {
     name: 'solid-file-router:ssg',
     apply: 'build',
+    // Share a single plugin instance across all Vite build environments so that
+    // the closure variables set in configResolved (e.g. generatedEntry) are
+    // visible to the closeBundle handler that runs in the SSR environment.
+    sharedDuringBuild: true,
     config(userConfig, { command }) {
       if (command !== 'build') {
         return null
       }
-      // The SSR environment config must be registered in the `config` hook (before
-      // configResolved). We derive paths from the raw user config here; `runPrerender`
-      // recomputes them from the fully resolved config to handle any normalisation Vite
-      // applies (e.g. absolute root resolution, outDir defaults).
+      // Register the SSR environment in the config hook (before configResolved)
+      // so Vite knows to build it when the user runs `vite build --app`.
+      // Paths are computed from the raw user config; configResolved recomputes
+      // them from the fully resolved config (absolute root, etc.).
       const rawRoot = resolve(userConfig.root || process.cwd())
-      const rawOutDir = join(rawRoot, userConfig.build?.outDir ?? 'dist')
-      const tempDir = join(rawOutDir, '.ssg-temp')
-      const ssrDir = join(tempDir, 'server')
-      const combinedEntryPath = join(tempDir, 'ssr-entry.ts')
+      const _tempDir = join(rawRoot, '.ssg-temp')
+      const _ssrDir = join(_tempDir, 'server')
+      const _combinedEntryPath = join(_tempDir, 'ssr-entry.ts')
 
       return {
         resolve: {
           alias: getRuntimeAlias(),
         },
         environments: {
-          // Register the SSR environment so that builder.environments.ssr is
-          // available in the buildApp hook without a separate vite.build() call.
           ssr: {
             build: {
-              outDir: ssrDir,
+              outDir: _ssrDir,
               rollupOptions: {
-                input: combinedEntryPath,
+                input: _combinedEntryPath,
               },
             },
           },
@@ -315,11 +266,70 @@ export function ssgPlugin(ssgConfig: SSGConfig): Plugin {
       }
     },
     configResolved(resolvedConfig) {
+      // configResolved fires once per environment config when sharedDuringBuild
+      // is true. The second call (for the SSR environment) patches build.outDir
+      // to the SSR-specific value, so we intentionally do NOT store outDir here.
+      // Instead, we derive the client outDir at prerender time from
+      // this.environment.getTopLevelConfig().
       root = resolvedConfig.root
-      outDir = join(root, resolvedConfig.build.outDir)
+      tempDir = join(root, '.ssg-temp')
+      ssrDir = join(tempDir, 'server')
+      combinedEntryPath = join(tempDir, 'ssr-entry.ts')
+      ssrOutputPath = getSSRBuildOutputPath(ssrDir, combinedEntryPath)
+
+      if (resolvedConfig.command !== 'build') {
+        return
+      }
+
+      const entryPath = join(root, serverEntry)
+      // Only create the default entry on the first configResolved call (when it
+      // doesn't exist yet).  Subsequent calls with the SSR-patched config will
+      // find the file already on disk and skip this branch, leaving generatedEntry
+      // unchanged.
+      if (!existsSync(entryPath)) {
+        writeFileSync(
+          entryPath,
+          `import { renderServer } from 'virtual:router-entry'\n\nexport default renderServer()\n`,
+        )
+        generatedEntry = true
+        logger.warn(
+          'No ssg.serverEntry setup and default serverEntry path not exists, use default code',
+          { timestamp: true },
+        )
+      }
+
+      // Write the combined SSR entry (re-exports render fn + fileRoutes).
+      // Called idempotently on both configResolved invocations — same content.
+      mkdirSync(ssrDir, { recursive: true })
+      writeFileSync(combinedEntryPath, createSSREntryCode(entryPath))
     },
-    async buildApp(builder) {
-      await runPrerender(builder, ssgConfig, root, outDir)
+    async closeBundle() {
+      // Only run prerendering after the SSR environment build finishes.
+      // The client environment is built first (Vite's default buildApp order),
+      // so its index.html is already on disk when this fires.
+      if (this.environment.name !== 'ssr') {
+        return
+      }
+
+      // Derive the client output directory from the top-level (unpatched) config.
+      const topLevelConfig = this.environment.getTopLevelConfig()
+      const clientOutDir = resolve(root, topLevelConfig.build.outDir)
+      const entryPath = join(root, serverEntry)
+
+      try {
+        await runPrerender(ssgConfig, root, clientOutDir, ssrOutputPath)
+      } catch (error) {
+        logger.error(`SSG failed: ${error}`)
+        throw error
+      } finally {
+        // Always clean up the temp directory and any auto-generated entry.
+        if (existsSync(tempDir)) {
+          rmSync(tempDir, { recursive: true, force: true })
+        }
+        if (generatedEntry && existsSync(entryPath)) {
+          rmSync(entryPath, { force: true })
+        }
+      }
     },
   }
 }

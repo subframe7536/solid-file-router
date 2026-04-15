@@ -46,7 +46,6 @@
     "qa": "bun run --parallel lint typecheck",
     "release": "bun run build && bun run qa && bun run test:run && bumpp --all"
   },
-  "dependencies": {},
   "devDependencies": {
     "@solidjs/meta": "^0.29.4",
     "@solidjs/router": "^0.16.1",
