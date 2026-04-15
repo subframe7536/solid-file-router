@@ -1,7 +1,11 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+
 import { describe, it, expect } from 'vitest'
 
 import {
-  createRouteManifestEntryCode,
+  createSSREntryCode,
   createSolidSSROptions,
   getSSRBuildOutputPath,
 } from '../src/ssg'
@@ -11,7 +15,7 @@ import {
   collectRoutesFromPrerender,
   crawlLinks,
 } from '../src/ssg/collect'
-import { injectHTML } from '../src/ssg/render'
+import { injectHTML, writeFallback } from '../src/ssg/render'
 
 const mockFileRoutes = [
   {
@@ -232,6 +236,20 @@ describe('injectHTML', () => {
   })
 })
 
+describe('writeFallback', () => {
+  it('writes fallback.html with raw template content', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'ssg-test-'))
+    try {
+      const template = '<html><body>SPA Shell</body></html>'
+      writeFallback(tmpDir, template)
+      const written = readFileSync(join(tmpDir, 'fallback.html'), 'utf-8')
+      expect(written).toBe(template)
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+})
+
 describe('ssg helpers', () => {
   it('derives the SSR output path from the entry file name', () => {
     expect(getSSRBuildOutputPath('/tmp/out', 'src/entry-server.tsx')).toBe(
@@ -242,8 +260,13 @@ describe('ssg helpers', () => {
     )
   })
 
-  it('generates a dedicated route manifest entry', () => {
-    expect(createRouteManifestEntryCode()).toBe("export { fileRoutes } from 'virtual:routes'\n")
+  it('generates a combined SSR entry that exports both render fn and fileRoutes', () => {
+    expect(createSSREntryCode('/abs/path/entry-server.tsx')).toBe(
+      "export { default } from '/abs/path/entry-server.tsx'\nexport { fileRoutes } from 'virtual:routes'\n",
+    )
+    expect(createSSREntryCode('C:\\Users\\user\\src\\entry.tsx')).toBe(
+      "export { default } from 'C:/Users/user/src/entry.tsx'\nexport { fileRoutes } from 'virtual:routes'\n",
+    )
   })
 
   it('merges shared solid options for SSR build', () => {

@@ -3,6 +3,17 @@ import { dirname, join } from 'node:path'
 
 import type { SSGRenderResult } from './types'
 
+/**
+ * Writes the raw HTML template as `fallback.html` in the output directory.
+ *
+ * This provides an SPA shell fallback for static file servers (e.g. Cloudflare Pages)
+ * that serve `fallback.html` for requests that do not match any prerendered route.
+ * Must be called before rendering individual routes so the fallback is always available.
+ */
+export function writeFallback(outDir: string, template: string): void {
+  writeFileSync(join(outDir, 'fallback.html'), template)
+}
+
 export function injectHTML(template: string, result: SSGRenderResult, mountId: string): string {
   let html = template
 

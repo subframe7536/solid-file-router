@@ -11,7 +11,7 @@ import { alignKeyValue, createLogHeader, formatDuration, PACKAGE_NAME, logger } 
 import { clearCache } from '../utils/extract'
 
 import { collectRoutesFromConfig, collectRoutesFromPrerender, crawlLinks } from './collect'
-import { injectHTML, readTemplate, writeRoute } from './render'
+import { injectHTML, readTemplate, writeFallback, writeRoute } from './render'
 import type { SSGConfig, SSGRenderResult } from './types'
 
 const DEFAULT_SSG_ROUTE_LABEL = '/404'
@@ -22,8 +22,8 @@ export function getSSRBuildOutputPath(outDir: string, entry: string) {
   return join(outDir, `${parse(entry).name}.js`).replace(/\\/g, '/')
 }
 
-export function createRouteManifestEntryCode() {
-  return `export { fileRoutes } from 'virtual:routes'\n`
+export function createSSREntryCode(serverEntryAbsPath: string): string {
+  return `export { default } from '${serverEntryAbsPath.replace(/\\/g, '/')}'\nexport { fileRoutes } from 'virtual:routes'\n`
 }
 
 export function createSolidSSROptions(options?: SolidPluginOptions): SolidPluginOptions {
@@ -86,11 +86,9 @@ export function ssgPlugin(config: SSGConfig, options: SSGPluginOptions): Plugin 
     async writeBundle() {
       let generatedEntry = false
       let entryPath: string
-      let generatedRouteManifestEntry = false
       const tempDir = join(outDir, '.ssg-temp')
-      const ssrServerDir = join(tempDir, 'server')
-      const ssrRoutesDir = join(tempDir, 'routes')
-      const routeManifestEntryPath = join(tempDir, 'route-manifest.ts')
+      const ssrDir = join(tempDir, 'server')
+      const combinedEntryPath = join(tempDir, 'ssr-entry.ts')
 
       try {
         entryPath = join(root, serverEntry)
@@ -109,11 +107,9 @@ export default renderServer()
           )
         }
 
-        // 1. SSR build
-        mkdirSync(ssrServerDir, { recursive: true })
-        mkdirSync(ssrRoutesDir, { recursive: true })
-        writeFileSync(routeManifestEntryPath, createRouteManifestEntryCode())
-        generatedRouteManifestEntry = true
+        // 1. SSR build (single combined build: render function + fileRoutes)
+        mkdirSync(ssrDir, { recursive: true })
+        writeFileSync(combinedEntryPath, createSSREntryCode(entryPath))
 
         clearCache()
 
@@ -127,41 +123,21 @@ export default renderServer()
           },
           plugins: ssrPlugins,
           build: {
-            ssr: entryPath,
-            outDir: ssrServerDir,
+            ssr: combinedEntryPath,
+            outDir: ssrDir,
             minify: false,
           },
           logLevel: 'warn',
         })
 
-        await build({
-          configFile: false,
-          root,
-          resolve: {
-            alias: getRuntimeAlias(),
-          },
-          plugins: ssrPlugins,
-          build: {
-            ssr: routeManifestEntryPath,
-            outDir: ssrRoutesDir,
-            minify: false,
-          },
-          logLevel: 'warn',
-        })
-
-        // 2. Import SSR module
-        const ssrModulePath = getSSRBuildOutputPath(ssrServerDir, serverEntry)
-        if (!existsSync(ssrModulePath)) {
-          throw new Error(`SSR build output not found at ${ssrModulePath}`)
-        }
-        const routeManifestPath = getSSRBuildOutputPath(ssrRoutesDir, routeManifestEntryPath)
-        if (!existsSync(routeManifestPath)) {
-          throw new Error(`Route manifest build output not found at ${routeManifestPath}`)
+        // 2. Import combined SSR module
+        const combinedModulePath = getSSRBuildOutputPath(ssrDir, combinedEntryPath)
+        if (!existsSync(combinedModulePath)) {
+          throw new Error(`SSR build output not found at ${combinedModulePath}`)
         }
 
-        const ssrModule = await importModule(ssrModulePath)
-        const routeManifestModule = await importModule(routeManifestPath)
-        const renderFn = ssrModule.default as
+        const combinedModule = await importModule(combinedModulePath)
+        const renderFn = combinedModule.default as
           | ((url: string) => Promise<SSGRenderResult>)
           | undefined
         if (typeof renderFn !== 'function') {
@@ -169,7 +145,7 @@ export default renderServer()
             `SSG server entry must default export a render function: ${serverEntry}`,
           )
         }
-        const fileRoutes = routeManifestModule.fileRoutes as any[]
+        const fileRoutes = combinedModule.fileRoutes as any[]
 
         // 3. Collect routes
         const visited = new Set<string>()
@@ -207,6 +183,7 @@ export default renderServer()
 
         // 4. Render routes
         const template = readTemplate(outDir)
+        writeFallback(outDir, template)
         let rendered = 0
         let failed = 0
         const renderStart = Date.now()
@@ -319,9 +296,6 @@ ${alignKeyValue(summaryLines)}`,
       } finally {
         if (generatedEntry && existsSync(entryPath!)) {
           rmSync(entryPath!, { force: true })
-        }
-        if (generatedRouteManifestEntry && existsSync(routeManifestEntryPath)) {
-          rmSync(routeManifestEntryPath, { force: true })
         }
       }
     },
