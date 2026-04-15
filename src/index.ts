@@ -146,7 +146,6 @@ interface FileRouterCorePluginOptions {
   verboseLog?: boolean
   inheritanceConfig: Required<InheritanceConfig>
   mode: FileRouterMode
-  clientHydrate: boolean
   solid?: SolidPluginOptions
 }
 
@@ -238,8 +237,11 @@ function createRouteRegistryPlugin(options: FileRouterCorePluginOptions) {
 
 function createFileRouterCorePlugins(options: FileRouterCorePluginOptions): Plugin[] {
   return [
-    solidPlugin(options.solid),
-    ...createHelperPlugin(options.clientHydrate),
+    solidPlugin({
+      ...(options.mode === 'spa' ? {} : { ssr: true }),
+      ...options.solid,
+    }),
+    ...createHelperPlugin(),
     createRouteRegistryPlugin(options),
   ]
 }
@@ -262,7 +264,6 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
   } = options
 
   const routerMode = resolveRouterMode(mode, Boolean(ssgConfig))
-  const shouldHydrate = routerMode !== 'spa'
 
   const inheritanceConfig = {
     enabled: inheritance.enabled ?? true,
@@ -279,7 +280,6 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     verboseLog,
     inheritanceConfig,
     mode: routerMode,
-    clientHydrate: shouldHydrate,
     solid: solidOptions,
   }
 
@@ -292,7 +292,6 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
           return createFileRouterCorePlugins({
             ...coreOptions,
             mode: 'ssr',
-            clientHydrate: true,
             solid: createSolidSSROptions(solidOptions),
           })
         },

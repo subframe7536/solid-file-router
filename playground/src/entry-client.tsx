@@ -1,6 +1,6 @@
 import './style.css'
 
-import { renderClient } from 'virtual:router-entry'
+import { renderClient } from 'solid-file-router'
 import { FileRouter } from 'virtual:routes'
 
-renderClient(() => <FileRouter />)
+renderClient(() => <FileRouter />, 'app')

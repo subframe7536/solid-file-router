@@ -1,5 +1,13 @@
 import type { RouteDefinition, RouteSectionProps } from '@solidjs/router'
-import type { Component } from 'solid-js'
+import type { Accessor, Component, JSX } from 'solid-js'
+import { createComponent } from 'solid-js'
+import {
+  generateHydrationScript,
+  render,
+  hydrate,
+  renderToStringAsync,
+  getAssets,
+} from 'solid-js/web'
 
 export interface FileRoutePath {}
 export interface FileRouteInfo {}
@@ -159,4 +167,78 @@ export function generatePath<T extends keyof FileRoutePath & string>(
   }
 
   return result
+}
+
+/**
+ * Render a Solid application to the DOM for client-side rendering (CSR) or hydration.
+ * In development mode, this function always uses `render()` for faster updates and better debugging.
+ * In production mode, it checks for the presence of the `_$HY` property on the `window` object to determine whether to use `hydrate()` (if server-rendered content is detected) or `render()` (for client-only rendering).
+ *
+ * @param component - A function that returns the root JSX element of the application
+ * @param elementId - The ID of the DOM element to render into
+ */
+export function renderClient(component: Accessor<JSX.Element>, elementId: string) {
+  if (import.meta.env.DEV) {
+    render(component, document.getElementById(elementId)!)
+  } else {
+    ;('_$HY' in window ? hydrate : render)(component, document.getElementById(elementId)!)
+  }
+}
+
+export interface RenderServerResult {
+  html: string
+  head: string
+}
+
+type Promisable<T> = Promise<T> | T
+
+export interface RenderServerOptions {
+  Router?: Component<{ url?: string }>
+  renderApp?: (app: () => JSX.Element, url: string) => Promisable<string>
+  extraHead?: (context: { url: string; html: string }) => Promisable<string | void>
+  onRenderError?: (context: {
+    error: unknown
+    url: string
+  }) => Promisable<RenderServerResult | void>
+  transformResult?: (
+    context: RenderServerResult & { url: string },
+  ) => Promisable<RenderServerResult>
+}
+
+/**
+ * Render a Solid application to an HTML string for server-side rendering (SSR).
+ *
+ * @param options - Configuration options for server rendering
+ */
+export function renderServer(
+  component: Accessor<JSX.Element>,
+  options: RenderServerOptions = {},
+): (url: string) => Promise<RenderServerResult> {
+  const { renderApp, extraHead, onRenderError, transformResult } = options
+
+  return async (url) => {
+    const app = () => createComponent(component, { url })
+
+    let html
+    try {
+      html = renderApp ? await renderApp(app, url) : await renderToStringAsync(app)
+    } catch (error) {
+      if (onRenderError) {
+        const handled = await onRenderError({ error, url })
+        if (handled) {
+          return handled
+        }
+      }
+      throw error
+    }
+
+    const extra = extraHead ? await extraHead({ url, html }) : getAssets()
+
+    const result = {
+      html,
+      head: generateHydrationScript() + (extra || ''),
+    }
+
+    return transformResult ? await transformResult({ ...result, url }) : result
+  }
 }
