@@ -6,7 +6,6 @@ import { describe, it, expect } from 'vitest'
 
 import {
   createSSREntryCode,
-  createSolidSSROptions,
   getSSRBuildOutputPath,
 } from '../src/ssg'
 import {
@@ -267,13 +266,5 @@ describe('ssg helpers', () => {
     expect(createSSREntryCode('C:\\Users\\user\\src\\entry.tsx')).toBe(
       "export { default } from 'C:/Users/user/src/entry.tsx'\nexport { fileRoutes } from 'virtual:routes'\n",
     )
-  })
-
-  it('merges shared solid options for SSR build', () => {
-    expect(createSolidSSROptions({ hot: false, ssr: false })).toEqual({
-      hot: false,
-      ssr: true,
-    })
-    expect(createSolidSSROptions()).toEqual({ ssr: true })
   })
 })

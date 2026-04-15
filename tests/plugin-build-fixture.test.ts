@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 
 import { build as tsdownBuild } from 'tsdown'
 import { build } from 'vite'
+import solidPlugin from 'vite-plugin-solid'
 import { describe, expect, it } from 'vitest'
 
 type Mode = 'spa' | 'ssr' | 'ssg'
@@ -54,11 +55,11 @@ async function buildModeFixture(mode: Mode) {
         'solid-file-router': DIST_RUNTIME_PATH,
       },
     },
-    plugins: fileRouter({
+    plugins: [solidPlugin(), ...fileRouter({
       mode,
       output: outputPath,
       ssg: mode === 'ssg' ? { routes: ['/'] } : undefined,
-    }),
+    })],
     build: {
       outDir: outDirName,
       minify: false,
