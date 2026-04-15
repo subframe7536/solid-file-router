@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join, parse } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { build } from 'vite'
 import type { Plugin, PluginOption } from 'vite'
@@ -47,6 +48,10 @@ export function assertAllFulfilled<T = any>(
 }
 
 const require = createRequire(import.meta.url)
+
+function importModule(filePath: string) {
+  return import(pathToFileURL(filePath).href)
+}
 
 function getRuntimeAlias() {
   return {
@@ -154,8 +159,8 @@ export default renderServer()
           throw new Error(`Route manifest build output not found at ${routeManifestPath}`)
         }
 
-        const ssrModule = await import(ssrModulePath)
-        const routeManifestModule = await import(routeManifestPath)
+        const ssrModule = await importModule(ssrModulePath)
+        const routeManifestModule = await importModule(routeManifestPath)
         const renderFn = ssrModule.default as
           | ((url: string) => Promise<SSGRenderResult>)
           | undefined
