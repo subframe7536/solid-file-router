@@ -23,6 +23,11 @@ interface DefinitionMode {
 }
 
 const REG_IS_ROUTE_FILE = /\.(jsx|tsx|mdx)$/
+
+function normalizeBaseDir(baseDir: string): string {
+  return baseDir ? normalizePath(baseDir).replace(/\/$/, '') : ''
+}
+
 export class RouteRegistry {
   private root = ''
   private initialized = false
@@ -33,7 +38,7 @@ export class RouteRegistry {
   private readonly routesFilter: string
 
   constructor(private readonly options: RouteRegistryOption) {
-    const baseDir = normalizePath(options.baseDir).replace(/\/$/, '')
+    const baseDir = normalizeBaseDir(options.baseDir)
     this.routesFilter = `${baseDir ? `${baseDir}/` : ''}src/pages/**/*.{jsx,tsx,mdx}`
   }
 
@@ -78,13 +83,16 @@ ${alignKeyValue([
     )
   }
 
-  markChanged(file: string) {
+  markChanged(file: string): boolean {
     const normalized = normalizePath(file)
     if (!this.isRouteFile(normalized)) {
-      return
+      return false
     }
+
     invalidateCache(normalized)
-    this.logVerbose(`Cache invalidated: ${normalized}`)
+    this.bumpVersion()
+    this.logVerbose(`Route changed: ${normalized}`)
+    return true
   }
 
   async addFile(file: string): Promise<boolean> {
@@ -164,7 +172,7 @@ ${alignKeyValue([
   }
 
   private get pagesDir() {
-    const baseDir = normalizePath(this.options.baseDir).replace(/\/$/, '')
+    const baseDir = normalizeBaseDir(this.options.baseDir)
     return `${this.root}/${baseDir ? `${baseDir}/` : ''}src/pages`.replace(/\/+/g, '/')
   }
 }

@@ -1,4 +1,5 @@
 import type { Plugin } from 'vite'
+import { normalizePath } from 'vite'
 import solidPlugin from 'vite-plugin-solid'
 import type { Options as SolidPluginOptions } from 'vite-plugin-solid'
 
@@ -192,6 +193,17 @@ function createRouteRegistryPlugin(options: FileRouterCorePluginOptions) {
         }
       }
 
+      const invalidateFileModules = (file: string) => {
+        const modules = server.moduleGraph.getModulesByFile(normalizePath(file))
+        if (!modules) {
+          return
+        }
+
+        for (const module of modules) {
+          server.moduleGraph.invalidateModule(module)
+        }
+      }
+
       const handleStructureEvent =
         (handler: (file: string) => Promise<boolean>) => async (file: string) => {
           if (!(await handler(file))) {
@@ -214,10 +226,18 @@ function createRouteRegistryPlugin(options: FileRouterCorePluginOptions) {
           handleStructureEvent((file) => registry.removeFile(file)),
         )
         .on('change', (file) => {
-          if (!reloadOnChange && !registry.isRouteFile(file)) {
+          if (!registry.markChanged(file)) {
             return
           }
-          registry.markChanged(file)
+
+          invalidateFileModules(file)
+          invalidateVirtualModule(VID_EXTRACT_RESOLVED)
+
+          if (reloadOnChange) {
+            server.ws.send({
+              type: 'full-reload',
+            })
+          }
         })
     },
     transform: {

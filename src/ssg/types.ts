@@ -22,7 +22,7 @@ export interface SSGConfig {
    *
    * You can use `renderServer` from `virtual:router-entry` for advanced customization.
    *
-   * If not set or the file doesn't exist, a default entry will be generated automatically.
+   * The file must exist for SSG builds.
    * @default 'src/entry-server.tsx'
    */
   serverEntry?: string

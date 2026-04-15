@@ -37,7 +37,7 @@
     "test:run": "vitest --run",
     "play": "vite serve playground",
     "play:build": "bun run build && vite build playground",
-    "play:preview": "vite preview playground",
+    "play:preview": "bun run play:build && vite preview playground",
     "lint": "oxlint",
     "format": "oxfmt",
     "typecheck": "tsc --noEmit",
