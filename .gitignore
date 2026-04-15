@@ -8,9 +8,6 @@ build/
 *.js.map
 *.tsbuildinfo
 
-# SSG temp directory (generated during vite build --app)
-.ssg-temp/
-
 # Lockfiles (library package – only bun.lock is tracked)
 package-lock.json
 yarn.lock

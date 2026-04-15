@@ -1,4 +1,4 @@
-import type { Plugin } from 'vite'
+import type { Plugin, ResolvedConfig } from 'vite'
 
 import { ID_EXTRACT, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
 import { createHelperPlugin } from './helper'
@@ -8,8 +8,6 @@ import type { InheritanceConfig } from './utils/definition'
 import { extract } from './utils/extract'
 import { RouteRegistry } from './utils/registry'
 import type { InfoTypeDefinition } from './utils/route-type'
-
-export type FileRouterMode = 'spa' | 'ssr' | 'ssg'
 
 interface FileRouterPluginOption {
   /**
@@ -79,7 +77,12 @@ interface FileRouterPluginOption {
   /**
    * SSG (Static Site Generation) configuration.
    *
-   * When provided, selected routes will be prerendered to static HTML during `vite build`.
+   * When provided, selected routes will be prerendered to static HTML during `vite build --app`.
+   *
+   * The router mode is inferred automatically:
+   * - No SSR environment configured → SPA (render)
+   * - SSR environment configured, no `ssg` → SSR (hydrate)
+   * - SSR environment configured + `ssg` → SSG (hydrate + prerender)
    *
    * @example
    * ```ts
@@ -90,16 +93,6 @@ interface FileRouterPluginOption {
    * ```
    */
   ssg?: SSGConfig
-  /**
-   * Router operating mode.
-   *
-   * - `spa`: client-only routes with `render()`
-   * - `ssr`: server-rendered routes with `hydrate()`
-   * - `ssg`: static site generation with prerendering
-   *
-   * @default options.ssg ? 'ssg' : 'spa'
-   */
-  mode?: FileRouterMode
 }
 
 export const DEFAULT_IGNORES = ['**/components/**', '**/node_modules/**', '**/dist/**']
@@ -121,11 +114,17 @@ const queryMap = new Map<string, string[]>([
 ])
 const REG_ROUTE_QUERY = /\?(route|comp)$/
 
-function resolveRouterMode(mode: FileRouterMode | undefined, hasSSG: boolean): FileRouterMode {
-  if (mode) {
-    return mode
+/**
+ * Returns true when the resolved Vite config has an SSR environment with a
+ * build entry configured (Vite 8 environment builds), or the legacy
+ * `build.ssr` option is set.
+ */
+function hasSSRConfigured(config: ResolvedConfig): boolean {
+  if (config.build.ssr) {
+    return true
   }
-  return hasSSG ? 'ssg' : 'spa'
+  const ssrEnv = (config.environments as Record<string, any>)?.ssr
+  return !!(ssrEnv?.build?.rolldownOptions?.input ?? ssrEnv?.build?.rollupOptions?.input)
 }
 
 interface FileRouterCorePluginOptions {
@@ -136,14 +135,13 @@ interface FileRouterCorePluginOptions {
   infoDts?: InfoTypeDefinition
   verboseLog?: boolean
   inheritanceConfig: Required<InheritanceConfig>
-  mode: FileRouterMode
-  clientHydrate: boolean
+  hydrateRef: { value: boolean }
 }
 
 function createRouteRegistryPlugin(options: FileRouterCorePluginOptions) {
-  const { baseDir, ignore, output, infoDts, verboseLog, inheritanceConfig, mode, reloadOnChange } =
+  const { baseDir, ignore, output, infoDts, verboseLog, inheritanceConfig, hydrateRef, reloadOnChange } =
     options
-  let isSSR = mode === 'ssr'
+  let isSSR = hydrateRef.value
   const registry = new RouteRegistry({
     baseDir,
     ignore,
@@ -156,7 +154,11 @@ function createRouteRegistryPlugin(options: FileRouterCorePluginOptions) {
   return {
     name: ID_EXTRACT,
     configResolved(config) {
-      isSSR = mode === 'ssr' || !!config.build.ssr
+      // Auto-infer SSR/SSG mode from the Vite config:
+      //   - build.ssr set → traditional Vite SSR build
+      //   - environments.ssr.build.rolldownOptions.input set → Vite 8 environment build
+      hydrateRef.value = hydrateRef.value || hasSSRConfigured(config)
+      isSSR = hydrateRef.value
       registry.setRoot(config.root)
     },
     resolveId: {
@@ -174,7 +176,7 @@ function createRouteRegistryPlugin(options: FileRouterCorePluginOptions) {
       handler() {
         // In Vite 8, this.environment.name is 'ssr' for the SSR build environment
         // (registered by the ssgPlugin config hook). The legacy `isSSR` path covers
-        // explicit SSR mode builds triggered by `mode: 'ssr'` or `build.ssr` in userland.
+        // explicit SSR mode builds triggered by `build.ssr` in userland.
         const ssr = isSSR || this.environment.name === 'ssr'
         return registry.getDefinition({ ssr })
       },
@@ -232,7 +234,7 @@ function createRouteRegistryPlugin(options: FileRouterCorePluginOptions) {
 
 function createFileRouterCorePlugins(options: FileRouterCorePluginOptions): Plugin[] {
   return [
-    ...createHelperPlugin(options.clientHydrate),
+    ...createHelperPlugin(options.hydrateRef),
     createRouteRegistryPlugin(options),
   ]
 }
@@ -250,11 +252,11 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     verboseLog,
     inheritance = { enabled: true },
     ssg: ssgConfig,
-    mode,
   } = options
 
-  const routerMode = resolveRouterMode(mode, Boolean(ssgConfig))
-  const shouldHydrate = routerMode !== 'spa'
+  // Hydration is needed for SSR and SSG. Start with whether ssg config is provided;
+  // configResolved will also enable it when the Vite config has an SSR environment.
+  const hydrateRef = { value: Boolean(ssgConfig) }
 
   const inheritanceConfig = {
     enabled: inheritance.enabled ?? true,
@@ -270,13 +272,12 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     infoDts,
     verboseLog,
     inheritanceConfig,
-    mode: routerMode,
-    clientHydrate: shouldHydrate,
+    hydrateRef,
   }
 
   const plugins = createFileRouterCorePlugins(coreOptions)
 
-  if (routerMode === 'ssg' && ssgConfig) {
+  if (ssgConfig) {
     plugins.push(ssgPlugin(ssgConfig))
   }
 

@@ -219,13 +219,15 @@ ${alignKeyValue(summaryLines)}`,
 export function ssgPlugin(ssgConfig: SSGConfig): Plugin {
   const { serverEntry = 'src/entry-server.tsx' } = ssgConfig
 
-  // Paths derived from root (not from build.outDir) so they are stable across
-  // the two configResolved calls that happen when sharedDuringBuild is true.
   let root: string
-  let tempDir: string
+  // Paths computed once in config() from the raw (pre-Vite) user config.
+  // They are stable across the two configResolved calls that fire when
+  // sharedDuringBuild is true (one per environment).
   let ssrDir: string
   let combinedEntryPath: string
   let ssrOutputPath: string
+  // Prevent double file-writing: configResolved also fires once per environment.
+  let hasInitialized = false
   // Track whether we auto-generated the server entry so we can clean it up.
   let generatedEntry = false
 
@@ -233,21 +235,23 @@ export function ssgPlugin(ssgConfig: SSGConfig): Plugin {
     name: 'solid-file-router:ssg',
     apply: 'build',
     // Share a single plugin instance across all Vite build environments so that
-    // the closure variables set in configResolved (e.g. generatedEntry) are
-    // visible to the closeBundle handler that runs in the SSR environment.
+    // the closure variables set in config/configResolved (e.g. generatedEntry)
+    // are visible to the closeBundle handler that runs in the SSR environment.
     sharedDuringBuild: true,
     config(userConfig, { command }) {
       if (command !== 'build') {
         return null
       }
-      // Register the SSR environment in the config hook (before configResolved)
-      // so Vite knows to build it when the user runs `vite build --app`.
-      // Paths are computed from the raw user config; configResolved recomputes
-      // them from the fully resolved config (absolute root, etc.).
+      // Compute SSR paths from the raw user config so they are stable
+      // regardless of which environment's config hook fires next.
+      // All per-environment config() calls receive the same top-level
+      // userConfig.build.outDir (the SSR-patched value is NOT propagated back),
+      // so repeating this computation is idempotent.
       const rawRoot = resolve(userConfig.root || process.cwd())
-      const _tempDir = join(rawRoot, '.ssg-temp')
-      const _ssrDir = join(_tempDir, 'server')
-      const _combinedEntryPath = join(_tempDir, 'ssr-entry.ts')
+      const rawOutDir = resolve(rawRoot, userConfig.build?.outDir || 'dist')
+      ssrDir = join(rawOutDir, 'server')
+      combinedEntryPath = join(ssrDir, 'ssr-entry.ts')
+      ssrOutputPath = getSSRBuildOutputPath(ssrDir, combinedEntryPath)
 
       return {
         resolve: {
@@ -256,9 +260,9 @@ export function ssgPlugin(ssgConfig: SSGConfig): Plugin {
         environments: {
           ssr: {
             build: {
-              outDir: _ssrDir,
-              rollupOptions: {
-                input: _combinedEntryPath,
+              outDir: ssrDir,
+              rolldownOptions: {
+                input: combinedEntryPath,
               },
             },
           },
@@ -266,27 +270,16 @@ export function ssgPlugin(ssgConfig: SSGConfig): Plugin {
       }
     },
     configResolved(resolvedConfig) {
-      // configResolved is called twice when sharedDuringBuild is true: once for
-      // the client environment config and once for the SSR environment config
-      // (which patches build.outDir to the SSR-specific value).  We intentionally
-      // do NOT store outDir here to avoid picking up the SSR-patched value.
-      // Instead, clientOutDir is derived at prerender time from
-      // this.environment.getTopLevelConfig() inside closeBundle.
       root = resolvedConfig.root
-      tempDir = join(root, '.ssg-temp')
-      ssrDir = join(tempDir, 'server')
-      combinedEntryPath = join(tempDir, 'ssr-entry.ts')
-      ssrOutputPath = getSSRBuildOutputPath(ssrDir, combinedEntryPath)
 
-      if (resolvedConfig.command !== 'build') {
+      // configResolved fires once per environment when sharedDuringBuild is
+      // true.  Only write files on the first call to avoid duplicate work.
+      if (resolvedConfig.command !== 'build' || hasInitialized) {
         return
       }
+      hasInitialized = true
 
       const entryPath = join(root, serverEntry)
-      // Only create the default entry on the first configResolved call (when it
-      // doesn't exist yet).  Subsequent calls with the SSR-patched config will
-      // find the file already on disk and skip this branch, leaving generatedEntry
-      // unchanged.
       if (!existsSync(entryPath)) {
         writeFileSync(
           entryPath,
@@ -299,8 +292,6 @@ export function ssgPlugin(ssgConfig: SSGConfig): Plugin {
         )
       }
 
-      // Write the combined SSR entry (re-exports render fn + fileRoutes).
-      // Called idempotently on both configResolved invocations — same content.
       mkdirSync(ssrDir, { recursive: true })
       writeFileSync(combinedEntryPath, createSSREntryCode(entryPath))
     },
@@ -323,9 +314,9 @@ export function ssgPlugin(ssgConfig: SSGConfig): Plugin {
         logger.error(`SSG failed: ${error}`)
         throw error
       } finally {
-        // Always clean up the temp directory and any auto-generated entry.
-        if (existsSync(tempDir)) {
-          rmSync(tempDir, { recursive: true, force: true })
+        // Clean up the SSR server directory and any auto-generated entry.
+        if (ssrDir && existsSync(ssrDir)) {
+          rmSync(ssrDir, { recursive: true, force: true })
         }
         if (generatedEntry && existsSync(entryPath)) {
           rmSync(entryPath, { force: true })

@@ -71,7 +71,7 @@ export function renderServer(options = {}) {
 `
 }
 
-export function createHelperPlugin(useHydrate: boolean): Plugin[] {
+export function createHelperPlugin(hydrateRef: { value: boolean }): Plugin[] {
   return [
     {
       name: ID_HELPER,
@@ -107,7 +107,7 @@ export function createHelperPlugin(useHydrate: boolean): Plugin[] {
           id: new RegExp(VID_ROUTER_ENTRY_RESOLVED),
         },
         handler() {
-          return buildRouterEntryHelper(useHydrate)
+          return buildRouterEntryHelper(hydrateRef.value)
         },
       },
     },

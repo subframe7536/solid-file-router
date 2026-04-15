@@ -21,25 +21,18 @@ function getRouterEntryCodeFromPlugins(plugins: ReturnType<typeof fileRouter>) {
 }
 
 describe('fileRouter mode handling', () => {
-  it('uses render() by default for SPA mode', () => {
+  it('uses render() by default when no SSR is configured (SPA)', () => {
     const plugins = fileRouter()
     const code = getRouterEntryCodeFromPlugins(plugins)
-    expect(code).toContain('import { generateHydrationScript, render, renderToStringAsync }')
-    expect(code).toContain("const mod = await import('@solidjs/meta')")
+    expect(code).toContain(
+      'import { generateHydrationScript, render, renderToStringAsync, getAssets }',
+    )
     expect(code).toContain('const renderContext = { url, Router, getAssets }')
     expect(code).toContain('return render(component, element)')
-    expect(plugins.some((plugin) => plugin.name.includes('solid'))).toBe(true)
+    expect(plugins.some((plugin) => plugin.name.includes('solid-file-router'))).toBe(true)
   })
 
-  it('uses hydrate() for SSR mode', () => {
-    const plugins = fileRouter({ mode: 'ssr' })
-    const code = getRouterEntryCodeFromPlugins(plugins)
-    expect(code).toContain('import { generateHydrationScript, hydrate, renderToStringAsync }')
-    expect(code).toContain('return hydrate(component, element)')
-    expect(plugins.some((plugin) => plugin.name.includes('solid'))).toBe(true)
-  })
-
-  it('defaults to SSG mode when ssg config is provided', () => {
+  it('uses hydrate() when ssg config is provided (SSG)', () => {
     const options = {
       ssg: {
         routes: ['/'],
@@ -47,17 +40,20 @@ describe('fileRouter mode handling', () => {
     } satisfies Parameters<typeof fileRouter>[0]
     const plugins = fileRouter(options)
     const code = getRouterEntryCodeFromPlugins(plugins)
-    expect(code).toContain('import { generateHydrationScript, hydrate, renderToStringAsync }')
+    expect(code).toContain(
+      'import { generateHydrationScript, hydrate, renderToStringAsync, getAssets }',
+    )
+    expect(code).toContain('return hydrate(component, element)')
     expect(plugins.some((plugin) => plugin.name === 'solid-file-router:ssg')).toBe(true)
   })
 
-  it('can disable SSG plugin by setting mode to spa', () => {
-    const plugins = fileRouter({
-      mode: 'spa',
-      ssg: {
-        routes: ['/'],
-      },
-    })
+  it('SSG plugin is present when ssg config is provided', () => {
+    const plugins = fileRouter({ ssg: { routes: ['/'] } })
+    expect(plugins.some((plugin) => plugin.name === 'solid-file-router:ssg')).toBe(true)
+  })
+
+  it('SSG plugin is absent when no ssg config is provided', () => {
+    const plugins = fileRouter()
     expect(plugins.some((plugin) => plugin.name === 'solid-file-router:ssg')).toBe(false)
   })
 })

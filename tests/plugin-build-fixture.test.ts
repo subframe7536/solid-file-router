@@ -4,11 +4,10 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { build as tsdownBuild } from 'tsdown'
-import { build } from 'vite'
+import { build, createBuilder, type InlineConfig } from 'vite'
 import solidPlugin from 'vite-plugin-solid'
 import { describe, expect, it } from 'vitest'
 
-type Mode = 'spa' | 'ssr' | 'ssg'
 type FileRouterFn = typeof import('../src').fileRouter
 
 const FIXTURE_ROOT = fileURLToPath(new URL('./fixtures/modes/basic', import.meta.url))
@@ -41,12 +40,24 @@ function resolveClientEntryCode(outDir: string) {
   return readFileSync(jsPath, 'utf-8')
 }
 
-async function buildModeFixture(mode: Mode) {
+/**
+ * Build a fixture with the given options.
+ *
+ * - No extra options → SPA (render): plain `vite build`
+ * - `withSSREnv: true` → SSR (hydrate): plain `vite build` with an SSR environment
+ *   registered in the config so the plugin auto-infers hydrate mode from `configResolved`
+ * - `ssg` config → SSG (hydrate + prerender): `vite build --app` using SSG plugin
+ */
+async function buildFixture(opts: {
+  ssg?: { routes: string[] }
+  withSSREnv?: boolean
+}) {
   const fileRouter = await getBuiltFileRouter()
   const suffix = randomUUID()
-  const outDirName = `.tmp-dist-${mode}-${suffix}`
-  const outputPath = `src/routes-${mode}-${suffix}.d.ts`
-  await build({
+  const outDirName = `.tmp-dist-${suffix}`
+  const outputPath = `src/routes-${suffix}.d.ts`
+
+  const base: InlineConfig = {
     configFile: false,
     root: FIXTURE_ROOT,
     logLevel: 'silent',
@@ -55,16 +66,38 @@ async function buildModeFixture(mode: Mode) {
         'solid-file-router': DIST_RUNTIME_PATH,
       },
     },
-    plugins: [solidPlugin(), ...fileRouter({
-      mode,
-      output: outputPath,
-      ssg: mode === 'ssg' ? { routes: ['/'] } : undefined,
-    })],
+    plugins: [solidPlugin(), ...fileRouter({ output: outputPath, ssg: opts.ssg })],
     build: {
       outDir: outDirName,
       minify: false,
     },
-  })
+  }
+
+  if (opts.ssg) {
+    // SSG: use Vite's builder API so both client and SSR environments are
+    // built.  The SSG plugin's closeBundle fires after the SSR build to run
+    // prerendering.
+    const builder = await createBuilder(base)
+    await builder.buildApp()
+  } else if (opts.withSSREnv) {
+    // SSR auto-inference: register an SSR environment in the Vite config so
+    // that configResolved sees it and enables hydrate mode on the client build.
+    // We only build the client here (plain `vite build`), which is enough to
+    // verify that the client entry uses hydrate().
+    await build({
+      ...base,
+      environments: {
+        ssr: {
+          build: {
+            rolldownOptions: { input: join(FIXTURE_ROOT, 'src/entry-server.tsx') },
+          },
+        },
+      },
+    })
+  } else {
+    await build(base)
+  }
+
   return {
     outDir: join(FIXTURE_ROOT, outDirName),
     outputPath: join(FIXTURE_ROOT, outputPath),
@@ -73,7 +106,7 @@ async function buildModeFixture(mode: Mode) {
 
 describe('fileRouter vite build fixtures', () => {
   it('builds SPA mode with render() client entry', async () => {
-    const { outDir, outputPath } = await buildModeFixture('spa')
+    const { outDir, outputPath } = await buildFixture({})
     try {
       const code = resolveClientEntryCode(outDir)
       expect(code).toContain('render(component, element)')
@@ -85,7 +118,7 @@ describe('fileRouter vite build fixtures', () => {
   })
 
   it('builds SSR mode with hydrate() client entry', async () => {
-    const { outDir, outputPath } = await buildModeFixture('ssr')
+    const { outDir, outputPath } = await buildFixture({ withSSREnv: true })
     try {
       const code = resolveClientEntryCode(outDir)
       expect(code).toContain('hydrate(component, element)')
@@ -96,7 +129,7 @@ describe('fileRouter vite build fixtures', () => {
   })
 
   it('builds SSG mode with hydrate() client entry and prerendered output', async () => {
-    const { outDir, outputPath } = await buildModeFixture('ssg')
+    const { outDir, outputPath } = await buildFixture({ ssg: { routes: ['/'] } })
     try {
       const code = resolveClientEntryCode(outDir)
       expect(code).toContain('hydrate(component, element)')
