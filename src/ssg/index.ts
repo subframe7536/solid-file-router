@@ -23,7 +23,8 @@ export function getSSRBuildOutputPath(outDir: string, entry: string) {
 }
 
 export function createSSREntryCode(serverEntryAbsPath: string): string {
-  return `export { default } from '${serverEntryAbsPath.replace(/\\/g, '/')}'\nexport { fileRoutes } from 'virtual:routes'\n`
+  const posixPath = serverEntryAbsPath.replace(/\\/g, '/')
+  return `export { default } from '${posixPath}'\nexport { fileRoutes } from 'virtual:routes'\n`
 }
 
 export function createSolidSSROptions(options?: SolidPluginOptions): SolidPluginOptions {
