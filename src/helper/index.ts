@@ -14,7 +14,7 @@ declare const __LOADER__: string
 function buildRouterEntryHelper(useHydrate = true) {
   const clientRenderer = useHydrate ? 'hydrate' : 'render'
   return `import { createComponent } from 'solid-js'
-import { generateHydrationScript, ${clientRenderer}, renderToStringAsync } from 'solid-js/web'
+import { generateHydrationScript, ${clientRenderer}, renderToStringAsync, getAssets } from 'solid-js/web'
 import { FileRouter } from 'virtual:routes'
 
 export function renderClient(component, elementId = 'app') {
@@ -36,14 +36,6 @@ export function renderServer(options = {}) {
   } = options
 
   return async (url) => {
-    const getAssets = async () => {
-      try {
-        const mod = await import('@solidjs/meta')
-        return typeof mod.getAssets === 'function' ? (mod.getAssets() ?? '') : ''
-      } catch {
-        return ''
-      }
-    }
     const app = () => createComponent(Router, { url })
     const renderContext = { url, Router, getAssets }
 
@@ -66,7 +58,7 @@ export function renderServer(options = {}) {
           ...renderContext,
           html,
         })
-      : ''
+      : getAssets()
 
     const result = {
       html,
