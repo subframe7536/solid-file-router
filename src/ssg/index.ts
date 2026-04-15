@@ -12,7 +12,7 @@ import { clearCache } from '../utils/extract'
 
 import { collectRoutesFromConfig, collectRoutesFromPrerender, crawlLinks } from './collect'
 import { injectHTML, readTemplate, writeRoute } from './render'
-import type { SSGConfig, SSGRenderResult } from './types'
+import type { FileRouteNode, SSGConfig, SSGRenderResult } from './types'
 
 const DEFAULT_SSG_ROUTE_LABEL = '/404'
 const SSG_BUNDLE_PREFIX = '__solid-file-router-ssg'
@@ -48,7 +48,8 @@ function importModule(filePath: string) {
 
 function getRuntimeAlias() {
   return {
-    [PACKAGE_NAME]: require.resolve(PACKAGE_NAME),
+    find: PACKAGE_NAME,
+    replacement: require.resolve(PACKAGE_NAME),
   }
 }
 
@@ -57,8 +58,8 @@ function mergeAlias(alias: AliasOptions | undefined): AliasOptions {
     return [...alias, getRuntimeAlias()]
   }
   return {
-    ...(alias || {}),
-    ...getRuntimeAlias(),
+    ...alias,
+    [PACKAGE_NAME]: require.resolve(PACKAGE_NAME),
   }
 }
 
@@ -85,6 +86,7 @@ async function detectSolidSSR(plugins: readonly Plugin[]) {
     return false
   }
 
+  // The Solid transform hook doesn't use the plugin context for this probe.
   const context = {} as any
 
   const result =
@@ -197,12 +199,16 @@ export function ssgPlugin(config: SSGConfig, options: SSGPluginOptions): Plugin 
         }
 
         const ssrModule = await importModule(ssrModulePath)
-        const renderFn = ssrModule.default as ((url: string) => Promise<SSGRenderResult>) | undefined
+        const renderFn = ssrModule.default as
+          | ((url: string) => Promise<SSGRenderResult>)
+          | undefined
         if (typeof renderFn !== 'function') {
-          throw new TypeError(`SSG server entry must default export a render function: ${serverEntry}`)
+          throw new TypeError(
+            `SSG server entry must default export a render function: ${serverEntry}`,
+          )
         }
 
-        const fileRoutes = ssrModule.fileRoutes as any[] | undefined
+        const fileRoutes = ssrModule.fileRoutes as FileRouteNode[] | undefined
 
         const visited = new Set<string>()
         const queue: string[] = []
@@ -265,7 +271,8 @@ export function ssgPlugin(config: SSGConfig, options: SSGPluginOptions): Plugin 
             }),
           )
 
-          for (const [index, settled] of results.entries()) {
+          for (let index = 0; index < results.length; index++) {
+            const settled = results[index]!
             if (settled.status === 'rejected') {
               const routePath = batch[index] || UNKNOWN_SSG_ROUTE_LABEL
               const reason =
@@ -311,10 +318,10 @@ export function ssgPlugin(config: SSGConfig, options: SSGPluginOptions): Plugin 
         }
 
         const totalDuration = Date.now() - renderStart
-        const summaryLines: Array<[string, string | number]> = [
+        const summaryLines = [
           ['Pages generated', rendered],
           ['Total time', formatDuration(totalDuration)],
-        ]
+        ] satisfies Array<[string, string | number]>
 
         if (rendered > 0) {
           summaryLines.push(['Avg per page', formatDuration(totalDuration / rendered)])

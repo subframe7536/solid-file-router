@@ -7,10 +7,14 @@ const SLOT_APP = '<!--ssr-outlet-->'
 const SLOT_HEAD = '<!--ssr-head-->'
 const SLOT_ASSETS = '<!--ssr-assets-->'
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 function withHTMLSlots(template: string, mountId: string) {
   let html = template
 
-  const mountSelector = mountId.replace(/^#/, '')
+  const mountSelector = escapeRegExp(mountId.replace(/^#/, ''))
   const mountRegex = new RegExp(`(<[^>]*id=["']${mountSelector}["'][^>]*>)(?:${SLOT_APP})?`)
   if (!html.includes(SLOT_APP)) {
     html = html.replace(mountRegex, `$1${SLOT_APP}`)

@@ -47,3 +47,10 @@ export interface CollectedRoute {
   path: string
   source: 'config' | 'prerender' | 'crawl'
 }
+
+export interface FileRouteNode {
+  path?: string
+  id?: string
+  children?: FileRouteNode[]
+  prerender?: boolean | { params?: Record<string, string | string[]> }
+}

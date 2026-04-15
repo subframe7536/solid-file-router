@@ -87,7 +87,7 @@ interface FileRouterPluginOption {
    *   crawl: true,
    * }
    * ```
-  */
+   */
   ssg?: SSGConfig
 }
 
@@ -121,7 +121,8 @@ interface FileRouterCorePluginOptions {
 }
 
 function createRouteRegistryPlugin(options: FileRouterCorePluginOptions) {
-  const { baseDir, ignore, output, infoDts, verboseLog, inheritanceConfig, reloadOnChange } = options
+  const { baseDir, ignore, output, infoDts, verboseLog, inheritanceConfig, reloadOnChange } =
+    options
   let isSSR = false
   const registry = new RouteRegistry({
     baseDir,
@@ -206,10 +207,7 @@ function createRouteRegistryPlugin(options: FileRouterCorePluginOptions) {
 }
 
 function createFileRouterCorePlugins(options: FileRouterCorePluginOptions): Plugin[] {
-  return [
-    ...createHelperPlugin(),
-    createRouteRegistryPlugin(options),
-  ]
+  return [...createHelperPlugin(), createRouteRegistryPlugin(options)]
 }
 
 /**

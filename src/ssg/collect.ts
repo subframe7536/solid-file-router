@@ -1,4 +1,4 @@
-import type { CollectedRoute, SSGConfig, SSGRouteEntry } from './types'
+import type { CollectedRoute, FileRouteNode, SSGConfig, SSGRouteEntry } from './types'
 
 export function expandDynamicRoute(
   pathPattern: string,
@@ -37,7 +37,7 @@ export function expandDynamicRoute(
 /**
  * Walk fileRoutes tree and collect all static (non-dynamic) paths.
  */
-function collectAllStaticRoutes(fileRoutes: any[], parentPath = ''): string[] {
+function collectAllStaticRoutes(fileRoutes: FileRouteNode[], parentPath = ''): string[] {
   const paths: string[] = []
 
   for (const route of fileRoutes) {
@@ -85,7 +85,10 @@ function isGlobPattern(s: string): boolean {
   return s.includes('*')
 }
 
-export function collectRoutesFromConfig(config: SSGConfig, fileRoutes?: any[]): CollectedRoute[] {
+export function collectRoutesFromConfig(
+  config: SSGConfig,
+  fileRoutes?: FileRouteNode[],
+): CollectedRoute[] {
   const routes: CollectedRoute[] = []
 
   if (!config.routes) {
@@ -133,7 +136,10 @@ export function collectRoutesFromConfig(config: SSGConfig, fileRoutes?: any[]): 
   return routes
 }
 
-export function collectRoutesFromPrerender(fileRoutes: any[], parentPath = ''): CollectedRoute[] {
+export function collectRoutesFromPrerender(
+  fileRoutes: FileRouteNode[],
+  parentPath = '',
+): CollectedRoute[] {
   const routes: CollectedRoute[] = []
 
   for (const route of fileRoutes) {

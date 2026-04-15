@@ -1,6 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { fileURLToPath } from 'node:url'
 
-import { ID_ROUTER_ENTRY } from '../src/const'
+import { resolveConfig } from 'vite'
+import solidPlugin from 'vite-plugin-solid'
+import { describe, it, expect, vi } from 'vitest'
+
+import { ID_ROUTER_ENTRY, logger } from '../src/const'
 import { fileRouter } from '../src/index'
 
 type PluginWithObjectLoad = {
@@ -25,7 +29,7 @@ describe('fileRouter mode handling', () => {
     const plugins = fileRouter()
     const code = getRouterEntryCodeFromPlugins(plugins)
     expect(code).toContain(
-      "import { generateHydrationScript, getAssets, hydrate, render, renderToStringAsync }",
+      'import { generateHydrationScript, getAssets, hydrate, render, renderToStringAsync }',
     )
     expect(code).toContain('if (import.meta.env.DEV) {')
     expect(code).toContain('return render(component, element)')
@@ -38,9 +42,9 @@ describe('fileRouter mode handling', () => {
     expect(code).toContain('const assets = getAssets()')
     expect(code).toContain('slots: {')
     expect(code).toContain('app: html')
-    expect(code).toContain('head: hydrationScript + (extra || \'\')')
+    expect(code).toContain("head: hydrationScript + (extra || '')")
     expect(code).toContain('assets,')
-    expect(plugins.some((plugin) => plugin.name.includes('solid'))).toBe(false)
+    expect(plugins.some((plugin) => plugin.name === 'solid')).toBe(false)
   })
 
   it('enables the SSG plugin when ssg config is provided', () => {
@@ -51,5 +55,30 @@ describe('fileRouter mode handling', () => {
     } satisfies Parameters<typeof fileRouter>[0]
     const plugins = fileRouter(options)
     expect(plugins.some((plugin) => plugin.name === 'solid-file-router:ssg')).toBe(true)
+  })
+
+  it('warns when ssg config is provided without solid ssr enabled', async () => {
+    const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {})
+    try {
+      await resolveConfig(
+        {
+          configFile: false,
+          root: fileURLToPath(new URL('./fixtures/modes/basic', import.meta.url)),
+          logLevel: 'silent',
+          plugins: [solidPlugin(), ...fileRouter({ ssg: { routes: ['/'] } })],
+          build: {
+            outDir: '.tmp-plugin-test',
+          },
+        },
+        'build',
+      )
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        'SSG config was ignored because vite-plugin-solid is not configured with { ssr: true }',
+        { timestamp: true },
+      )
+    } finally {
+      warnSpy.mockRestore()
+    }
   })
 })
