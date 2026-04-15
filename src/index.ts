@@ -1,10 +1,8 @@
 import type { Plugin } from 'vite'
-import solidPlugin from 'vite-plugin-solid'
-import type { Options as SolidPluginOptions } from 'vite-plugin-solid'
 
 import { ID_EXTRACT, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
 import { createHelperPlugin } from './helper'
-import { createSolidSSROptions, ssgPlugin } from './ssg'
+import { ssgPlugin } from './ssg'
 import type { SSGConfig } from './ssg/types'
 import type { InheritanceConfig } from './utils/definition'
 import { extract } from './utils/extract'
@@ -12,7 +10,6 @@ import { RouteRegistry } from './utils/registry'
 import type { InfoTypeDefinition } from './utils/route-type'
 
 export type FileRouterMode = 'spa' | 'ssr' | 'ssg'
-
 interface FileRouterPluginOption {
   /**
    * The output file path where the page types will be saved.
@@ -90,25 +87,8 @@ interface FileRouterPluginOption {
    *   crawl: true,
    * }
    * ```
-   */
+  */
   ssg?: SSGConfig
-  /**
-   * Router operating mode.
-   *
-   * - `spa`: client-only routes with `render()`
-   * - `ssr`: server-rendered routes with `hydrate()`
-   * - `ssg`: static site generation with prerendering
-   *
-   * @default options.ssg ? 'ssg' : 'spa'
-   */
-  mode?: FileRouterMode
-  /**
-   * Shared options passed to `vite-plugin-solid`.
-   *
-   * These options are reused by internal SSG SSR builds so Solid plugin behavior
-   * stays aligned with the main plugin configuration.
-   */
-  solid?: SolidPluginOptions
 }
 
 export const DEFAULT_IGNORES = ['**/components/**', '**/node_modules/**', '**/dist/**']
@@ -130,13 +110,6 @@ const queryMap = new Map<string, string[]>([
 ])
 const REG_ROUTE_QUERY = /\?(route|comp)$/
 
-function resolveRouterMode(mode: FileRouterMode | undefined, hasSSG: boolean): FileRouterMode {
-  if (mode) {
-    return mode
-  }
-  return hasSSG ? 'ssg' : 'spa'
-}
-
 interface FileRouterCorePluginOptions {
   output: string
   baseDir: string
@@ -145,15 +118,11 @@ interface FileRouterCorePluginOptions {
   infoDts?: InfoTypeDefinition
   verboseLog?: boolean
   inheritanceConfig: Required<InheritanceConfig>
-  mode: FileRouterMode
-  clientHydrate: boolean
-  solid?: SolidPluginOptions
 }
 
 function createRouteRegistryPlugin(options: FileRouterCorePluginOptions) {
-  const { baseDir, ignore, output, infoDts, verboseLog, inheritanceConfig, mode, reloadOnChange } =
-    options
-  let isSSR = mode === 'ssr'
+  const { baseDir, ignore, output, infoDts, verboseLog, inheritanceConfig, reloadOnChange } = options
+  let isSSR = false
   const registry = new RouteRegistry({
     baseDir,
     ignore,
@@ -166,7 +135,7 @@ function createRouteRegistryPlugin(options: FileRouterCorePluginOptions) {
   return {
     name: ID_EXTRACT,
     configResolved(config) {
-      isSSR = mode === 'ssr' || !!config.build.ssr
+      isSSR = !!config.build.ssr
       registry.setRoot(config.root)
     },
     resolveId: {
@@ -238,8 +207,7 @@ function createRouteRegistryPlugin(options: FileRouterCorePluginOptions) {
 
 function createFileRouterCorePlugins(options: FileRouterCorePluginOptions): Plugin[] {
   return [
-    solidPlugin(options.solid),
-    ...createHelperPlugin(options.clientHydrate),
+    ...createHelperPlugin(),
     createRouteRegistryPlugin(options),
   ]
 }
@@ -257,12 +225,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     verboseLog,
     inheritance = { enabled: true },
     ssg: ssgConfig,
-    mode,
-    solid: solidOptions,
   } = options
-
-  const routerMode = resolveRouterMode(mode, Boolean(ssgConfig))
-  const shouldHydrate = routerMode !== 'spa'
 
   const inheritanceConfig = {
     enabled: inheritance.enabled ?? true,
@@ -278,23 +241,15 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     infoDts,
     verboseLog,
     inheritanceConfig,
-    mode: routerMode,
-    clientHydrate: shouldHydrate,
-    solid: solidOptions,
   }
 
   const plugins = createFileRouterCorePlugins(coreOptions)
 
-  if (routerMode === 'ssg' && ssgConfig) {
+  if (ssgConfig) {
     plugins.push(
       ssgPlugin(ssgConfig, {
-        createSSRPlugins() {
-          return createFileRouterCorePlugins({
-            ...coreOptions,
-            mode: 'ssr',
-            clientHydrate: true,
-            solid: createSolidSSROptions(solidOptions),
-          })
+        createCorePlugins() {
+          return createFileRouterCorePlugins(coreOptions)
         },
       }),
     )

@@ -3,20 +3,40 @@ import { dirname, join } from 'node:path'
 
 import type { SSGRenderResult } from './types'
 
-export function injectHTML(template: string, result: SSGRenderResult, mountId: string): string {
+const SLOT_APP = '<!--ssr-outlet-->'
+const SLOT_HEAD = '<!--ssr-head-->'
+const SLOT_ASSETS = '<!--ssr-assets-->'
+
+function withHTMLSlots(template: string, mountId: string) {
   let html = template
 
-  // Inject rendered HTML into mount element
   const mountSelector = mountId.replace(/^#/, '')
-  const mountRegex = new RegExp(`(<div[^>]*id=["']${mountSelector}["'][^>]*>)(<!--[^>]*-->)?`)
-  html = html.replace(mountRegex, `$1${result.html}`)
+  const mountRegex = new RegExp(`(<[^>]*id=["']${mountSelector}["'][^>]*>)(?:${SLOT_APP})?`)
+  if (!html.includes(SLOT_APP)) {
+    html = html.replace(mountRegex, `$1${SLOT_APP}`)
+  }
 
-  // Inject head content (e.g. hydration script)
-  if (result.head) {
-    html = html.replace('</head>', `${result.head}\n</head>`)
+  if (!html.includes(SLOT_HEAD) || !html.includes(SLOT_ASSETS)) {
+    html = html.replace(
+      '</head>',
+      `${html.includes(SLOT_HEAD) ? '' : SLOT_HEAD}${html.includes(SLOT_ASSETS) ? '' : SLOT_ASSETS}\n</head>`,
+    )
   }
 
   return html
+}
+
+export function injectHTML(template: string, result: SSGRenderResult, mountId: string): string {
+  const slots = result.slots ?? {
+    app: result.html,
+    head: result.head,
+    assets: result.assets,
+  }
+
+  return withHTMLSlots(template, mountId)
+    .replace(SLOT_APP, slots.app || '')
+    .replace(SLOT_HEAD, slots.head || '')
+    .replace(SLOT_ASSETS, slots.assets || '')
 }
 
 export function writeRoute(outDir: string, routePath: string, html: string): void {

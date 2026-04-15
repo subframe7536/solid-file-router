@@ -1,11 +1,11 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { join, parse } from 'node:path'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import { glob } from 'tinyglobby'
 import { build } from 'vite'
-import type { Plugin, PluginOption } from 'vite'
-import type { Options as SolidPluginOptions } from 'vite-plugin-solid'
+import type { AliasOptions, Plugin } from 'vite'
 
 import { alignKeyValue, createLogHeader, formatDuration, PACKAGE_NAME, logger } from '../const'
 import { clearCache } from '../utils/extract'
@@ -15,20 +15,13 @@ import { injectHTML, readTemplate, writeRoute } from './render'
 import type { SSGConfig, SSGRenderResult } from './types'
 
 const DEFAULT_SSG_ROUTE_LABEL = '/404'
+const SSG_BUNDLE_PREFIX = '__solid-file-router-ssg'
+const SSG_BUNDLE_FILE = `${SSG_BUNDLE_PREFIX}.js`
+const SSG_ENTRY_FILE = '.solid-file-router-ssg-entry.ts'
 const UNKNOWN_SSG_ROUTE_LABEL = '<unknown>'
-
-export function getSSRBuildOutputPath(outDir: string, entry: string) {
-  // Always return posix-style paths for tests and downstream usage
-  return join(outDir, `${parse(entry).name}.js`).replace(/\\/g, '/')
-}
-
-export function createRouteManifestEntryCode() {
-  return `export { fileRoutes } from 'virtual:routes'\n`
-}
-
-export function createSolidSSROptions(options?: SolidPluginOptions): SolidPluginOptions {
-  return options ? { ...options, ssr: true } : { ssr: true }
-}
+const SSR_PROBE_CODE = '<div>solid-file-router-ssr-probe</div>'
+const SSR_PROBE_ID = '/virtual/solid-file-router-ssr-probe.tsx'
+const SSR_PROBE_MARKER = '_$getNextElement'
 
 export function assertAllFulfilled<T = any>(
   results: Array<PromiseSettledResult<T>>,
@@ -59,8 +52,67 @@ function getRuntimeAlias() {
   }
 }
 
+function mergeAlias(alias: AliasOptions | undefined): AliasOptions {
+  if (Array.isArray(alias)) {
+    return [...alias, getRuntimeAlias()]
+  }
+  return {
+    ...(alias || {}),
+    ...getRuntimeAlias(),
+  }
+}
+
+function normalizeImportPath(id: string) {
+  const normalized = id.replace(/\\/g, '/')
+  return normalized.startsWith('.') ? normalized : `./${normalized}`
+}
+
+function createServerEntryCode(entryPath: string, exists: boolean) {
+  if (exists) {
+    return `export { fileRoutes } from 'virtual:routes'\nexport { default } from '${normalizeImportPath(entryPath)}'\n`
+  }
+
+  return `import { renderServer } from 'virtual:router-entry'
+export { fileRoutes } from 'virtual:routes'
+export default renderServer()
+`
+}
+
+async function detectSolidSSR(plugins: readonly Plugin[]) {
+  const solidPlugin = plugins.find((plugin) => plugin.name === 'solid')
+  const hook = solidPlugin?.transform
+  if (!hook) {
+    return false
+  }
+
+  const context = {} as any
+
+  const result =
+    typeof hook === 'function'
+      ? await hook.call(context, SSR_PROBE_CODE, SSR_PROBE_ID, { moduleType: 'js', ssr: false })
+      : await hook.handler.call(context, SSR_PROBE_CODE, SSR_PROBE_ID, {
+          moduleType: 'js',
+          ssr: false,
+        })
+
+  const code = typeof result === 'string' ? result : String(result?.code || '')
+  return code.includes(SSR_PROBE_MARKER)
+}
+
+async function cleanupSSRArtifacts(outDir: string) {
+  const files = await glob(`${SSG_BUNDLE_PREFIX}*`, {
+    cwd: outDir,
+    absolute: true,
+    dot: true,
+  })
+
+  for (const file of files) {
+    rmSync(file, { recursive: true, force: true })
+  }
+}
+
 interface SSGPluginOptions {
-  createSSRPlugins: () => PluginOption[]
+  createCorePlugins: () => Plugin[]
 }
 
 export function ssgPlugin(config: SSGConfig, options: SSGPluginOptions): Plugin {
@@ -73,105 +125,85 @@ export function ssgPlugin(config: SSGConfig, options: SSGPluginOptions): Plugin 
     concurrency = 4,
   } = config
 
-  let root: string
-  let outDir: string
+  let root = ''
+  let outDir = ''
+  let alias: AliasOptions | undefined
+  let solidPlugins: Plugin[] = []
+  let ssrEnabled = false
 
   return {
     name: 'solid-file-router:ssg',
     apply: 'build',
-    configResolved(resolvedConfig) {
+    async configResolved(resolvedConfig) {
       root = resolvedConfig.root
       outDir = join(root, resolvedConfig.build.outDir)
+      alias = resolvedConfig.resolve.alias
+      solidPlugins = resolvedConfig.plugins.filter((plugin) => plugin.name === 'solid')
+      ssrEnabled = await detectSolidSSR(resolvedConfig.plugins)
+
+      if (!ssrEnabled) {
+        logger.warn(
+          'SSG config was ignored because vite-plugin-solid is not configured with { ssr: true }',
+          { timestamp: true },
+        )
+      }
     },
-    async writeBundle() {
-      let generatedEntry = false
-      let entryPath: string
-      let generatedRouteManifestEntry = false
-      const tempDir = join(outDir, '.ssg-temp')
-      const ssrServerDir = join(tempDir, 'server')
-      const ssrRoutesDir = join(tempDir, 'routes')
-      const routeManifestEntryPath = join(tempDir, 'route-manifest.ts')
+    async closeBundle() {
+      if (!ssrEnabled) {
+        return
+      }
+
+      const entryPath = join(root, serverEntry)
+      const ssgEntryPath = join(root, SSG_ENTRY_FILE)
 
       try {
-        entryPath = join(root, serverEntry)
         if (!existsSync(entryPath)) {
-          writeFileSync(
-            entryPath,
-            `import { renderServer } from 'virtual:router-entry'
-
-export default renderServer()
-`,
-          )
-          generatedEntry = true
           logger.warn(
             'No ssg.serverEntry setup and default serverEntry path not exists, use default code',
             { timestamp: true },
           )
         }
 
-        // 1. SSR build
-        mkdirSync(ssrServerDir, { recursive: true })
-        mkdirSync(ssrRoutesDir, { recursive: true })
-        writeFileSync(routeManifestEntryPath, createRouteManifestEntryCode())
-        generatedRouteManifestEntry = true
+        writeFileSync(ssgEntryPath, createServerEntryCode(serverEntry, existsSync(entryPath)))
 
         clearCache()
 
-        const ssrPlugins = options.createSSRPlugins()
-
         await build({
           configFile: false,
           root,
           resolve: {
-            alias: getRuntimeAlias(),
+            alias: mergeAlias(alias),
           },
-          plugins: ssrPlugins,
+          plugins: [...solidPlugins, ...options.createCorePlugins()],
           build: {
-            ssr: entryPath,
-            outDir: ssrServerDir,
+            ssr: ssgEntryPath,
+            outDir,
+            emptyOutDir: false,
             minify: false,
+            rollupOptions: {
+              output: {
+                entryFileNames: SSG_BUNDLE_FILE,
+                chunkFileNames: `${SSG_BUNDLE_PREFIX}-[name]-[hash].js`,
+                assetFileNames: `${SSG_BUNDLE_PREFIX}-[name]-[hash][extname]`,
+              },
+            },
           },
           logLevel: 'warn',
         })
 
-        await build({
-          configFile: false,
-          root,
-          resolve: {
-            alias: getRuntimeAlias(),
-          },
-          plugins: ssrPlugins,
-          build: {
-            ssr: routeManifestEntryPath,
-            outDir: ssrRoutesDir,
-            minify: false,
-          },
-          logLevel: 'warn',
-        })
-
-        // 2. Import SSR module
-        const ssrModulePath = getSSRBuildOutputPath(ssrServerDir, serverEntry)
+        const ssrModulePath = join(outDir, SSG_BUNDLE_FILE)
         if (!existsSync(ssrModulePath)) {
           throw new Error(`SSR build output not found at ${ssrModulePath}`)
         }
-        const routeManifestPath = getSSRBuildOutputPath(ssrRoutesDir, routeManifestEntryPath)
-        if (!existsSync(routeManifestPath)) {
-          throw new Error(`Route manifest build output not found at ${routeManifestPath}`)
-        }
 
         const ssrModule = await importModule(ssrModulePath)
-        const routeManifestModule = await importModule(routeManifestPath)
-        const renderFn = ssrModule.default as
-          | ((url: string) => Promise<SSGRenderResult>)
-          | undefined
+        const renderFn = ssrModule.default as ((url: string) => Promise<SSGRenderResult>) | undefined
         if (typeof renderFn !== 'function') {
-          throw new TypeError(
-            `SSG server entry must default export a render function: ${serverEntry}`,
-          )
+          throw new TypeError(`SSG server entry must default export a render function: ${serverEntry}`)
         }
-        const fileRoutes = routeManifestModule.fileRoutes as any[]
 
-        // 3. Collect routes
+        const fileRoutes = ssrModule.fileRoutes as any[] | undefined
+
         const visited = new Set<string>()
         const queue: string[] = []
         let routeLogWidth = DEFAULT_SSG_ROUTE_LABEL.length
@@ -205,12 +237,10 @@ export default renderServer()
           return
         }
 
-        // 4. Render routes
         const template = readTemplate(outDir)
         let rendered = 0
         let failed = 0
         const renderStart = Date.now()
-        const failedRoutes: string[] = []
 
         logger.info(`${createLogHeader('SSG Prerendering Started')}`, { timestamp: true })
 
@@ -225,6 +255,7 @@ export default renderServer()
                   timeout,
                 )
               })
+
               try {
                 const result = await Promise.race([renderFn(url), timeoutPromise])
                 return { url, result }
@@ -234,33 +265,30 @@ export default renderServer()
             }),
           )
 
-          for (const settled of results) {
+          for (const [index, settled] of results.entries()) {
             if (settled.status === 'rejected') {
-              const url = batch[results.indexOf(settled)]
-              const routePath = url || UNKNOWN_SSG_ROUTE_LABEL
+              const routePath = batch[index] || UNKNOWN_SSG_ROUTE_LABEL
               const reason =
                 settled.reason instanceof Error ? settled.reason.message : String(settled.reason)
               failed++
-              failedRoutes.push(routePath)
               logger.error(`  ✗ ${formatRouteLogLabel(routePath)} → Failed: ${reason}`, {
                 timestamp: false,
               })
               continue
             }
 
-            const { url, result } = (settled as PromiseFulfilledResult<any>).value
+            const { url, result } = settled.value
             const html = injectHTML(template, result, mountId)
             writeRoute(outDir, url, html)
             rendered++
 
-            // Log individual route rendering (TanStack Start style)
             const outputPath = url === '/' ? '/index.html' : `${url}.html`
             logger.info(`  ✓ ${formatRouteLogLabel(url)} → ${outputPath}`, {
               timestamp: false,
             })
 
             if (crawl) {
-              const newLinks = crawlLinks(result.html, visited)
+              const newLinks = crawlLinks(result.html || result.slots?.app || '', visited)
               for (const link of newLinks) {
                 visited.add(link)
                 updateRouteLogWidth(link)
@@ -270,7 +298,6 @@ export default renderServer()
           }
         }
 
-        // 5. Generate 404.html (always, for static file servers)
         try {
           const notFoundResult = await renderFn('/__ssg_not_found__')
           const notFoundHtml = injectHTML(template, notFoundResult, mountId)
@@ -284,9 +311,7 @@ export default renderServer()
         }
 
         const totalDuration = Date.now() - renderStart
-
-        // Build completion summary
-        let summaryLines: [string, any][] = [
+        const summaryLines: Array<[string, string | number]> = [
           ['Pages generated', rendered],
           ['Total time', formatDuration(totalDuration)],
         ]
@@ -304,25 +329,12 @@ export default renderServer()
 ${alignKeyValue(summaryLines)}`,
           { timestamp: true },
         )
-
-        // 6. Cleanup
-        rmSync(tempDir, { recursive: true, force: true })
-        if (generatedEntry) {
-          rmSync(entryPath, { force: true })
-        }
       } catch (error) {
         logger.error(`SSG failed: ${error}`)
-        if (existsSync(tempDir)) {
-          rmSync(tempDir, { recursive: true, force: true })
-        }
         throw error
       } finally {
-        if (generatedEntry && existsSync(entryPath!)) {
-          rmSync(entryPath!, { force: true })
-        }
-        if (generatedRouteManifestEntry && existsSync(routeManifestEntryPath)) {
-          rmSync(routeManifestEntryPath, { force: true })
-        }
+        rmSync(ssgEntryPath, { force: true })
+        await cleanupSSRArtifacts(outDir)
       }
     },
   }

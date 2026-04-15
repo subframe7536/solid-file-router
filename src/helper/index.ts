@@ -11,10 +11,9 @@ import {
 
 declare const __LOADER__: string
 
-function buildRouterEntryHelper(useHydrate = true) {
-  const clientRenderer = useHydrate ? 'hydrate' : 'render'
+function buildRouterEntryHelper() {
   return `import { createComponent } from 'solid-js'
-import { generateHydrationScript, ${clientRenderer}, renderToStringAsync, getAssets } from 'solid-js/web'
+import { generateHydrationScript, getAssets, hydrate, render, renderToStringAsync } from 'solid-js/web'
 import { FileRouter } from 'virtual:routes'
 
 export function renderClient(component, elementId = 'app') {
@@ -23,7 +22,11 @@ export function renderClient(component, elementId = 'app') {
     throw new Error(\`Mount element with id "\${elementId}" not found\`)
   }
 
-  return ${clientRenderer}(component, element)
+  if (import.meta.env.DEV) {
+    return render(component, element)
+  }
+
+  return ('_$HY' in window ? hydrate : render)(component, element)
 }
 
 export function renderServer(options = {}) {
@@ -58,11 +61,18 @@ export function renderServer(options = {}) {
           ...renderContext,
           html,
         })
-      : getAssets()
+      : ''
+    const assets = getAssets()
 
     const result = {
       html,
       head: hydrationScript + (extra || ''),
+      assets,
+      slots: {
+        app: html,
+        head: hydrationScript + (extra || ''),
+        assets,
+      },
     }
 
     return transformResult ? await transformResult(result, renderContext) : result
@@ -71,7 +81,7 @@ export function renderServer(options = {}) {
 `
 }
 
-export function createHelperPlugin(useHydrate: boolean): Plugin[] {
+export function createHelperPlugin(): Plugin[] {
   return [
     {
       name: ID_HELPER,
@@ -107,7 +117,7 @@ export function createHelperPlugin(useHydrate: boolean): Plugin[] {
           id: new RegExp(VID_ROUTER_ENTRY_RESOLVED),
         },
         handler() {
-          return buildRouterEntryHelper(useHydrate)
+          return buildRouterEntryHelper()
         },
       },
     },

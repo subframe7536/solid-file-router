@@ -33,8 +33,14 @@ export interface SSGConfig {
 }
 
 export interface SSGRenderResult {
-  html: string
-  head: string
+  html?: string
+  head?: string
+  assets?: string
+  slots?: {
+    app?: string
+    head?: string
+    assets?: string
+  }
 }
 
 export interface CollectedRoute {

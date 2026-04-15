@@ -1,10 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import {
-  createRouteManifestEntryCode,
-  createSolidSSROptions,
-  getSSRBuildOutputPath,
-} from '../src/ssg'
+import { assertAllFulfilled } from '../src/ssg'
 import {
   expandDynamicRoute,
   collectRoutesFromConfig,
@@ -197,60 +193,69 @@ describe('crawlLinks', () => {
 describe('injectHTML', () => {
   const template = `<!doctype html>
 <html>
-  <head><title>Test</title>
+  <head><title>Test</title><!--ssr-head--><!--ssr-assets-->
     <script type="module" crossorigin src="/assets/index.js"></script>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app"><!--ssr-outlet--></div>
   </body>
 </html>`
 
-  it('injects rendered HTML into mount element', () => {
-    const result = { html: '<h1>Hello</h1>', head: '' }
+  it('injects rendered HTML into the outlet slot', () => {
+    const result = { slots: { app: '<h1>Hello</h1>' } }
     const output = injectHTML(template, result, '#app')
     expect(output).toContain('<div id="app"><h1>Hello</h1></div>')
   })
 
-  it('injects head content when provided', () => {
-    const result = { html: '<h1>Hello</h1>', head: '<script>window._$HY={};</script>' }
+  it('injects head and asset slots when provided', () => {
+    const result = {
+      slots: {
+        app: '<h1>Hello</h1>',
+        head: '<script>window._$HY={};</script>',
+        assets: '<link rel="modulepreload" href="/assets/index.js">',
+      },
+    }
     const output = injectHTML(template, result, '#app')
     expect(output).toContain('<script>window._$HY={};</script>')
-    expect(output).toContain('</head>')
+    expect(output).toContain('<link rel="modulepreload" href="/assets/index.js">')
   })
 
-  it('does not inject empty head', () => {
-    const result = { html: '<h1>Hello</h1>', head: '' }
+  it('adds default slots when the template does not already include them', () => {
+    const result = {
+      slots: {
+        app: '<h1>Hello</h1>',
+        head: '<meta name="ssr" content="true">',
+      },
+    }
     const output = injectHTML(template, result, '#app')
-    expect(output).not.toMatch(/\n<\/head>/)
+    expect(
+      injectHTML(
+        `<!doctype html><html><head><title>Test</title></head><body><div id="app"></div></body></html>`,
+        result,
+        '#app',
+      ),
+    ).toContain('<div id="app"><h1>Hello</h1></div>')
+    expect(output).toContain('<meta name="ssr" content="true">')
   })
 
   it('handles custom mountId', () => {
     const customTemplate = template.replace('id="app"', 'id="root"')
-    const result = { html: '<p>Content</p>', head: '' }
+    const result = { slots: { app: '<p>Content</p>' } }
     const output = injectHTML(customTemplate, result, '#root')
     expect(output).toContain('<div id="root"><p>Content</p></div>')
   })
 })
 
 describe('ssg helpers', () => {
-  it('derives the SSR output path from the entry file name', () => {
-    expect(getSSRBuildOutputPath('/tmp/out', 'src/entry-server.tsx')).toBe(
-      '/tmp/out/entry-server.js',
-    )
-    expect(getSSRBuildOutputPath('/tmp/out', 'src/custom.server.ts')).toBe(
-      '/tmp/out/custom.server.js',
-    )
-  })
-
-  it('generates a dedicated route manifest entry', () => {
-    expect(createRouteManifestEntryCode()).toBe("export { fileRoutes } from 'virtual:routes'\n")
-  })
-
-  it('merges shared solid options for SSR build', () => {
-    expect(createSolidSSROptions({ hot: false, ssr: false })).toEqual({
-      hot: false,
-      ssr: true,
-    })
-    expect(createSolidSSROptions()).toEqual({ ssr: true })
+  it('throws for rejected prerender results', () => {
+    expect(() =>
+      assertAllFulfilled(
+        [
+          { status: 'fulfilled', value: { url: '/ok', result: {} } } as PromiseFulfilledResult<any>,
+          { status: 'rejected', reason: new Error('boom') } as PromiseRejectedResult,
+        ],
+        ['/ok', '/boom'],
+      ),
+    ).toThrow(/SSG prerender failed for \/boom/)
   })
 })

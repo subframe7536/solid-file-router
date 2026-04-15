@@ -13,8 +13,14 @@ declare module 'virtual:router-entry' {
   import type { Component, JSX } from 'solid-js'
 
   export interface RenderServerResult {
-    html: string
-    head: string
+    html?: string
+    head?: string
+    assets?: string
+    slots?: {
+      app?: string
+      head?: string
+      assets?: string
+    }
   }
 
   export interface RenderServerOptions {
