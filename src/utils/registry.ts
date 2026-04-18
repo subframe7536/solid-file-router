@@ -19,7 +19,7 @@ interface RouteRegistryOption {
 }
 
 interface DefinitionMode {
-  ssr: boolean
+  lazy: boolean
 }
 
 const REG_IS_ROUTE_FILE = /\.(jsx|tsx|mdx)$/
@@ -122,7 +122,7 @@ ${alignKeyValue([
   async getDefinition(mode: DefinitionMode) {
     await this.ensureInitialized()
 
-    const key = `${mode.ssr}`
+    const key = `${mode.lazy}`
     const cached = this.definitionCache.get(key)
     if (cached?.version === this.version) {
       this.logVerbose(`Cache hit: virtual:routes (${key})`)
@@ -135,10 +135,10 @@ ${alignKeyValue([
       files,
       this.options.verboseLog,
       this.options.inheritance,
-      mode.ssr,
+      mode.lazy,
     )
 
-    if (!mode.ssr && this.typesVersion !== this.version) {
+    if (mode.lazy && this.typesVersion !== this.version) {
       generateRouteTypes(
         files,
         normalizePath(`${this.root}/${this.options.output}`),
@@ -154,7 +154,7 @@ ${alignKeyValue([
 ${alignKeyValue([
   ['Routes', files.length],
   ['Time', formatDuration(Date.now() - start)],
-  ['Mode', mode.ssr ? 'SSR' : 'Client'],
+  ['Mode', mode.lazy ? 'Lazy' : 'Eager'],
 ])}`,
       false,
     )

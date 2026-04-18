@@ -84,9 +84,9 @@ export default createRoute({
                   color: '#2e7d32',
                 }}
               >
-                <strong>SSG vs SPA Demo</strong>
+                <strong>SSR vs SPA Demo</strong>
                 <div style={{ 'font-size': '14px', color: '#666', 'margin-top': '5px' }}>
-                  See how the same layout renders differently in SSG and SPA modes
+                  See how the same layout renders differently in SSR and SPA modes
                 </div>
               </A>
             </li>

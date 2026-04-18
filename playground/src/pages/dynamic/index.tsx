@@ -5,15 +5,15 @@ export default createRoute({
   component: () => {
     return (
       <div>
-        <h3>SSG vs SPA Demo</h3>
+        <h3>SSR vs SPA Demo</h3>
         <ul>
           <li>
-            <strong>SSG (build):</strong> "Rendered at" shows the build timestamp, "isServer" is
-            true in the page source. Content is visible before JS loads.
+            <strong>SSR (server):</strong> "Rendered at" shows the server-rendered timestamp,
+            "isServer" is true in the page source. Content is visible before JS hydrates.
           </li>
           <li>
-            <strong>SPA (dev):</strong> "Rendered at" shows the current time, "isServer" is false.
-            Content only appears after JS executes.
+            <strong>SPA (client):</strong> "Rendered at" shows the current time, "isServer" is
+            false. Content only appears after JS executes.
           </li>
         </ul>
         <p>

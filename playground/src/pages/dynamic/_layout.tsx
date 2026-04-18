@@ -25,7 +25,7 @@ export default createRoute({
           </div>
           <div style={{ 'margin-top': '8px', color: '#666' }}>
             {isServer
-              ? 'This HTML was generated at build time (SSG). View page source to confirm.'
+              ? 'This HTML was rendered on the server. View page source to confirm.'
               : 'This content was rendered by client-side JavaScript (SPA).'}
           </div>
         </div>

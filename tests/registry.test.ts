@@ -63,7 +63,7 @@ export default createRoute({
 `,
     )
 
-    await registry.getDefinition({ ssr: false })
+    await registry.getDefinition({ lazy: true })
     expect((registry as any).definitionCache.size).toBe(1)
 
     writeFileSync(
@@ -80,7 +80,7 @@ export default createRoute({
     expect(registry.markChanged(routeFile)).toBe(true)
     expect((registry as any).definitionCache.size).toBe(0)
 
-    await registry.getDefinition({ ssr: false })
+    await registry.getDefinition({ lazy: true })
     expect((registry as any).definitionCache.size).toBe(1)
   })
 })

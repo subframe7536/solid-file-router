@@ -46,9 +46,6 @@
     "qa": "bun run --parallel lint typecheck",
     "release": "bun run build && bun run qa && bun run test:run && bumpp --all"
   },
-  "dependencies": {
-    "vite-plugin-solid": "^2.11.12"
-  },
   "devDependencies": {
     "@solidjs/meta": "^0.29.4",
     "@solidjs/router": "^0.16.1",
@@ -64,6 +61,7 @@
     "tsdown": "^0.21.7",
     "typescript": "^5.9.3",
     "vite": "^8.0.8",
+    "vite-plugin-solid": "^2.11.12",
     "vitest": "^4.1.4"
   },
   "peerDependencies": {

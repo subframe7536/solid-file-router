@@ -32,7 +32,7 @@ const routeComponentExpression = (
   loadingExpression: string,
   errorExpression: string,
 ) =>
-  `__comp(lazy(() => import('${filePath}?comp').then(mod => ({ default: mod.default.component }))), ${loadingExpression}, ${errorExpression})`
+  `__loader__(lazy(() => import('${filePath}?comp').then(mod => ({ default: mod.default.component }))), ${loadingExpression}, ${errorExpression})`
 
 const inheritedExpression = (
   routeIndex: number,
@@ -52,11 +52,12 @@ describe('generateDefinition', () => {
       "import __layout0_route from '/root/project/src/pages/(group)/_layout.tsx?route'",
     )
     expect(module).toContain("import __route0_route from '/root/project/src/pages/index.tsx?route'")
+    expect(module).toContain("import { __loader__ } from 'solid-file-router'")
     expect(module).toContain(
-      'export const Root = __comp(__app_comp.component, __app_route.loadingComponent, __app_route.errorComponent)',
+      'export const Root = __loader__(__app_comp.component, __app_route.loadingComponent, __app_route.errorComponent)',
     )
     expect(module).toContain(
-      "__comp(lazy(() => import('/root/project/src/pages/index.tsx?comp').then(mod => ({ default: mod.default.component }))), __route0_route.loadingComponent || ((__route0_route.inherit === false || __route0_route.inherit?.loading === false) ? undefined : (__app_route.loadingComponent)), __route0_route.errorComponent || ((__route0_route.inherit === false || __route0_route.inherit?.error === false) ? undefined : (__app_route.errorComponent)))",
+      "__loader__(lazy(() => import('/root/project/src/pages/index.tsx?comp').then(mod => ({ default: mod.default.component }))), __route0_route.loadingComponent || ((__route0_route.inherit === false || __route0_route.inherit?.loading === false) ? undefined : (__app_route.loadingComponent)), __route0_route.errorComponent || ((__route0_route.inherit === false || __route0_route.inherit?.error === false) ? undefined : (__app_route.errorComponent)))",
     )
     expect(module).toContain('...__route4_route')
     expect(module).toContain("import __404_route from '/root/project/src/pages/404.tsx?route'")
@@ -66,10 +67,11 @@ describe('generateDefinition', () => {
   })
 
   it('generates client routes with lazy route components', async () => {
-    const module = await generateDefinition(files, false, undefined, false)
+    const module = await generateDefinition(files, false, undefined, true)
     expect(module).toContain("import { createComponent, lazy } from 'solid-js'")
     expect(module).toContain("import { Router } from '@solidjs/router'")
-    expect(module).toContain('export const Root = __comp(__app_comp.component')
+    expect(module).toContain("import { __loader__ } from 'solid-file-router'")
+    expect(module).toContain('export const Root = __loader__(__app_comp.component')
     expect(module).toContain("import __route0_route from '/root/project/src/pages/index.tsx?route'")
     expect(module).toContain("lazy(() => import('/root/project/src/pages/index.tsx?comp')")
     expect(module).toContain('get base()')
@@ -83,7 +85,7 @@ describe('generateDefinition', () => {
     expect(module).toContain(`const __app_route = {}`)
     expect(module).toContain(`const __404_route = undefined`)
     expect(module).toContain(
-      `export const Root = __comp(__app_comp.component, __app_route.loadingComponent, __app_route.errorComponent)`,
+      `export const Root = __loader__(__app_comp.component, __app_route.loadingComponent, __app_route.errorComponent)`,
     )
   })
 
@@ -185,7 +187,7 @@ describe('generateDefinition', () => {
   })
 
   it('generates SSR routes without lazy helpers', async () => {
-    const module = await generateDefinition(inheritanceFiles, false, undefined, true)
+    const module = await generateDefinition(inheritanceFiles, false, undefined, false)
 
     expect(module).toContain("import { createComponent } from 'solid-js'")
     expect(module).toContain("import { StaticRouter } from '@solidjs/router'")

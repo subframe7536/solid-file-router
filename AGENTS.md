@@ -6,7 +6,7 @@ Type-safe file-based router for Solid.js. The package provides:
 - A Vite plugin that generates routes from `src/pages/` directory structure
 - Runtime utilities (`createRoute`, `generatePath`)
 - Component inheritance system for loading/error boundaries
-- SSG (Static Site Generation) support
+- Consumers configure `vite-plugin-solid` separately in app Vite configs
 
 Runtime: **Bun**. All scripts use `bun --bun`.
 
@@ -106,20 +106,14 @@ bun run play:preview   # Preview playground build
 ```
 src/
   index.ts          # Main Vite plugin entry (fileRouter)
-  runtime.ts        # createRoute, generatePath, type exports
+  runtime.ts        # createRoute, generatePath, __loader__, type exports
   const.ts          # Shared constants, logger
   helper/
-    index.ts        # Vite helper plugin
-    loader.tsx       # Solid component loader (compiled into __LOADER__)
+    loader.tsx       # Solid component loader exported directly from runtime
   utils/
     definition.ts   # Route tree generation, import codegen
     extract.ts      # AST extraction of route config properties
     route-type.ts   # DTS type generation for routes
-  ssg/
-    index.ts        # SSG Vite plugin
-    render.ts       # HTML rendering for prerendering
-    collect.ts      # Route crawling for SSG
-    types.ts        # SSG config types
 ```
 
 ## Testing Conventions

@@ -1,4 +1,4 @@
-import { alignKeyValue, createLogHeader, logger, VID_HELPER } from '../const'
+import { alignKeyValue, createLogHeader, logger, PACKAGE_NAME } from '../const'
 
 export const patterns = {
   optional: [/^-(:?[\w-]+|\*)/, '$1?'],
@@ -222,15 +222,15 @@ async function generateRegularRoutes(
     inheritLoading: true,
     inheritError: true,
   },
-  ssr = false,
+  lazy = true,
 ): Promise<[imports: string[], routs: BaseRoute[]]> {
-  const imports: string[] = ssr ? [] : [`import __comp from '${VID_HELPER}'`]
+  const imports: string[] = lazy ? [`import { __loader__ } from '${PACKAGE_NAME}'`] : []
   const layouts: LayoutInfo[] = []
 
   const appPath = files.find((key) => key.endsWith('_app.tsx') || key.endsWith('_app.jsx'))
   if (appPath) {
     imports.push(`import __app_comp from '${appPath}?comp'`)
-    if (!ssr) {
+    if (lazy) {
       imports.push(`import __app_route from '${appPath}?route'`)
       layouts.push({
         path: appPath,
@@ -242,18 +242,18 @@ async function generateRegularRoutes(
     logger.warn('No `_app.jsx` or `_app.tsx` found, fallback to parent component', {
       timestamp: true,
     })
-    if (ssr) {
-      imports.push(`const __app_comp = { component: (props) => props.children }`)
-    } else {
+    if (lazy) {
       imports.push(
         `import { memo } from "solid-js/web";`,
         `const __app_comp = { component: (props) => memo(() => props.children) }`,
         `const __app_route = {}`,
       )
+    } else {
+      imports.push(`const __app_comp = { component: (props) => props.children }`)
     }
   }
 
-  if (!ssr) {
+  if (lazy) {
     // Find and import layout defaults (client only)
     const layoutFiles = files.filter((key) => REG_LAYOUT.test(key))
     layoutFiles.forEach((layoutPath, index) => {
@@ -271,7 +271,7 @@ async function generateRegularRoutes(
   )
 
   // Build route-to-layout mapping
-  const routeLayoutMap = ssr ? {} : buildRouteLayoutMap(filtered, layouts)
+  const routeLayoutMap = lazy ? buildRouteLayoutMap(filtered, layouts) : {}
 
   const regularRoutes: BaseRoute[] = []
   for (let i = 0; i < filtered.length; i++) {
@@ -281,7 +281,7 @@ async function generateRegularRoutes(
 
     let route: BaseRoute
 
-    if (ssr) {
+    if (!lazy) {
       imports.push(`import __route${i}_comp from '${file}?comp'`)
       route = {
         id: file.replace(...patterns.route),
@@ -329,7 +329,7 @@ ${alignKeyValue([
       route = {
         id: file.replace(...patterns.route),
         component: wrapInline(
-          `__comp(lazy(() => import('${file}?comp').then(mod => ({ default: mod.default.component }))), ${loadExpr}, ${errorExpr})`,
+          `__loader__(lazy(() => import('${file}?comp').then(mod => ({ default: mod.default.component }))), ${loadExpr}, ${errorExpr})`,
         ),
         __: wrapInline(`...__route${i}_route`),
       }
@@ -395,14 +395,14 @@ ${alignKeyValue([
     logger.warn('No `404.jsx` or `404.tsx` found, fallback to `() => null`', {
       timestamp: true,
     })
-    imports.push(`const __404_comp = ${ssr ? '{ component: () => null }' : '() => null'}`)
+    imports.push(`const __404_comp = ${lazy ? '() => null' : '{ component: () => null }'}`)
     imports.push(`const __404_route = undefined`)
   }
   regularRoutes.push({
     id: '*',
     path: '*',
-    component: wrapInline(ssr ? '__404_comp.component' : '__404_comp'),
-    ...(ssr ? {} : { __: wrapInline(`...__404_route`) }),
+    component: wrapInline(lazy ? '__404_comp' : '__404_comp.component'),
+    ...(lazy ? { __: wrapInline(`...__404_route`) } : {}),
   })
 
   return [imports, regularRoutes]
@@ -443,25 +443,25 @@ export async function generateDefinition(
     inheritLoading: true,
     inheritError: true,
   },
-  ssr = false,
+  lazy = true,
 ): Promise<string> {
   const [imports, regularRoutes] = await generateRegularRoutes(
     files,
     verbose,
     inheritanceConfig,
-    ssr,
+    lazy,
   )
-  const routerImport = ssr
-    ? `import { StaticRouter } from '@solidjs/router'`
-    : `import { Router } from '@solidjs/router'`
-  const routerComponent = ssr ? 'StaticRouter' : 'Router'
-  const routerUrlProp = ssr ? 'url' : 'base'
-  const solidImports = ssr
-    ? `import { createComponent } from 'solid-js'`
-    : `import { createComponent, lazy } from 'solid-js'`
-  const rootExpr = ssr
-    ? `export const Root = __app_comp.component`
-    : `export const Root = __comp(__app_comp.component, __app_route.loadingComponent, __app_route.errorComponent)`
+  const routerImport = lazy
+    ? `import { Router } from '@solidjs/router'`
+    : `import { StaticRouter } from '@solidjs/router'`
+  const routerComponent = lazy ? 'Router' : 'StaticRouter'
+  const routerUrlProp = lazy ? 'base' : 'url'
+  const solidImports = lazy
+    ? `import { createComponent, lazy } from 'solid-js'`
+    : `import { createComponent } from 'solid-js'`
+  const rootExpr = lazy
+    ? `export const Root = __loader__(__app_comp.component, __app_route.loadingComponent, __app_route.errorComponent)`
+    : `export const Root = __app_comp.component`
 
   const regularFiles = files.filter(
     (key) => (!key.includes('/_') || REG_LAYOUT.test(key)) && !isNotFoundRoute(key),

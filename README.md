@@ -20,11 +20,11 @@ Generate type safe route definition and virtual module that return `@solidjs/rou
 ### Installation
 
 ```bash
-npm install solid-file-router
+npm install solid-file-router vite-plugin-solid
 # or
-yarn add solid-file-router
+yarn add solid-file-router vite-plugin-solid
 # or
-bun add solid-file-router
+bun add solid-file-router vite-plugin-solid
 ```
 
 ### Setup
@@ -33,14 +33,15 @@ bun add solid-file-router
 
 ```typescript
 import { defineConfig } from 'vite'
+import solidPlugin from 'vite-plugin-solid'
 import { fileRouter } from 'solid-file-router/plugin'
 
 export default defineConfig({
-  plugins: [fileRouter()],
+  plugins: [solidPlugin(), fileRouter()],
 })
 ```
 
-`fileRouter()` already includes `vite-plugin-solid` internally.
+`vite-plugin-solid` is no longer bundled internally, so add it to your Vite config explicitly.
 
 2. **Create your pages directory** at `src/pages/`
 
@@ -477,38 +478,11 @@ console.log(routeInfo['/'])
 console.log(routeInfo['/blog/:id'])
 ```
 
-### `virtual:router-entry`
-
-Utility virtual module for client mount and server rendering.
-
-```ts
-import { renderClient } from 'virtual:router-entry'
-import { FileRouter } from 'virtual:routes'
-
-renderClient(() => <FileRouter />)
-```
-
-`renderClient()` uses `hydrate()` automatically when the mount element already contains SSR or SSG markup, and falls back to `render()` for client-only mounts.
-
-```ts
-import { renderServer } from 'virtual:router-entry'
-
-export default renderServer({
-  async extraHead({ getAssets }) {
-    return `<meta name="x-rendered" content="true" />${await getAssets()}`
-  },
-})
-```
-
-`renderServer()` always includes `generateHydrationScript()` in `head`. Use `extraHead()` to append additional head content. `getAssets()` is available in the render context and returns assets from `@solidjs/meta` when installed (otherwise returns an empty string).
-
 ## Configuration
 
 Options passed to the `fileRouter()` plugin in `vite.config.ts`.
 
 ````ts
-import type { Options as SolidPluginOptions } from 'vite-plugin-solid'
-
 interface FileRouterPluginOption {
   /**
    * The output file path where the page types will be saved.
@@ -534,6 +508,11 @@ interface FileRouterPluginOption {
    * @default true
    */
   reloadOnChange?: boolean
+  /**
+   * Whether to generate route modules with lazy imports.
+   * When omitted, enabled in client builds and disabled in SSR builds.
+   */
+  lazy?: boolean
   /**
    * Route's dts config to control Route's info type
    * @example
@@ -577,23 +556,6 @@ interface FileRouterPluginOption {
      */
     inheritError?: boolean
   }
-  /**
-   * Router operating mode.
-   *
-   * - `spa`: client-only routes with `render()`
-   * - `ssr`: server-rendered routes with `hydrate()`
-   * - `ssg`: static site generation with prerendering
-   *
-   * @default options.ssg ? 'ssg' : 'spa'
-   */
-  mode?: 'spa' | 'ssr' | 'ssg'
-  /**
-   * Shared options passed to `vite-plugin-solid`.
-   *
-   * These options are reused by internal SSG SSR builds so Solid plugin behavior
-   * stays aligned with the main plugin configuration.
-   */
-  solid?: SolidPluginOptions
 }
 ````
 
