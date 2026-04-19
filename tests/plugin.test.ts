@@ -44,14 +44,14 @@ export default createRoute({
   return root
 }
 
-function createPlugin(root: string, lazy?: boolean) {
+async function createPlugin(root: string, lazy?: boolean) {
   const [plugin] = fileRouter({
     baseDir: '',
     ignore: [],
     lazy,
   })
 
-  ;(plugin as any).configResolved({
+  await (plugin as any).configResolved({
     build: { ssr: false },
     root,
   })
@@ -62,7 +62,7 @@ function createPlugin(root: string, lazy?: boolean) {
 describe('fileRouter', () => {
   it('respects lazy: false even in a client build', async () => {
     const root = createTempProject()
-    const plugin = createPlugin(root, false)
+    const plugin = await createPlugin(root, false)
     const module = await plugin.load.handler()
 
     expect(module).toContain("import { createComponent } from 'solid-js'")
@@ -72,9 +72,9 @@ describe('fileRouter', () => {
 
   it('respects lazy: true even in an SSR build', async () => {
     const root = createTempProject()
-    const plugin = createPlugin(root, true)
+    const plugin = await createPlugin(root, true)
 
-    plugin.configResolved({
+    await plugin.configResolved({
       build: { ssr: true },
       root,
     })

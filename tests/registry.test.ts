@@ -2,9 +2,52 @@ import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { generateDefinition } from '../src/utils/definition'
+import { invalidateCache } from '../src/utils/extract'
 import { RouteRegistry } from '../src/utils/registry'
+import { generateRouteTypes } from '../src/utils/route-type'
+
+vi.mock('../src/utils/definition', async () => {
+  const actual =
+    await vi.importActual<typeof import('../src/utils/definition')>('../src/utils/definition')
+  return {
+    ...actual,
+    generateDefinition: vi.fn(
+      (files: string[], cache: Map<string, { file: string; id: string; segments: string[] }>) => {
+        for (const file of files.filter(
+          (f) => !cache.has(f) && !f.includes('/_app.') && !f.endsWith('/404.tsx'),
+        )) {
+          cache.set(file, { file, id: file, segments: ['index'] })
+        }
+        return cache
+      },
+    ),
+    assembleDefinition: vi.fn(
+      (files: string[], _cache: unknown, lazy: boolean) =>
+        `mode:${lazy ? 'lazy' : 'eager'}:${files.join('|')}`,
+    ),
+  }
+})
+
+vi.mock('../src/utils/route-type', async () => {
+  const actual =
+    await vi.importActual<typeof import('../src/utils/route-type')>('../src/utils/route-type')
+  return {
+    ...actual,
+    generateRouteTypes: vi.fn(() => 0),
+  }
+})
+
+vi.mock('../src/utils/extract', async () => {
+  const actual =
+    await vi.importActual<typeof import('../src/utils/extract')>('../src/utils/extract')
+  return {
+    ...actual,
+    invalidateCache: vi.fn(),
+  }
+})
 
 const tempDirs: string[] = []
 
@@ -12,9 +55,11 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
+
+  vi.clearAllMocks()
 })
 
-function createTempRegistry() {
+async function createTempRegistry() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
   const pagesDir = join(root, 'src/pages')
 
@@ -42,14 +87,47 @@ export default createRoute({
     },
   })
 
-  registry.setRoot(root)
+  await registry.initialize(root)
 
   return { registry, pagesDir }
 }
 
 describe('RouteRegistry', () => {
-  it('clears the virtual routes cache when a route file changes', async () => {
-    const { registry, pagesDir } = createTempRegistry()
+  it('caches definition and avoids repeated generation', async () => {
+    const generateDefinitionMock = vi.mocked(generateDefinition)
+    const generateRouteTypesMock = vi.mocked(generateRouteTypes)
+    const { registry, pagesDir } = await createTempRegistry()
+    const routeFile = join(pagesDir, 'index.tsx')
+
+    writeFileSync(
+      routeFile,
+      `import { createRoute } from 'solid-file-router'
+
+export default createRoute({
+  component: () => <h1>home</h1>,
+})
+`,
+    )
+
+    await registry.addFile(routeFile)
+
+    const first = await registry.getDefinition(true)
+    const second = await registry.getDefinition(true)
+    const third = await registry.getDefinition(true)
+
+    expect(first).toBe(second)
+    expect(second).toBe(third)
+    expect(generateDefinitionMock).toHaveBeenCalledTimes(2)
+    expect(generateDefinitionMock.mock.calls[0]?.[0]).toEqual([join(pagesDir, '_app.tsx')])
+    expect(generateDefinitionMock.mock.calls[1]?.[0]).toEqual([routeFile])
+    expect(generateRouteTypesMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps topology cache intact on route edits', async () => {
+    const generateDefinitionMock = vi.mocked(generateDefinition)
+    const generateRouteTypesMock = vi.mocked(generateRouteTypes)
+    const invalidateCacheMock = vi.mocked(invalidateCache)
+    const { registry, pagesDir } = await createTempRegistry()
     const routeFile = join(pagesDir, 'index.tsx')
 
     writeFileSync(
@@ -63,8 +141,8 @@ export default createRoute({
 `,
     )
 
-    await registry.getDefinition({ lazy: true })
-    expect((registry as any).definitionCache.size).toBe(1)
+    await registry.addFile(routeFile)
+    await registry.getDefinition(true)
 
     writeFileSync(
       routeFile,
@@ -78,9 +156,54 @@ export default createRoute({
     )
 
     expect(registry.markChanged(routeFile)).toBe(true)
-    expect((registry as any).definitionCache.size).toBe(0)
+    await registry.getDefinition(true)
 
-    await registry.getDefinition({ lazy: true })
-    expect((registry as any).definitionCache.size).toBe(1)
+    expect(generateDefinitionMock).toHaveBeenCalledTimes(2)
+    expect(generateRouteTypesMock).toHaveBeenCalledTimes(1)
+    expect(invalidateCacheMock).toHaveBeenCalledWith(routeFile)
+    expect((registry as any).definitionCache.has(routeFile)).toBe(true)
+  })
+
+  it('regenerates route types when route files are added or removed', async () => {
+    const generateDefinitionMock = vi.mocked(generateDefinition)
+    const generateRouteTypesMock = vi.mocked(generateRouteTypes)
+    const invalidateCacheMock = vi.mocked(invalidateCache)
+    const { registry, pagesDir } = await createTempRegistry()
+    const routeFile = join(pagesDir, 'index.tsx')
+    const addedFile = join(pagesDir, 'about.tsx')
+
+    writeFileSync(
+      routeFile,
+      `import { createRoute } from 'solid-file-router'
+
+export default createRoute({
+  component: () => <h1>home</h1>,
+})
+`,
+    )
+
+    await registry.addFile(routeFile)
+    await registry.getDefinition(true)
+
+    writeFileSync(
+      addedFile,
+      `import { createRoute } from 'solid-file-router'
+
+export default createRoute({
+  component: () => <h1>about</h1>,
+})
+`,
+    )
+
+    expect(await registry.addFile(addedFile)).toBe(true)
+    await registry.getDefinition(true)
+
+    expect(await registry.removeFile(addedFile)).toBe(true)
+    await registry.getDefinition(true)
+
+    expect(generateDefinitionMock).toHaveBeenCalledTimes(3)
+    expect(generateRouteTypesMock).toHaveBeenCalledTimes(3)
+    expect(invalidateCacheMock).toHaveBeenCalledWith(addedFile)
+    expect((registry as any).definitionCache.has(addedFile)).toBe(false)
   })
 })

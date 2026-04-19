@@ -1,7 +1,7 @@
 import type { Plugin } from 'vite'
 import { normalizePath } from 'vite'
 
-import { ID_EXTRACT, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
+import { PACKAGE_NAME, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
 import type { InheritanceConfig } from './utils/definition'
 import { extract } from './utils/extract'
 import { RouteRegistry } from './utils/registry'
@@ -119,9 +119,9 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
 
   return [
     {
-      name: ID_EXTRACT,
-      configResolved(config) {
-        registry.setRoot(config.root)
+      name: `${PACKAGE_NAME}:extract`,
+      async configResolved(config) {
+        await registry.initialize(config.root)
       },
       resolveId: {
         filter: {

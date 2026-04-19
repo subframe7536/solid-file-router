@@ -1,10 +1,10 @@
 import { glob } from 'tinyglobby'
 import { normalizePath } from 'vite'
 
-import { createLogHeader, formatDuration, logger } from '../const'
+import { logger } from '../const'
 
-import { generateDefinition } from './definition'
-import type { InheritanceConfig } from './definition'
+import { generateDefinition, assembleDefinition } from './definition'
+import type { InheritanceConfig, RouteEntry } from './definition'
 import { invalidateCache } from './extract'
 import type { InfoTypeDefinition } from './route-type'
 import { generateRouteTypes } from './route-type'
@@ -26,154 +26,102 @@ function normalizeBaseDir(baseDir: string): string {
 
 export class RouteRegistry {
   private root = ''
-  private initialized = false
-  private version = 0
-  private typesVersion = -1
-  private files = new Set<string>()
-  private readonly definitionCache = new Map<string, { version: number; code: string }>()
+  private pagesDir = ''
+  private outputPath = ''
+  private readonly pagesDirBase: string
+  private readonly files = new Set<string>()
+  private typesDirty = true
+  private readonly definitionCache = new Map<string, RouteEntry>()
   private readonly routesFilter: string
 
   constructor(private readonly options: RouteRegistryOption) {
     const baseDir = normalizeBaseDir(options.baseDir)
-    this.routesFilter = `${baseDir ? `${baseDir}/` : ''}src/pages/**/*.{jsx,tsx,mdx}`
+    this.pagesDirBase = `${baseDir ? `${baseDir}/` : ''}src/pages`
+    this.routesFilter = `${this.pagesDirBase}/**/*.{jsx,tsx,mdx}`
   }
 
-  setRoot(root: string) {
-    this.root = normalizePath(root)
-  }
-
-  private logVerbose(message: string, timestamp = true) {
-    if (!this.options.verboseLog) {
-      return
-    }
-    logger.info(`routes: ${message}`, { timestamp })
-  }
-
-  isRouteFile(file: string): boolean {
+  markChanged(file: string): boolean {
     const normalized = normalizePath(file)
-    return normalized.startsWith(`${this.pagesDir}/`) && REG_IS_ROUTE_FILE.test(normalized)
-  }
-
-  async ensureInitialized() {
-    if (this.initialized) {
-      return
+    if (!this.isRouteFileNormalized(normalized)) {
+      return false
     }
 
-    const start = Date.now()
+    invalidateCache(normalized)
+    log(`Route changed: ${normalized}`)
+    return true
+  }
+
+  async addFile(file: string): Promise<boolean> {
+    const normalized = normalizePath(file)
+    if (!this.isRouteFileNormalized(normalized) || this.files.has(normalized)) {
+      return false
+    }
+
+    this.files.add(normalized)
+    generateDefinition([normalized], this.definitionCache)
+    this.typesDirty = true
+    log(`Route added: ${normalized}`)
+    return true
+  }
+
+  async removeFile(file: string): Promise<boolean> {
+    const normalized = normalizePath(file)
+    if (!this.files.delete(normalized)) {
+      return false
+    }
+
+    invalidateCache(normalized)
+    this.definitionCache.delete(normalized)
+    this.typesDirty = true
+    log(`Route removed: ${normalized}`)
+    return true
+  }
+
+  async getDefinition(lazy: boolean): Promise<string> {
+    const files = [...this.files].sort()
+
+    if (this.typesDirty) {
+      generateRouteTypes(files, this.outputPath, this.options.infoDts)
+      this.typesDirty = false
+    }
+    log(`Generated ${this.definitionCache.size} routes, Mode: ${lazy ? 'Lazy' : 'Eager'}`)
+
+    const code = assembleDefinition(
+      files,
+      this.definitionCache,
+      lazy,
+      this.options.inheritance,
+      this.options.verboseLog,
+    )
+
+    return code
+  }
+
+  async initialize(root: string): Promise<void> {
+    this.root = normalizePath(root)
+    this.pagesDir = `${this.root}/${this.pagesDirBase}`.replace(/\/+$/g, '')
+    this.outputPath = normalizePath(`${this.root}/${this.options.output}`)
     const files = await glob(this.routesFilter, {
       cwd: this.root,
       ignore: this.options.ignore,
       absolute: true,
     })
 
-    this.files = new Set(files.map((file) => normalizePath(file)))
-    this.initialized = true
-    this.version++
-    this.logVerbose(
-      `${createLogHeader('Registry Initialized')}
-${alignKeyValue([
-  ['Files', this.files.size],
-  ['Time', formatDuration(Date.now() - start)],
-])}`,
-      false,
-    )
-  }
-
-  markChanged(file: string): boolean {
-    const normalized = normalizePath(file)
-    if (!this.isRouteFile(normalized)) {
-      return false
+    this.files.clear()
+    for (const file of files) {
+      this.files.add(normalizePath(file))
     }
 
-    invalidateCache(normalized)
-    this.bumpVersion()
-    this.logVerbose(`Route changed: ${normalized}`)
-    return true
-  }
-
-  async addFile(file: string): Promise<boolean> {
-    await this.ensureInitialized()
-    const normalized = normalizePath(file)
-    if (!this.isRouteFile(normalized) || this.files.has(normalized)) {
-      return false
-    }
-    this.files.add(normalized)
-    this.bumpVersion()
-    this.logVerbose(`Route added: ${normalized}`)
-    return true
-  }
-
-  async removeFile(file: string): Promise<boolean> {
-    await this.ensureInitialized()
-    const normalized = normalizePath(file)
-    if (!this.files.delete(normalized)) {
-      return false
-    }
-    invalidateCache(normalized)
-    this.bumpVersion()
-    this.logVerbose(`Route removed: ${normalized}`)
-    return true
-  }
-
-  async getDefinition(lazy: boolean): Promise<string> {
-    await this.ensureInitialized()
-
-    const key = `${lazy}`
-    const cached = this.definitionCache.get(key)
-    if (cached?.version === this.version) {
-      this.logVerbose(`Cache hit: virtual:routes (${key})`)
-      return cached.code
-    }
-
-    const files = this.getFiles()
-    const start = Date.now()
-    const code = await generateDefinition(
-      files,
-      this.options.verboseLog,
-      this.options.inheritance,
-      lazy,
-    )
-
-    if (lazy && this.typesVersion !== this.version) {
-      generateRouteTypes(
-        files,
-        normalizePath(`${this.root}/${this.options.output}`),
-        this.options.infoDts,
-      )
-      this.typesVersion = this.version
-      this.logVerbose(`Route types generated for ${files.length} routes`, false)
-    }
-
-    this.definitionCache.set(key, { version: this.version, code })
-    this.logVerbose(
-      `${createLogHeader('Virtual Module Generated')}
-${alignKeyValue([
-  ['Routes', files.length],
-  ['Time', formatDuration(Date.now() - start)],
-  ['Mode', lazy ? 'Lazy' : 'Eager'],
-])}`,
-      false,
-    )
-    return code
-  }
-
-  private getFiles() {
-    return [...this.files].sort()
-  }
-
-  private bumpVersion() {
-    this.version++
-    this.typesVersion = -1
+    this.typesDirty = true
     this.definitionCache.clear()
+    generateDefinition([...this.files].sort(), this.definitionCache)
   }
 
-  private get pagesDir() {
-    const baseDir = normalizeBaseDir(this.options.baseDir)
-    return `${this.root}/${baseDir ? `${baseDir}/` : ''}src/pages`.replace(/\/+/g, '/')
+  private isRouteFileNormalized(file: string): boolean {
+    return file.startsWith(`${this.pagesDir}/`) && REG_IS_ROUTE_FILE.test(file)
   }
 }
 
-function alignKeyValue(entries: Array<[string, string | number]>, minKeyWidth = 12): string {
-  const maxKeyLen = Math.max(...entries.map(([key]) => key.length), minKeyWidth)
-  return entries.map(([key, value]) => `${String(key).padEnd(maxKeyLen)} : ${value}`).join('\n')
+function log(message: string, timestamp = true) {
+  logger.info(message, { timestamp })
 }

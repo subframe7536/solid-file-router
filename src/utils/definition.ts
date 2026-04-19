@@ -1,4 +1,4 @@
-import { alignKeyValue, createLogHeader, logger, PACKAGE_NAME } from '../const'
+import { logger, PACKAGE_NAME } from '../const'
 
 export const patterns = {
   optional: [/^-(:?[\w-]+|\*)/, '$1?'],
@@ -88,6 +88,60 @@ interface RouteInfoModuleEntry {
   path: string
 }
 
+interface RouteInheritanceLogRow {
+  route: string
+  loadingComponent: string
+  errorComponent: string
+}
+
+export interface RouteEntry {
+  file: string
+  id: string
+  segments: string[]
+}
+
+const DEFAULT_INHERITANCE_CONFIG = {
+  enabled: true,
+  inheritLoading: true,
+  inheritError: true,
+} satisfies InheritanceConfig
+
+function isGeneratedRouteFile(file: string): boolean {
+  return (!file.includes('/_') || REG_LAYOUT.test(file)) && !isNotFoundRoute(file)
+}
+
+function hashString(value: string): string {
+  let hash = 2166136261
+
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.codePointAt(index) ?? 0
+    hash = Math.imul(hash, 16777619)
+  }
+
+  return (hash >>> 0).toString(36)
+}
+
+export function getRouteImportName(file: string): string {
+  return `__route_${hashString(file)}`
+}
+
+export function getComponentImportName(file: string): string {
+  return `__comp_${hashString(file)}`
+}
+
+function createRouteEntry(file: string): RouteEntry {
+  return {
+    file,
+    id: file.replace(...patterns.route),
+    segments: file
+      .replace(...patterns.route)
+      .replace(...patterns.splat)
+      .replace(...patterns.param)
+      .split('/')
+      .filter(Boolean),
+  }
+}
+
 /**
  * Builds a mapping of routes to their ancestor layouts for component inheritance.
  *
@@ -157,23 +211,19 @@ function buildRouteLayoutMap(routeFiles: string[], layouts: LayoutInfo[]): Route
  * The generated expressions include runtime checks for the route's `inherit` configuration,
  * allowing individual routes to opt-out of inheritance at runtime.
  *
- * @param routeIndex - Index of the route in the routes array
+ * @param routeImportName - Stable import name for the route module
  * @param layouts - Ordered array of ancestor layouts (nearest first)
  * @param inheritanceConfig - Build-time inheritance configuration from plugin options
  */
 function resolveInheritedComponents(
-  routeIndex: number,
+  routeImportName: string,
   layouts: LayoutInfo[],
   inheritanceConfig: InheritanceConfig,
 ): { loadExpr: string; errorExpr: string } {
   const { enabled = true, inheritError = true, inheritLoading = true } = inheritanceConfig
-  // Start with route's own components
-  const routeLoadImport = `__route${routeIndex}_route.loadingComponent`
-  const routeErrorImport = `__route${routeIndex}_route.errorComponent`
-
-  // Check route-level inheritance control
-  const routeInheritCheck = `__route${routeIndex}_route.inherit`
-
+  const routeLoadImport = `${routeImportName}.loadingComponent`
+  const routeErrorImport = `${routeImportName}.errorComponent`
+  const routeInheritCheck = `${routeImportName}.inherit`
   // Build fallback chain from nearest to farthest layout
   let loadExpr = routeLoadImport
   let errorExpr = routeErrorImport
@@ -214,24 +264,15 @@ function resolveInheritedComponents(
   return { loadExpr, errorExpr }
 }
 
-async function generateRegularRoutes(
-  files: string[],
-  verbose = false,
-  inheritanceConfig: InheritanceConfig = {
-    enabled: true,
-    inheritLoading: true,
-    inheritError: true,
-  },
-  lazy = true,
-): Promise<[imports: string[], routs: BaseRoute[]]> {
-  const imports: string[] = lazy ? [`import { __loader__ } from '${PACKAGE_NAME}'`] : []
+function computeGlobalContext(files: string[], lazy: boolean) {
+  const globalImports: string[] = lazy ? [`import { __loader__ } from '${PACKAGE_NAME}'`] : []
   const layouts: LayoutInfo[] = []
 
   const appPath = files.find((key) => key.endsWith('_app.tsx') || key.endsWith('_app.jsx'))
   if (appPath) {
-    imports.push(`import __app_comp from '${appPath}?comp'`)
+    globalImports.push(`import __app_comp from '${appPath}?comp'`)
     if (lazy) {
-      imports.push(`import __app_route from '${appPath}?route'`)
+      globalImports.push(`import __app_route from '${appPath}?route'`)
       layouts.push({
         path: appPath,
         loadImportName: '__app_route.loadingComponent',
@@ -243,169 +284,108 @@ async function generateRegularRoutes(
       timestamp: true,
     })
     if (lazy) {
-      imports.push(
+      globalImports.push(
         `import { memo } from "solid-js/web";`,
         `const __app_comp = { component: (props) => memo(() => props.children) }`,
         `const __app_route = {}`,
       )
     } else {
-      imports.push(`const __app_comp = { component: (props) => props.children }`)
+      globalImports.push(`const __app_comp = { component: (props) => props.children }`)
     }
   }
 
   if (lazy) {
-    // Find and import layout defaults (client only)
     const layoutFiles = files.filter((key) => REG_LAYOUT.test(key))
-    layoutFiles.forEach((layoutPath, index) => {
-      imports.push(`import __layout${index}_route from '${layoutPath}?route'`)
+    layoutFiles.forEach((layoutPath) => {
+      const layoutImportName = getRouteImportName(layoutPath)
+      globalImports.push(`import ${layoutImportName} from '${layoutPath}?route'`)
       layouts.push({
         path: layoutPath,
-        loadImportName: `__layout${index}_route.loadingComponent`,
-        errorImportName: `__layout${index}_route.errorComponent`,
+        loadImportName: `${layoutImportName}.loadingComponent`,
+        errorImportName: `${layoutImportName}.errorComponent`,
       })
     })
   }
 
-  const filtered = files.filter(
-    (key) => (!key.includes('/_') || REG_LAYOUT.test(key)) && !isNotFoundRoute(key),
-  )
-
-  // Build route-to-layout mapping
-  const routeLayoutMap = lazy ? buildRouteLayoutMap(filtered, layouts) : {}
-
-  const regularRoutes: BaseRoute[] = []
-  for (let i = 0; i < filtered.length; i++) {
-    const file = filtered[i]!
-
-    imports.push(`import __route${i}_route from '${file}?route'`)
-
-    let route: BaseRoute
-
-    if (!lazy) {
-      imports.push(`import __route${i}_comp from '${file}?comp'`)
-      route = {
-        id: file.replace(...patterns.route),
-        component: wrapInline(`__route${i}_comp.component`),
-        __: wrapInline(`...__route${i}_route`),
-      }
-    } else {
-      // Resolve inherited components
-      const ancestorLayouts = routeLayoutMap[file] || []
-      const { loadExpr, errorExpr } = resolveInheritedComponents(
-        i,
-        ancestorLayouts,
-        inheritanceConfig,
-      )
-
-      // Log component inheritance chain in development mode
-      if (verbose && ancestorLayouts.length > 0) {
-        const routeId = file.replace(...patterns.route)
-        const loadChain: string[] = ['route']
-        const errorChain: string[] = ['route']
-
-        for (const layout of ancestorLayouts) {
-          const layoutName = layout.path.includes('_app.')
-            ? '_app'
-            : layout.path.replace(...patterns.route).replace('/_layout', '')
-
-          if (layout.loadImportName) {
-            loadChain.push(layoutName)
-          }
-          if (layout.errorImportName) {
-            errorChain.push(layoutName)
-          }
-        }
-
-        logger.info(
-          `${createLogHeader(`Route: ${routeId}`)}
-${alignKeyValue([
-  ['loadingComponent', loadChain.join(' → ')],
-  ['errorComponent', errorChain.join(' → ')],
-])}`,
-          { timestamp: true },
-        )
-      }
-
-      route = {
-        id: file.replace(...patterns.route),
-        component: wrapInline(
-          `__loader__(lazy(() => import('${file}?comp').then(mod => ({ default: mod.default.component }))), ${loadExpr}, ${errorExpr})`,
-        ),
-        __: wrapInline(`...__route${i}_route`),
-      }
-    }
-
-    const segments = file
-      .replace(...patterns.route)
-      .replace(...patterns.splat)
-      .replace(...patterns.param)
-      .split('/')
-      .filter(Boolean)
-
-    segments.reduce((parent, segment, index) => {
-      const path = segment.replace(...patterns.slash).replace(...patterns.optional)
-      const root = index === 0
-      const leaf = index === segments.length - 1 && segments.length > 1
-      const node = !root && !leaf
-      const layout = segment === '_layout'
-      const group = REG_GROUP.test(path)
-      const insert = REG_INSERT.test(path) ? 'unshift' : 'push'
-
-      if (root) {
-        const last = segments.length === 1
-        if (last) {
-          regularRoutes.push({ path, ...route })
-          return parent
-        }
-      }
-
-      if (root || node) {
-        const current = root ? regularRoutes : parent.children
-        const found = current?.find(
-          (r) => r.path === path || r.id?.replace('/_layout', '').split('/').pop() === path,
-        )
-
-        if (found) {
-          found.children ??= []
-          return found
-        }
-
-        const props = group ? (route?.component ? { id: path, path: '' } : { id: path }) : { path }
-        current?.[insert]({ ...props, children: [] })
-        return current?.[insert === 'unshift' ? 0 : current.length - 1] as BaseRoute
-      }
-
-      if (layout) {
-        return Object.assign(parent, route)
-      }
-
-      if (leaf) {
-        parent?.children?.[insert]({ path, ...route })
-      }
-
-      return parent
-    }, {} as BaseRoute)
-  }
+  const filteredFiles = files.filter(isGeneratedRouteFile)
+  const routeLayoutMap = lazy ? buildRouteLayoutMap(filteredFiles, layouts) : {}
 
   const notFoundPath = files.find((key) => isNotFoundRoute(key))
   if (notFoundPath) {
-    imports.push(`import __404_comp from '${notFoundPath}?comp'`)
-    imports.push(`import __404_route from '${notFoundPath}?route'`)
+    globalImports.push(`import __404_comp from '${notFoundPath}?comp'`)
+    globalImports.push(`import __404_route from '${notFoundPath}?route'`)
   } else {
     logger.warn('No `404.jsx` or `404.tsx` found, fallback to `() => null`', {
       timestamp: true,
     })
-    imports.push(`const __404_comp = ${lazy ? '() => null' : '{ component: () => null }'}`)
-    imports.push(`const __404_route = undefined`)
+    globalImports.push(`const __404_comp = ${lazy ? '() => null' : '{ component: () => null }'}`)
+    globalImports.push(`const __404_route = undefined`)
   }
-  regularRoutes.push({
-    id: '*',
-    path: '*',
-    component: wrapInline(lazy ? '__404_comp' : '__404_comp.component'),
-    ...(lazy ? { __: wrapInline(`...__404_route`) } : {}),
-  })
 
-  return [imports, regularRoutes]
+  return { globalImports, filteredFiles, routeLayoutMap }
+}
+
+function generateSingleRouteDefinition(
+  entry: RouteEntry,
+  ancestorLayouts: LayoutInfo[],
+  inheritanceConfig: InheritanceConfig,
+  lazy: boolean,
+  verbose: boolean,
+): { imports: string[]; route: BaseRoute; inheritanceLogRow?: RouteInheritanceLogRow } {
+  const routeImportName = getRouteImportName(entry.file)
+  const imports: string[] = [`import ${routeImportName} from '${entry.file}?route'`]
+  let route: BaseRoute
+  let inheritanceLogRow: RouteInheritanceLogRow | undefined
+
+  if (!lazy) {
+    const componentImportName = getComponentImportName(entry.file)
+    imports.push(`import ${componentImportName} from '${entry.file}?comp'`)
+    route = {
+      id: entry.id,
+      component: wrapInline(`${componentImportName}.component`),
+      __: wrapInline(`...${routeImportName}`),
+    }
+  } else {
+    const { loadExpr, errorExpr } = resolveInheritedComponents(
+      routeImportName,
+      ancestorLayouts,
+      inheritanceConfig,
+    )
+
+    if (verbose && ancestorLayouts.length > 0) {
+      const loadChain: string[] = ['route']
+      const errorChain: string[] = ['route']
+
+      for (const layout of ancestorLayouts) {
+        const layoutName = layout.path.includes('_app.')
+          ? '_app'
+          : layout.path.replace(...patterns.route).replace('/_layout', '')
+
+        if (layout.loadImportName) {
+          loadChain.push(layoutName)
+        }
+        if (layout.errorImportName) {
+          errorChain.push(layoutName)
+        }
+      }
+
+      inheritanceLogRow = {
+        route: entry.id,
+        loadingComponent: loadChain.join(' → '),
+        errorComponent: errorChain.join(' → '),
+      }
+    }
+
+    route = {
+      id: entry.id,
+      component: wrapInline(
+        `__loader__(lazy(() => import('${entry.file}?comp').then(mod => ({ default: mod.default.component }))), ${loadExpr}, ${errorExpr})`,
+      ),
+      __: wrapInline(`...${routeImportName}`),
+    }
+  }
+
+  return { imports, route, inheritanceLogRow }
 }
 
 /**
@@ -435,37 +415,109 @@ export interface InheritanceConfig {
   inheritError?: boolean
 }
 
-export async function generateDefinition(
+export function generateDefinition(
   files: string[],
-  verbose = false,
-  inheritanceConfig: InheritanceConfig = {
-    enabled: true,
-    inheritLoading: true,
-    inheritError: true,
-  },
-  lazy = true,
-): Promise<string> {
-  const [imports, regularRoutes] = await generateRegularRoutes(
-    files,
-    verbose,
-    inheritanceConfig,
-    lazy,
-  )
-  const routerImport = lazy
-    ? `import { Router } from '@solidjs/router'`
-    : `import { StaticRouter } from '@solidjs/router'`
-  const routerComponent = lazy ? 'Router' : 'StaticRouter'
-  const routerUrlProp = lazy ? 'base' : 'url'
-  const solidImports = lazy
-    ? `import { createComponent, lazy } from 'solid-js'`
-    : `import { createComponent } from 'solid-js'`
-  const rootExpr = lazy
-    ? `export const Root = __loader__(__app_comp.component, __app_route.loadingComponent, __app_route.errorComponent)`
-    : `export const Root = __app_comp.component`
+  cache: Map<string, RouteEntry> = new Map(),
+): Map<string, RouteEntry> {
+  for (const file of files.filter(isGeneratedRouteFile)) {
+    if (cache.has(file)) {
+      continue
+    }
 
-  const regularFiles = files.filter(
-    (key) => (!key.includes('/_') || REG_LAYOUT.test(key)) && !isNotFoundRoute(key),
-  )
+    cache.set(file, createRouteEntry(file))
+  }
+
+  return cache
+}
+
+export function assembleDefinition(
+  files: string[],
+  cache: Map<string, RouteEntry>,
+  lazy = true,
+  inheritanceConfig: InheritanceConfig = DEFAULT_INHERITANCE_CONFIG,
+  verbose = false,
+): string {
+  const { globalImports, filteredFiles, routeLayoutMap } = computeGlobalContext(files, lazy)
+
+  const routeImports: string[] = []
+  const regularRoutes: BaseRoute[] = []
+  const inheritanceLogRows: RouteInheritanceLogRow[] = []
+
+  for (const file of filteredFiles) {
+    const entry = cache.get(file) ?? createRouteEntry(file)
+    const ancestorLayouts = routeLayoutMap[file] ?? []
+    const { imports, route, inheritanceLogRow } = generateSingleRouteDefinition(
+      entry,
+      ancestorLayouts,
+      inheritanceConfig,
+      lazy,
+      verbose,
+    )
+    // In lazy mode, _layout.tsx files already have their `?route` import
+    // emitted by computeGlobalContext. Skip the duplicate here.
+    const importsToAdd = lazy && REG_LAYOUT.test(entry.file) ? imports.slice(1) : imports
+    routeImports.push(...importsToAdd)
+
+    if (verbose && inheritanceLogRow) {
+      inheritanceLogRows.push(inheritanceLogRow)
+    }
+
+    entry.segments.reduce((parent, segment, index) => {
+      const path = segment.replace(...patterns.slash).replace(...patterns.optional)
+      const root = index === 0
+      const leaf = index === entry.segments.length - 1 && entry.segments.length > 1
+      const node = !root && !leaf
+      const layout = segment === '_layout'
+      const group = REG_GROUP.test(path)
+      const insert = REG_INSERT.test(path) ? 'unshift' : 'push'
+
+      if (root) {
+        const last = entry.segments.length === 1
+        if (last) {
+          regularRoutes.push({ path, ...route })
+          return parent
+        }
+      }
+
+      if (root || node) {
+        const current = root ? regularRoutes : parent.children
+        const found = current?.find(
+          (r) => r.path === path || r.id?.replace('/_layout', '').split('/').pop() === path,
+        )
+
+        if (found) {
+          found.children ??= []
+          return found
+        }
+
+        const props = group ? (route.component ? { id: path, path: '' } : { id: path }) : { path }
+        current?.[insert]({ ...props, children: [] })
+        return current?.[insert === 'unshift' ? 0 : current.length - 1] as BaseRoute
+      }
+
+      if (layout) {
+        return Object.assign(parent, route)
+      }
+
+      if (leaf) {
+        parent?.children?.[insert]({ path, ...route })
+      }
+
+      return parent
+    }, {} as BaseRoute)
+  }
+
+  if (verbose && inheritanceLogRows.length > 0) {
+    console.table(inheritanceLogRows)
+  }
+
+  regularRoutes.push({
+    id: '*',
+    path: '*',
+    component: wrapInline(lazy ? '__404_comp' : '__404_comp.component'),
+    ...(lazy ? { __: wrapInline(`...__404_route`) } : {}),
+  })
+
   const routeInfoEntries = files
     .filter((file) => !file.includes('/_'))
     .map((file) => {
@@ -478,12 +530,11 @@ export async function generateDefinition(
         return { path, importName: '__404_route' }
       }
 
-      const index = regularFiles.indexOf(file)
-      if (index < 0) {
+      if (!isGeneratedRouteFile(file)) {
         return undefined
       }
 
-      return { path, importName: `__route${index}_route` }
+      return { path, importName: getRouteImportName(file) }
     })
     .filter((entry): entry is RouteInfoModuleEntry => !!entry)
 
@@ -493,9 +544,22 @@ export async function generateDefinition(
     ),
   )
 
-  const result = `${solidImports}
+  const routerImport = lazy
+    ? `import { Router } from '@solidjs/router'`
+    : `import { StaticRouter } from '@solidjs/router'`
+  const routerComponent = lazy ? 'Router' : 'StaticRouter'
+  const routerUrlProp = lazy ? 'base' : 'url'
+  const solidImports = lazy
+    ? `import { createComponent, lazy } from 'solid-js'`
+    : `import { createComponent } from 'solid-js'`
+  const rootExpr = lazy
+    ? `export const Root = __loader__(__app_comp.component, __app_route.loadingComponent, __app_route.errorComponent)`
+    : `export const Root = __app_comp.component`
+
+  return `${solidImports}
 ${routerImport}
-${imports.join('\n')}
+${globalImports.join('\n')}
+${routeImports.join('\n')}
 
 ${rootExpr}
 
@@ -513,5 +577,4 @@ export const FileRouter = (props) => createComponent(${routerComponent}, {
   }
 })
 `
-  return result
 }
