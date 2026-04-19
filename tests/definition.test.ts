@@ -8,17 +8,19 @@ import {
 } from '../src/utils/definition'
 import type { InheritanceConfig } from '../src/utils/definition'
 
+const root = '/root/project'
+const defaultRouteRoot = `${root}/src/pages`
+
 async function buildDefinition(
   files: string[],
   verbose?: boolean,
   inheritanceConfig?: InheritanceConfig,
   lazy?: boolean,
+  routeRoot = defaultRouteRoot,
 ) {
-  const cache = generateDefinition(files)
-  return assembleDefinition(files, cache, lazy, inheritanceConfig, verbose)
+  const cache = generateDefinition(files, new Map(), routeRoot)
+  return assembleDefinition(files, cache, lazy, inheritanceConfig, verbose, routeRoot)
 }
-
-const root = '/root/project'
 const files = [
   `${root}/src/pages/_app.tsx`,
   `${root}/src/pages/index.tsx`,
@@ -37,6 +39,14 @@ const inheritanceFiles = [
   `${root}/src/pages/dashboard/admin/_layout.tsx`,
   `${root}/src/pages/dashboard/admin/users.tsx`,
   `${root}/src/pages/404.tsx`,
+]
+
+const customRouteRoot = `${root}/app/routes`
+const customRouteFiles = [
+  `${customRouteRoot}/_app.tsx`,
+  `${customRouteRoot}/index.tsx`,
+  `${customRouteRoot}/blog/[slug].tsx`,
+  `${customRouteRoot}/404.tsx`,
 ]
 
 const routeComponentExpression = (
@@ -123,6 +133,19 @@ describe('generateDefinition', () => {
     )
     expect(module).toContain(
       `"/nest/:id": ${getRouteImportName(`${root}/src/pages/nest/[id].tsx`)}.info`,
+    )
+  })
+
+  it('derives route ids from a custom pagesDir', async () => {
+    const module = await buildDefinition(customRouteFiles, false, undefined, true, customRouteRoot)
+
+    expect(module).toContain(
+      `import ${getRouteImportName(`${customRouteRoot}/index.tsx`)} from '${customRouteRoot}/index.tsx?route'`,
+    )
+    expect(module).toContain(`...${getRouteImportName(`${customRouteRoot}/blog/[slug].tsx`)}`)
+    expect(module).toContain(`"/": ${getRouteImportName(`${customRouteRoot}/index.tsx`)}.info`)
+    expect(module).toContain(
+      `"/blog/:slug": ${getRouteImportName(`${customRouteRoot}/blog/[slug].tsx`)}.info`,
     )
   })
 

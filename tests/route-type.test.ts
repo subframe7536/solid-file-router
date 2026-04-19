@@ -27,6 +27,14 @@ const files = [
   `${root}/src/pages/index.tsx`,
 ]
 
+const customRouteRoot = `${root}/app/routes`
+const customRouteFiles = [
+  `${customRouteRoot}/_app.tsx`,
+  `${customRouteRoot}/blog/[slug].tsx`,
+  `${customRouteRoot}/docs/-[lang]/index.tsx`,
+  `${customRouteRoot}/index.tsx`,
+]
+
 describe('generateRouteTypes', () => {
   it('writes route type defs and returns count', () => {
     const params = parseParams(files)
@@ -45,6 +53,16 @@ describe('generateRouteTypes', () => {
       "'/docs/:lang?': { $lang?: string }",
       "'/docs/:lang?/resources': { $lang?: string }",
       "'/docs/en?/support': never",
+      "'/': never",
+    ])
+  })
+
+  it('supports a custom pagesDir when parsing params', () => {
+    const params = parseParams(customRouteFiles, customRouteRoot)
+
+    expect(params).toStrictEqual([
+      "'/blog/:slug': { $slug: string }",
+      "'/docs/:lang?': { $lang?: string }",
       "'/': never",
     ])
   })

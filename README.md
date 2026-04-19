@@ -490,13 +490,13 @@ interface FileRouterPluginOption {
    */
   output?: string
   /**
-   * The base directory of `src/pages`.
+    * The directory containing all route files.
    *
-   * e.g. If your `_app.tsx` is located at `packages/app/module/src/pages/_app.tsx`,
-   * You need to setup to `packages/app/module/`
-   * @default ''
+    * e.g. If your `_app.tsx` is located at `module/routes/_app.tsx`,
+    * You need to setup to `module/routes`
+    * @default 'src/pages'
    */
-  baseDir?: string
+    pagesDir?: string
   /**
    * A list of glob patterns to be ignored during processing.
    *

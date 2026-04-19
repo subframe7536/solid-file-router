@@ -10,7 +10,7 @@ import type { InfoTypeDefinition } from './route-type'
 import { generateRouteTypes } from './route-type'
 
 interface RouteRegistryOption {
-  baseDir: string
+  pagesDir: string
   ignore: string[]
   output: string
   infoDts?: InfoTypeDefinition
@@ -48,7 +48,7 @@ export class RouteRegistry {
     }
 
     this.files.add(normalized)
-    generateDefinition([normalized], this.definitionCache)
+    generateDefinition([normalized], this.definitionCache, this.pagesDir)
     this.typesDirty = true
     log(`Route added: ${normalized}`)
     return true
@@ -71,7 +71,7 @@ export class RouteRegistry {
     const files = [...this.files].sort()
 
     if (this.typesDirty) {
-      generateRouteTypes(files, this.outputPath, this.options.infoDts)
+      generateRouteTypes(files, this.outputPath, this.options.infoDts, this.pagesDir)
       this.typesDirty = false
     }
     log(`Generated ${this.definitionCache.size} routes, Mode: ${lazy ? 'Lazy' : 'Eager'}`)
@@ -82,6 +82,7 @@ export class RouteRegistry {
       lazy,
       this.options.inheritance,
       this.options.verboseLog,
+      this.pagesDir,
     )
 
     return code
@@ -90,14 +91,10 @@ export class RouteRegistry {
   async initialize(root: string): Promise<void> {
     this.root = normalizePath(root)
 
-    this.pagesDir =
-      `${this.root}/${this.options.baseDir ? `${normalizePath(this.options.baseDir).replace(/\/$/, '')}/` : ''}src/pages`.replace(
-        /\/+$/g,
-        '',
-      )
+    this.pagesDir = resolveFromRoot(this.root, this.options.pagesDir)
     this.outputPath = normalizePath(`${this.root}/${this.options.output}`)
-    const files = await glob(`${this.pagesDir}/**/*.{jsx,tsx,mdx}`, {
-      cwd: this.root,
+    const files = await glob('**/*.{jsx,tsx,mdx}', {
+      cwd: this.pagesDir,
       ignore: this.options.ignore,
       absolute: true,
     })
@@ -108,12 +105,19 @@ export class RouteRegistry {
     }
 
     this.definitionCache.clear()
-    generateDefinition([...this.files].sort(), this.definitionCache)
+    generateDefinition([...this.files].sort(), this.definitionCache, this.pagesDir)
   }
 
   private isRouteFileNormalized(file: string): boolean {
     return file.startsWith(`${this.pagesDir}/`) && REG_IS_ROUTE_FILE.test(file)
   }
+}
+
+function resolveFromRoot(root: string, dir: string): string {
+  if (!dir) {
+    return root
+  }
+  return `${root}/${normalizePath(dir).replace(/^(?:\.\/|\/+)|\/+$/g, '')}`
 }
 
 function log(message: string, timestamp = true) {

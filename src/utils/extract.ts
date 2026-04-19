@@ -2,14 +2,6 @@ import type * as Babel from '@babel/core'
 
 import { logger } from '../const'
 
-/**
- * Normalizes file paths by removing project root prefix for cleaner logs
- */
-function normalizeId(id: string): string {
-  // Remove common project root patterns (e.g., /workspace/, /workspace)
-  return id.replace(/\/workspace\/?/g, '')
-}
-
 export interface ExtractConfig {
   entryFn: string
   pick: string[]
@@ -199,7 +191,7 @@ export async function extract(code: string, id: string, config: ExtractConfig, v
 
   if (!astPromise) {
     if (verbose) {
-      logger.info(`AST cache miss: ${normalizeId(id)}`, { timestamp: false })
+      logger.info(`AST cache miss: ${id}`, { timestamp: false })
     }
 
     astPromise = babel
@@ -217,7 +209,7 @@ export async function extract(code: string, id: string, config: ExtractConfig, v
 
     astPromiseCache.set(id, astPromise)
   } else if (verbose) {
-    logger.info(`AST cache hit:  ${normalizeId(id)}`, { timestamp: false })
+    logger.info(`AST cache hit:  ${id}`, { timestamp: false })
   }
 
   const ast = await astPromise

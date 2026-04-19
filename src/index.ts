@@ -14,13 +14,13 @@ interface FileRouterPluginOption {
    */
   output?: string
   /**
-   * The base directory of `src/pages`.
+   * The directory containing all route files.
    *
-   * e.g. If your `_app.tsx` is located at `packages/app/module/src/pages/_app.tsx`,
-   * You need to setup to `packages/app/module/`
-   * @default ''
+   * e.g. If your `_app.tsx` is located at `module/routes/_app.tsx`,
+   * You need to setup to `module/routes`
+   * @default 'src/pages'
    */
-  baseDir?: string
+  pagesDir?: string
   /**
    * A list of glob patterns to be ignored during processing.
    *
@@ -93,7 +93,7 @@ const REG_ROUTE_QUERY = /\?(route|comp)$/
 export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
   const {
     output = 'src/routes.d.ts',
-    baseDir = '',
+    pagesDir = 'src/pages',
     ignore = DEFAULT_IGNORES,
     reloadOnChange = true,
     lazy,
@@ -109,7 +109,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
   }
 
   const registry = new RouteRegistry({
-    baseDir,
+    pagesDir,
     ignore,
     output,
     infoDts,

@@ -1,9 +1,10 @@
+import { normalizePath } from 'vite'
+
 import { logger, PACKAGE_NAME } from '../const'
 
 export const patterns = {
   optional: [/^-(:?[\w-]+|\*)/, '$1?'],
   param: [/\[([^\]]+)]/g, ':$1'],
-  route: [/^.*\/?src\/pages\/|\.(jsx|tsx|mdx)$/g, ''],
   slash: [/^index$|\./g, '/'],
   splat: [/\[\.{3}\w+\]/g, '*'],
 } as const
@@ -11,12 +12,13 @@ export const patterns = {
 const REG_LAYOUT = /_layout\.(jsx|tsx)$/
 const REG_GROUP = /\([\w-]+\)/
 const REG_INSERT = /^\w|\//
+const REG_ROUTE_EXT = /\.(jsx|tsx|mdx)$/
 
 function isNotFoundRoute(file: string) {
   return file.endsWith('404.tsx') || file.endsWith('404.jsx')
 }
 
-export function getRoutePath(key: string): string | undefined {
+export function getRoutePath(key: string, routeRoot = 'src/pages'): string | undefined {
   if (key.includes('/_') && !key.endsWith('/404.tsx') && !key.endsWith('/404.jsx')) {
     return undefined
   }
@@ -25,8 +27,7 @@ export function getRoutePath(key: string): string | undefined {
     return '/404'
   }
 
-  const path = key
-    .replace(...patterns.route)
+  const path = getRouteKey(key, routeRoot)
     .replace(...patterns.splat)
     .replace(...patterns.param)
     .replace(/\([\w-]+\)\/|\/?_layout/g, '')
@@ -129,12 +130,34 @@ export function getComponentImportName(file: string): string {
   return `__comp_${hashString(file)}`
 }
 
-function createRouteEntry(file: string): RouteEntry {
+function getRouteKey(file: string, routeRoot: string): string {
+  const normalizedFile = normalizePath(file)
+  const normalizedRouteRoot = normalizePath(routeRoot).replace(/\/+$/g, '')
+  const prefixedRouteRoot = normalizedRouteRoot ? `${normalizedRouteRoot}/` : ''
+
+  if (prefixedRouteRoot && normalizedFile.startsWith(prefixedRouteRoot)) {
+    return normalizedFile.slice(prefixedRouteRoot.length).replace(REG_ROUTE_EXT, '')
+  }
+
+  if (prefixedRouteRoot) {
+    const suffixIndex = normalizedFile.lastIndexOf(`/${prefixedRouteRoot}`)
+    if (suffixIndex >= 0) {
+      return normalizedFile
+        .slice(suffixIndex + prefixedRouteRoot.length + 1)
+        .replace(REG_ROUTE_EXT, '')
+    }
+  }
+
+  return normalizedFile.replace(REG_ROUTE_EXT, '')
+}
+
+function createRouteEntry(file: string, routeRoot: string): RouteEntry {
+  const routeKey = getRouteKey(file, routeRoot)
+
   return {
     file,
-    id: file.replace(...patterns.route),
-    segments: file
-      .replace(...patterns.route)
+    id: routeKey,
+    segments: routeKey
       .replace(...patterns.splat)
       .replace(...patterns.param)
       .split('/')
@@ -331,6 +354,7 @@ function generateSingleRouteDefinition(
   inheritanceConfig: InheritanceConfig,
   lazy: boolean,
   verbose: boolean,
+  routeRoot: string,
 ): { imports: string[]; route: BaseRoute; inheritanceLogRow?: RouteInheritanceLogRow } {
   const routeImportName = getRouteImportName(entry.file)
   const imports: string[] = [`import ${routeImportName} from '${entry.file}?route'`]
@@ -359,7 +383,7 @@ function generateSingleRouteDefinition(
       for (const layout of ancestorLayouts) {
         const layoutName = layout.path.includes('_app.')
           ? '_app'
-          : layout.path.replace(...patterns.route).replace('/_layout', '')
+          : getRouteKey(layout.path, routeRoot).replace('/_layout', '')
 
         if (layout.loadImportName) {
           loadChain.push(layoutName)
@@ -418,13 +442,14 @@ export interface InheritanceConfig {
 export function generateDefinition(
   files: string[],
   cache: Map<string, RouteEntry> = new Map(),
+  routeRoot = 'src/pages',
 ): Map<string, RouteEntry> {
   for (const file of files.filter(isGeneratedRouteFile)) {
     if (cache.has(file)) {
       continue
     }
 
-    cache.set(file, createRouteEntry(file))
+    cache.set(file, createRouteEntry(file, routeRoot))
   }
 
   return cache
@@ -436,6 +461,7 @@ export function assembleDefinition(
   lazy = true,
   inheritanceConfig: InheritanceConfig = DEFAULT_INHERITANCE_CONFIG,
   verbose = false,
+  routeRoot = 'src/pages',
 ): string {
   const { globalImports, filteredFiles, routeLayoutMap } = computeGlobalContext(files, lazy)
 
@@ -444,7 +470,7 @@ export function assembleDefinition(
   const inheritanceLogRows: RouteInheritanceLogRow[] = []
 
   for (const file of filteredFiles) {
-    const entry = cache.get(file) ?? createRouteEntry(file)
+    const entry = cache.get(file) ?? createRouteEntry(file, routeRoot)
     const ancestorLayouts = routeLayoutMap[file] ?? []
     const { imports, route, inheritanceLogRow } = generateSingleRouteDefinition(
       entry,
@@ -452,6 +478,7 @@ export function assembleDefinition(
       inheritanceConfig,
       lazy,
       verbose,
+      routeRoot,
     )
     // In lazy mode, _layout.tsx files already have their `?route` import
     // emitted by computeGlobalContext. Skip the duplicate here.
@@ -521,7 +548,7 @@ export function assembleDefinition(
   const routeInfoEntries = files
     .filter((file) => !file.includes('/_'))
     .map((file) => {
-      const path = getRoutePath(file)
+      const path = getRoutePath(file, routeRoot)
       if (!path) {
         return undefined
       }

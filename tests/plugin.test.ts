@@ -14,9 +14,9 @@ afterEach(() => {
   }
 })
 
-function createTempProject() {
+function createTempProject(routeRoot = 'src/pages') {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-plugin-')))
-  const pagesDir = join(root, 'src/pages')
+  const pagesDir = join(root, routeRoot)
 
   tempDirs.push(root)
   mkdirSync(pagesDir, { recursive: true })
@@ -44,10 +44,10 @@ export default createRoute({
   return root
 }
 
-function createTempProjectWithCustomRoot(customRoot: string) {
+function createTempProjectWithCustomRoot(customRoot: string, routeRoot = 'src/pages') {
   const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-plugin-')))
   const root = join(workspaceRoot, customRoot)
-  const pagesDir = join(root, 'src/pages')
+  const pagesDir = join(root, routeRoot)
 
   tempDirs.push(workspaceRoot)
   mkdirSync(pagesDir, { recursive: true })
@@ -85,9 +85,9 @@ export default createRoute({
   return { workspaceRoot, root }
 }
 
-async function createPlugin(root: string, lazy?: boolean) {
+async function createPlugin(root: string, lazy?: boolean, pagesDir = 'src/pages') {
   const [plugin] = fileRouter({
-    baseDir: '',
+    pagesDir,
     ignore: [],
     lazy,
   })
@@ -135,5 +135,14 @@ describe('fileRouter', () => {
 
     expect(existsSync(join(root, 'src/routes.d.ts'))).toBe(true)
     expect(existsSync(join(workspaceRoot, 'src/routes.d.ts'))).toBe(false)
+  })
+
+  it('supports a custom pagesDir from config', async () => {
+    const { root } = createTempProjectWithCustomRoot('apps/site', 'app/routes')
+    const plugin = await createPlugin(root, false, 'app/routes')
+
+    const module = await plugin.load.handler()
+
+    expect(module).toContain(`${join(root, 'app/routes/index.tsx')}?route`)
   })
 })
