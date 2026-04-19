@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -44,6 +44,47 @@ export default createRoute({
   return root
 }
 
+function createTempProjectWithCustomRoot(customRoot: string) {
+  const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-plugin-')))
+  const root = join(workspaceRoot, customRoot)
+  const pagesDir = join(root, 'src/pages')
+
+  tempDirs.push(workspaceRoot)
+  mkdirSync(pagesDir, { recursive: true })
+
+  writeFileSync(
+    join(pagesDir, '_app.tsx'),
+    `import { createRoute } from 'solid-file-router'
+
+export default createRoute({
+  component: (props) => <div>{props.children}</div>,
+})
+`,
+  )
+
+  writeFileSync(
+    join(pagesDir, 'index.tsx'),
+    `import { createRoute } from 'solid-file-router'
+
+export default createRoute({
+  component: () => <h1>home</h1>,
+})
+`,
+  )
+
+  writeFileSync(
+    join(pagesDir, 'about.tsx'),
+    `import { createRoute } from 'solid-file-router'
+
+export default createRoute({
+  component: () => <h1>about</h1>,
+})
+`,
+  )
+
+  return { workspaceRoot, root }
+}
+
 async function createPlugin(root: string, lazy?: boolean) {
   const [plugin] = fileRouter({
     baseDir: '',
@@ -84,5 +125,15 @@ describe('fileRouter', () => {
     expect(module).toContain("import { createComponent, lazy } from 'solid-js'")
     expect(module).toContain("import { Router } from '@solidjs/router'")
     expect(module).toContain('lazy(() => import(')
+  })
+
+  it('supports a custom Vite root from config', async () => {
+    const { workspaceRoot, root } = createTempProjectWithCustomRoot('apps/site')
+    const plugin = await createPlugin(root, false)
+
+    await plugin.load.handler()
+
+    expect(existsSync(join(root, 'src/routes.d.ts'))).toBe(true)
+    expect(existsSync(join(workspaceRoot, 'src/routes.d.ts'))).toBe(false)
   })
 })

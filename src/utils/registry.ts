@@ -20,25 +20,15 @@ interface RouteRegistryOption {
 
 const REG_IS_ROUTE_FILE = /\.(jsx|tsx|mdx)$/
 
-function normalizeBaseDir(baseDir: string): string {
-  return baseDir ? normalizePath(baseDir).replace(/\/$/, '') : ''
-}
-
 export class RouteRegistry {
   private root = ''
   private pagesDir = ''
   private outputPath = ''
-  private readonly pagesDirBase: string
   private readonly files = new Set<string>()
   private typesDirty = true
   private readonly definitionCache = new Map<string, RouteEntry>()
-  private readonly routesFilter: string
 
-  constructor(private readonly options: RouteRegistryOption) {
-    const baseDir = normalizeBaseDir(options.baseDir)
-    this.pagesDirBase = `${baseDir ? `${baseDir}/` : ''}src/pages`
-    this.routesFilter = `${this.pagesDirBase}/**/*.{jsx,tsx,mdx}`
-  }
+  constructor(private readonly options: RouteRegistryOption) {}
 
   markChanged(file: string): boolean {
     const normalized = normalizePath(file)
@@ -99,9 +89,14 @@ export class RouteRegistry {
 
   async initialize(root: string): Promise<void> {
     this.root = normalizePath(root)
-    this.pagesDir = `${this.root}/${this.pagesDirBase}`.replace(/\/+$/g, '')
+
+    this.pagesDir =
+      `${this.root}/${this.options.baseDir ? `${normalizePath(this.options.baseDir).replace(/\/$/, '')}/` : ''}src/pages`.replace(
+        /\/+$/g,
+        '',
+      )
     this.outputPath = normalizePath(`${this.root}/${this.options.output}`)
-    const files = await glob(this.routesFilter, {
+    const files = await glob(`${this.pagesDir}/**/*.{jsx,tsx,mdx}`, {
       cwd: this.root,
       ignore: this.options.ignore,
       absolute: true,
@@ -112,7 +107,6 @@ export class RouteRegistry {
       this.files.add(normalizePath(file))
     }
 
-    this.typesDirty = true
     this.definitionCache.clear()
     generateDefinition([...this.files].sort(), this.definitionCache)
   }

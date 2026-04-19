@@ -59,11 +59,12 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-async function createTempRegistry() {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
+async function createTempRegistry(customRoot = '', includeIndexRoute = false) {
+  const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
+  const root = customRoot ? join(workspaceRoot, customRoot) : workspaceRoot
   const pagesDir = join(root, 'src/pages')
 
-  tempDirs.push(root)
+  tempDirs.push(workspaceRoot)
   mkdirSync(pagesDir, { recursive: true })
 
   writeFileSync(
@@ -75,6 +76,18 @@ export default createRoute({
 })
 `,
   )
+
+  if (includeIndexRoute) {
+    writeFileSync(
+      join(pagesDir, 'index.tsx'),
+      `import { createRoute } from 'solid-file-router'
+
+export default createRoute({
+  component: () => <h1>home</h1>,
+})
+`,
+    )
+  }
 
   const registry = new RouteRegistry({
     baseDir: '',
@@ -205,5 +218,19 @@ export default createRoute({
     expect(generateRouteTypesMock).toHaveBeenCalledTimes(3)
     expect(invalidateCacheMock).toHaveBeenCalledWith(addedFile)
     expect((registry as any).definitionCache.has(addedFile)).toBe(false)
+  })
+
+  it('discovers route files under a custom root during initialization', async () => {
+    const generateDefinitionMock = vi.mocked(generateDefinition)
+    const { registry, pagesDir } = await createTempRegistry('apps/site', true)
+    const routeFile = join(pagesDir, 'index.tsx')
+
+    expect(generateDefinitionMock).toHaveBeenCalledWith(
+      [join(pagesDir, '_app.tsx'), routeFile],
+      expect.any(Map),
+    )
+    expect(await registry.getDefinition(true)).toBe(
+      `mode:lazy:${join(pagesDir, '_app.tsx')}|${routeFile}`,
+    )
   })
 })
