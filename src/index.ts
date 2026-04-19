@@ -108,7 +108,6 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     inheritError: inheritance.inheritError ?? true,
   }
 
-  let isLazy = true
   const registry = new RouteRegistry({
     baseDir,
     ignore,
@@ -122,7 +121,6 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     {
       name: ID_EXTRACT,
       configResolved(config) {
-        isLazy = lazy ?? !config.build.ssr
         registry.setRoot(config.root)
       },
       resolveId: {
@@ -137,8 +135,8 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
         filter: {
           id: new RegExp(VID_EXTRACT_RESOLVED),
         },
-        handler() {
-          return registry.getDefinition({ lazy: isLazy })
+        handler(_, options) {
+          return registry.getDefinition(lazy ?? !options?.ssr)
         },
       },
       configureServer(server) {

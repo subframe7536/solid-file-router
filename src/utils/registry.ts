@@ -18,10 +18,6 @@ interface RouteRegistryOption {
   inheritance: InheritanceConfig
 }
 
-interface DefinitionMode {
-  lazy: boolean
-}
-
 const REG_IS_ROUTE_FILE = /\.(jsx|tsx|mdx)$/
 
 function normalizeBaseDir(baseDir: string): string {
@@ -119,10 +115,10 @@ ${alignKeyValue([
     return true
   }
 
-  async getDefinition(mode: DefinitionMode) {
+  async getDefinition(lazy: boolean): Promise<string> {
     await this.ensureInitialized()
 
-    const key = `${mode.lazy}`
+    const key = `${lazy}`
     const cached = this.definitionCache.get(key)
     if (cached?.version === this.version) {
       this.logVerbose(`Cache hit: virtual:routes (${key})`)
@@ -135,10 +131,10 @@ ${alignKeyValue([
       files,
       this.options.verboseLog,
       this.options.inheritance,
-      mode.lazy,
+      lazy,
     )
 
-    if (mode.lazy && this.typesVersion !== this.version) {
+    if (lazy && this.typesVersion !== this.version) {
       generateRouteTypes(
         files,
         normalizePath(`${this.root}/${this.options.output}`),
@@ -154,7 +150,7 @@ ${alignKeyValue([
 ${alignKeyValue([
   ['Routes', files.length],
   ['Time', formatDuration(Date.now() - start)],
-  ['Mode', mode.lazy ? 'Lazy' : 'Eager'],
+  ['Mode', lazy ? 'Lazy' : 'Eager'],
 ])}`,
       false,
     )
