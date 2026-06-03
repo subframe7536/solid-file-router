@@ -137,6 +137,17 @@ const CACHE_BUST_PARAM = 't'
 const SLASH_CODE_POINT = '/'.codePointAt(0)!
 
 type EnvironmentName = typeof ENVIRONMENT.CLIENT | typeof ENVIRONMENT.SERVER
+const SSG_SOLID_HELP = [
+  '[solid-file-router] `ssg` requires `vite-plugin-solid({ ssr: true })`.',
+  'Configure plugins like:',
+  '  plugins: [solidPlugin({ ssr: true }), fileRouter({ ssg: { ... } })]',
+  'See `playground/vite.ssg.config.ts` for a complete example.',
+].join('\n')
+const SSG_PROBE_ENTRY = '\0solid-file-router-ssg-probe.tsx'
+const SSG_PROBE_SOURCE = 'export default function SsgProbe() { return <div>ssg-probe</div> }'
+const REG_SOLID_SSR_OUTPUT = /\b(?:_\$)?ssr(?:HydrationKey)?\b/
+
+type TransformResultCode = string | { code?: string | null } | null | undefined
 
 function trimTrailingSlashes(value: string) {
   let end = value.length
@@ -234,6 +245,34 @@ function renderTemplate(template: string, app: string) {
     .replace('</head>', `${generateHydrationScript()}${getAssets()}</head>`)
 }
 
+function readTransformCode(result: TransformResultCode) {
+  if (typeof result === 'string') {
+    return result
+  }
+  return typeof result?.code === 'string' ? result.code : ''
+}
+
+async function hasSolidSsrTransform(plugin: Plugin) {
+  const transform = plugin.transform
+  if (!transform) {
+    return false
+  }
+
+  const transformContext = {} as any
+  const transformOptions = { ssr: true, moduleType: 'js' as const }
+  const result =
+    typeof transform === 'function'
+      ? await transform.call(transformContext, SSG_PROBE_SOURCE, SSG_PROBE_ENTRY, transformOptions)
+      : await transform.handler.call(
+          transformContext,
+          SSG_PROBE_SOURCE,
+          SSG_PROBE_ENTRY,
+          transformOptions,
+        )
+  const transformedCode = readTransformCode(result as TransformResultCode)
+  return REG_SOLID_SSR_OUTPUT.test(transformedCode)
+}
+
 /**
  * Vite plugin for page generation
  */
@@ -278,6 +317,17 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     {
       name: `${PACKAGE_NAME}:extract`,
       async configResolved(config) {
+        if (ssgConfig.enabled) {
+          const solidPlugin = config.plugins.find((plugin) => plugin.name === 'solid')
+          if (!solidPlugin) {
+            throw new Error(`${SSG_SOLID_HELP}\nDetected issue: missing vite-plugin-solid.`)
+          }
+
+          if (!(await hasSolidSsrTransform(solidPlugin))) {
+            throw new Error(`${SSG_SOLID_HELP}\nDetected issue: vite-plugin-solid must be configured with ssr: true.`)
+          }
+        }
+
         logger = config.logger
         await registry.initialize(config.root)
       },

@@ -603,6 +603,9 @@ export default defineConfig({
 })
 ```
 
+If `ssg` is configured without `vite-plugin-solid({ ssr: true })`, the plugin throws an actionable build error with setup guidance.
+For a complete runnable config, see `playground/vite.ssg.config.ts`.
+
 ### Configuring Component Inheritance
 
 By default, all routes inherit loading and error components from their layouts. You can control this behavior at both the plugin level (build-time) and route level (runtime).

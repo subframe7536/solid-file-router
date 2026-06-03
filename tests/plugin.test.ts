@@ -111,6 +111,17 @@ function getBuildConfig(plugin: Plugin, userConfig: UserConfig = {}) {
   return configHook.call({} as never, userConfig, env)
 }
 
+function createSolidPluginStub(transformedCode: string): Plugin {
+  return {
+    name: 'solid',
+    transform() {
+      return {
+        code: transformedCode,
+      }
+    },
+  }
+}
+
 describe('fileRouter', () => {
   it('respects lazy: false even in a client build', async () => {
     const root = createTempProject()
@@ -213,5 +224,49 @@ describe('fileRouter', () => {
         },
       },
     })
+  })
+
+  it('throws helpful error when ssg is enabled without vite-plugin-solid', async () => {
+    const root = createTempProject()
+    const [plugin] = fileRouter({
+      ssg: {},
+    })
+
+    await expect(
+      (plugin as any).configResolved({
+        root,
+        plugins: [],
+      })
+    ).rejects.toThrow(/missing vite-plugin-solid/)
+  })
+
+  it('throws helpful error when ssg is enabled without solid ssr transform', async () => {
+    const root = createTempProject()
+    const [plugin] = fileRouter({
+      ssg: {},
+    })
+    const solidWithoutSsr = createSolidPluginStub('export default () => null')
+
+    await expect(
+      (plugin as any).configResolved({
+        root,
+        plugins: [solidWithoutSsr],
+      })
+    ).rejects.toThrow(/must be configured with ssr: true/)
+  })
+
+  it('accepts ssg config when solid ssr transform is enabled', async () => {
+    const root = createTempProject()
+    const [plugin] = fileRouter({
+      ssg: {},
+    })
+    const solidWithSsr = createSolidPluginStub('import { ssr as _$ssr } from "solid-js/web"; export default _$ssr')
+
+    await expect(
+      (plugin as any).configResolved({
+        root,
+        plugins: [solidWithSsr],
+      })
+    ).resolves.toBeUndefined()
   })
 })
