@@ -141,11 +141,11 @@ const SSG_SOLID_HELP = [
   '[solid-file-router] `ssg` requires `vite-plugin-solid({ ssr: true })`.',
   'Configure plugins like:',
   '  plugins: [solidPlugin({ ssr: true }), fileRouter({ ssg: { ... } })]',
-  'See `playground/vite.ssg.config.ts` for a complete example.',
+  'See the README "Configuring SSG Prerender" section for a complete example.',
 ].join('\n')
 const SSG_PROBE_ENTRY = '\0solid-file-router-ssg-probe.tsx'
 const SSG_PROBE_SOURCE = 'export default function SsgProbe() { return <div>ssg-probe</div> }'
-const REG_SOLID_SSR_OUTPUT = /\b(?:_\$)?ssr(?:HydrationKey)?\b/
+const REG_SOLID_SSR_TRANSFORM = /\b(?:_\$)?ssr(?:HydrationKey)?\b/
 
 type TransformResultCode = string | { code?: string | null } | null | undefined
 
@@ -258,19 +258,27 @@ async function hasSolidSsrTransform(plugin: Plugin) {
     return false
   }
 
+  const transformHandler =
+    typeof transform === 'function'
+      ? transform
+      : typeof transform.handler === 'function'
+        ? transform.handler
+        : null
+  if (!transformHandler) {
+    return false
+  }
+
+  // Solid's transform does not require plugin-context methods for this static probe.
   const transformContext = {} as any
   const transformOptions = { ssr: true, moduleType: 'js' as const }
-  const result =
-    typeof transform === 'function'
-      ? await transform.call(transformContext, SSG_PROBE_SOURCE, SSG_PROBE_ENTRY, transformOptions)
-      : await transform.handler.call(
-          transformContext,
-          SSG_PROBE_SOURCE,
-          SSG_PROBE_ENTRY,
-          transformOptions,
-        )
+  const result = await transformHandler.call(
+    transformContext,
+    SSG_PROBE_SOURCE,
+    SSG_PROBE_ENTRY,
+    transformOptions,
+  )
   const transformedCode = readTransformCode(result as TransformResultCode)
-  return REG_SOLID_SSR_OUTPUT.test(transformedCode)
+  return REG_SOLID_SSR_TRANSFORM.test(transformedCode)
 }
 
 /**
