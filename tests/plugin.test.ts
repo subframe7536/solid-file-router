@@ -145,4 +145,62 @@ describe('fileRouter', () => {
 
     expect(module).toContain(`${join(root, 'app/routes/index.tsx')}?route`)
   })
+
+  it('does not inject ssg config unless explicitly enabled', () => {
+    const [plugin] = fileRouter()
+    const config = (plugin as any).config?.({}, { command: 'build' })
+    expect(config).toBeUndefined()
+  })
+
+  it('injects default ssg environment config when enabled', () => {
+    const [plugin] = fileRouter({
+      ssg: {},
+    })
+    const config = (plugin as any).config?.({}, { command: 'build' })
+    expect(config).toMatchObject({
+      build: { copyPublicDir: false },
+      environments: {
+        client: {
+          build: { outDir: 'dist/client', copyPublicDir: true },
+        },
+        ssr: {
+          build: {
+            outDir: 'dist/server',
+            ssr: 'src/entry-server.tsx',
+            copyPublicDir: false,
+          },
+        },
+      },
+    })
+  })
+
+  it('respects custom ssg server entry and outDir', () => {
+    const [plugin] = fileRouter({
+      ssg: {
+        serverEntry: 'app/entry-ssg.tsx',
+      },
+    })
+    const config = (plugin as any).config?.(
+      {
+        environments: {
+          client: { build: { outDir: 'build' } },
+          ssr: { build: { outDir: 'build' } },
+        },
+      },
+      { command: 'build' },
+    )
+    expect(config).toMatchObject({
+      environments: {
+        client: {
+          build: { outDir: 'build/client' },
+        },
+        ssr: {
+          build: {
+            outDir: 'build/server',
+            ssr: 'app/entry-ssg.tsx',
+          },
+        },
+      },
+    })
+  })
 })

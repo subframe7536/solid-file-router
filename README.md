@@ -556,8 +556,52 @@ interface FileRouterPluginOption {
      */
     inheritError?: boolean
   }
+  /**
+   * Optional SSG configuration with Vite Environment API.
+   * `vite-plugin-solid` stays user-configured.
+   */
+  ssg?: {
+    /**
+     * SSR entry file path.
+     * @default 'src/entry-server.tsx'
+     */
+    serverEntry?: string
+    /**
+     * Prerender routes or a lazy route producer.
+     * @default ['/']
+     */
+    routes?: readonly string[] | (() => readonly string[] | Promise<readonly string[]>)
+    /**
+     * Max concurrent prerender tasks.
+     * @default 4
+     */
+    concurrency?: number
+  }
 }
 ````
+
+### Configuring SSG Prerender
+
+When using SSG, keep `vite-plugin-solid` in your own Vite config and enable prerendering through `fileRouter`.
+
+```ts
+import { fileRouter } from 'solid-file-router/plugin'
+import { defineConfig } from 'vite'
+import solidPlugin from 'vite-plugin-solid'
+
+export default defineConfig({
+  plugins: [
+    solidPlugin({ ssr: true }),
+    fileRouter({
+      ssg: {
+        serverEntry: 'src/entry-server.tsx',
+        routes: ['/', '/about'],
+        concurrency: 4,
+      },
+    }),
+  ],
+})
+```
 
 ### Configuring Component Inheritance
 
