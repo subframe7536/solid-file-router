@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import type { ConfigEnv, Plugin, UserConfig } from 'vite'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { fileRouter } from '../src/index'
@@ -100,6 +101,16 @@ async function createPlugin(root: string, lazy?: boolean, pagesDir = 'src/pages'
   return plugin as any
 }
 
+function getBuildConfig(plugin: Plugin, userConfig: UserConfig = {}) {
+  const configHook = plugin.config
+  if (!configHook || typeof configHook !== 'function') {
+    return
+  }
+
+  const env: ConfigEnv = { command: 'build', mode: 'production' }
+  return configHook.call({} as never, userConfig, env)
+}
+
 describe('fileRouter', () => {
   it('respects lazy: false even in a client build', async () => {
     const root = createTempProject()
@@ -148,7 +159,7 @@ describe('fileRouter', () => {
 
   it('does not inject ssg config unless explicitly enabled', () => {
     const [plugin] = fileRouter()
-    const config = (plugin as any).config?.({}, { command: 'build' })
+    const config = getBuildConfig(plugin!)
     expect(config).toBeUndefined()
   })
 
@@ -156,7 +167,7 @@ describe('fileRouter', () => {
     const [plugin] = fileRouter({
       ssg: {},
     })
-    const config = (plugin as any).config?.({}, { command: 'build' })
+    const config = getBuildConfig(plugin!)
     expect(config).toMatchObject({
       build: { copyPublicDir: false },
       environments: {
@@ -180,14 +191,14 @@ describe('fileRouter', () => {
         serverEntry: 'app/entry-ssg.tsx',
       },
     })
-    const config = (plugin as any).config?.(
+    const config = getBuildConfig(
+      plugin!,
       {
         environments: {
           client: { build: { outDir: 'build' } },
           ssr: { build: { outDir: 'build' } },
         },
       },
-      { command: 'build' },
     )
     expect(config).toMatchObject({
       environments: {

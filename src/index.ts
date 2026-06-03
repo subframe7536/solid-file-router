@@ -132,16 +132,33 @@ const ENVIRONMENT = {
   SERVER: 'ssr',
 } as const
 const INDEX_HTML_FILE_NAME = 'index.html'
+const DEFAULT_PRERENDER_CONCURRENCY = 4
+const CACHE_BUST_PARAM = 't'
+const SLASH_CODE_POINT = '/'.codePointAt(0)!
 
 type EnvironmentName = typeof ENVIRONMENT.CLIENT | typeof ENVIRONMENT.SERVER
 
-function getPrerenderAssetFileName(route: string) {
+function trimTrailingSlashes(value: string) {
+  let end = value.length
+  while (end > 0 && value.codePointAt(end - 1) === SLASH_CODE_POINT) {
+    end -= 1
+  }
+  return value.slice(0, end)
+}
+
+function normalizeRoutePath(route: string) {
   const trimmedRoute = route.trim()
-  const normalizedRoute =
-    !trimmedRoute || trimmedRoute === '/'
-      ? '/'
-      : (trimmedRoute.startsWith('/') ? trimmedRoute : `/${trimmedRoute}`).replace(/\/+$/, '') ||
-        '/'
+  if (!trimmedRoute || trimmedRoute === '/') {
+    return '/'
+  }
+
+  const withLeadingSlash = trimmedRoute.startsWith('/') ? trimmedRoute : `/${trimmedRoute}`
+  const withoutTrailingSlash = trimTrailingSlashes(withLeadingSlash)
+  return withoutTrailingSlash || '/'
+}
+
+function getPrerenderAssetFileName(route: string) {
+  const normalizedRoute = normalizeRoutePath(route)
 
   if (normalizedRoute === '/') {
     return INDEX_HTML_FILE_NAME
@@ -188,7 +205,11 @@ async function mapWithConcurrency<T, R>(
     while (nextIndex < items.length) {
       const currentIndex = nextIndex
       nextIndex += 1
-      results[currentIndex] = await mapper(items[currentIndex], currentIndex)
+      const item = items[currentIndex]
+      if (item === undefined) {
+        continue
+      }
+      results[currentIndex] = await mapper(item, currentIndex)
     }
   }
 
@@ -204,7 +225,7 @@ async function loadServerRenderer(config: ResolvedConfig, entryFileName: string)
 
   const resolvedOutDir = path.resolve(config.root, serverOutDir)
   const serverEntryUrl = pathToFileURL(path.join(resolvedOutDir, entryFileName)).href
-  return import(`${serverEntryUrl}?t=${Date.now()}`).then((mod) => mod.default || mod)
+  return import(`${serverEntryUrl}?${CACHE_BUST_PARAM}=${Date.now()}`).then((mod) => mod.default ?? mod)
 }
 
 function renderTemplate(template: string, app: string) {
@@ -233,7 +254,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     enabled: !!ssg,
     serverEntry: ssg?.serverEntry ?? 'src/entry-server.tsx',
     routes: ssg?.routes ?? ['/'],
-    concurrency: Math.max(1, ssg?.concurrency ?? 4),
+    concurrency: Math.max(1, ssg?.concurrency ?? DEFAULT_PRERENDER_CONCURRENCY),
   }
   let logger: Logger | undefined
   let serverEntryFileName: string | undefined
@@ -277,16 +298,20 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
             sharedPlugins: true,
             async buildApp(builder) {
               const serverEnvironment = builder.environments[ENVIRONMENT.SERVER]
+              if (!serverEnvironment) {
+                throw new Error('Missing SSG server environment in builder')
+              }
               if (!serverEnvironment.isBuilt) {
                 await builder.build(serverEnvironment)
               }
               const clientEnvironment = builder.environments[ENVIRONMENT.CLIENT]
+              if (!clientEnvironment) {
+                throw new Error('Missing SSG client environment in builder')
+              }
               if (!clientEnvironment.isBuilt) {
                 await builder.build(clientEnvironment)
               }
-              console.log(
-                `Build completed! You can serve the output with a static file server like \`http-server\` on ${clientOutDir}.`,
-              )
+              logger?.info(`Build completed! You can serve ${clientOutDir} with a static file server.`)
             },
           },
           environments: {
@@ -418,25 +443,12 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
               : Buffer.from(indexHtmlAsset.source).toString('utf-8')
           const resolvedRoutes =
             typeof ssgConfig.routes === 'function' ? await ssgConfig.routes() : ssgConfig.routes
-          const prerenderRoutes = [
-            ...new Set(
-              resolvedRoutes.map((route) => {
-                const trimmedRoute = route.trim()
-
-                if (!trimmedRoute || trimmedRoute === '/') {
-                  return '/'
-                }
-
-                const routeWithLeadingSlash = trimmedRoute.startsWith('/')
-                  ? trimmedRoute
-                  : `/${trimmedRoute}`
-
-                return routeWithLeadingSlash.replace(/\/+$/, '') || '/'
-              }),
-            ),
-          ]
+          const prerenderRoutes = Array.from(
+            new Set(resolvedRoutes.map((route) => normalizeRoutePath(route))),
+          )
           const serverRenderer = await loadServerRenderer(this.environment.config, serverEntryFileName)
 
+          // Keep static-host fallback for client-side routing.
           this.emitFile({
             type: 'asset',
             fileName: '404.html',
