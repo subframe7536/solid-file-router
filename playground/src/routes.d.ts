@@ -21,10 +21,6 @@ declare module 'solid-file-router' {
     '/nest/value': never
     '/404': never
   }
-  interface FileRouteInfo {
-    name: string
-    role: string
-  }
 }
 
 declare module '@solidjs/router' {

@@ -135,6 +135,8 @@ const INDEX_HTML_FILE_NAME = 'index.html'
 const DEFAULT_PRERENDER_CONCURRENCY = 4
 const CACHE_BUST_PARAM = 't'
 const SLASH_CODE_POINT = '/'.codePointAt(0)!
+const SOLID_SSR_PROBE_ID = `${PACKAGE_NAME}:ssg-ssr-probe.tsx`
+const SOLID_SSR_PROBE_CODE = 'export default () => <div />'
 
 type EnvironmentName = typeof ENVIRONMENT.CLIENT | typeof ENVIRONMENT.SERVER
 const SSG_SOLID_HELP = [
@@ -143,11 +145,6 @@ const SSG_SOLID_HELP = [
   '  plugins: [solidPlugin({ ssr: true }), fileRouter({ ssg: { ... } })]',
   'See the README "Configuring SSG Prerender" section for a complete example.',
 ].join('\n')
-const SSG_PROBE_ENTRY = '\0solid-file-router-ssg-probe.tsx'
-const SSG_PROBE_SOURCE = 'export default function SsgProbe() { return <div>ssg-probe</div> }'
-const REG_SOLID_SSR_TRANSFORM = /\b(?:_\$)?ssr(?:HydrationKey)?\b/
-
-type TransformResultCode = string | { code?: string | null } | null | undefined
 
 function trimTrailingSlashes(value: string) {
   let end = value.length
@@ -236,7 +233,9 @@ async function loadServerRenderer(config: ResolvedConfig, entryFileName: string)
 
   const resolvedOutDir = path.resolve(config.root, serverOutDir)
   const serverEntryUrl = pathToFileURL(path.join(resolvedOutDir, entryFileName)).href
-  return import(`${serverEntryUrl}?${CACHE_BUST_PARAM}=${Date.now()}`).then((mod) => mod.default ?? mod)
+  return import(`${serverEntryUrl}?${CACHE_BUST_PARAM}=${Date.now()}`).then(
+    (mod) => mod.default ?? mod,
+  )
 }
 
 function renderTemplate(template: string, app: string) {
@@ -245,40 +244,20 @@ function renderTemplate(template: string, app: string) {
     .replace('</head>', `${generateHydrationScript()}${getAssets()}</head>`)
 }
 
-function readTransformCode(result: TransformResultCode) {
-  if (typeof result === 'string') {
-    return result
-  }
-  return typeof result?.code === 'string' ? result.code : ''
-}
-
 async function hasSolidSsrTransform(plugin: Plugin) {
-  const transform = plugin.transform
-  if (!transform) {
+  if (!plugin.transform) {
     return false
   }
 
-  const transformHandler =
-    typeof transform === 'function'
-      ? transform
-      : typeof transform.handler === 'function'
-        ? transform.handler
-        : null
-  if (!transformHandler) {
-    return false
-  }
+  const transform =
+    typeof plugin.transform === 'function' ? plugin.transform : plugin.transform.handler
+  const result = await transform.call({} as never, SOLID_SSR_PROBE_CODE, SOLID_SSR_PROBE_ID, {
+    moduleType: 'js',
+    ssr: true,
+  })
 
-  // Solid's transform does not require plugin-context methods for this static probe.
-  const transformContext = {} as any
-  const transformOptions = { ssr: true, moduleType: 'js' as const }
-  const result = await transformHandler.call(
-    transformContext,
-    SSG_PROBE_SOURCE,
-    SSG_PROBE_ENTRY,
-    transformOptions,
-  )
-  const transformedCode = readTransformCode(result as TransformResultCode)
-  return REG_SOLID_SSR_TRANSFORM.test(transformedCode)
+  const code = typeof result === 'string' ? result : result?.code
+  return typeof code === 'string' && code.includes('solid-js/web') && code.includes('ssr')
 }
 
 /**
@@ -324,6 +303,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
   return [
     {
       name: `${PACKAGE_NAME}:extract`,
+      sharedDuringBuild: true,
       async configResolved(config) {
         if (ssgConfig.enabled) {
           const solidPlugin = config.plugins.find((plugin) => plugin.name === 'solid')
@@ -332,7 +312,9 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
           }
 
           if (!(await hasSolidSsrTransform(solidPlugin))) {
-            throw new Error(`${SSG_SOLID_HELP}\nDetected issue: vite-plugin-solid must be configured with ssr: true.`)
+            throw new Error(
+              `${SSG_SOLID_HELP}\nDetected issue: vite-plugin-solid must be configured with ssr: true.`,
+            )
           }
         }
 
@@ -353,7 +335,6 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
             copyPublicDir: false,
           },
           builder: {
-            sharedPlugins: true,
             async buildApp(builder) {
               const serverEnvironment = builder.environments[ENVIRONMENT.SERVER]
               if (!serverEnvironment) {
@@ -369,7 +350,9 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
               if (!clientEnvironment.isBuilt) {
                 await builder.build(clientEnvironment)
               }
-              logger?.info(`Build completed! You can serve ${clientOutDir} with a static file server.`)
+              logger?.info(
+                `Build completed! You can serve ${clientOutDir} with a static file server.`,
+              )
             },
           },
           environments: {
@@ -504,7 +487,10 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
           const prerenderRoutes = Array.from(
             new Set(resolvedRoutes.map((route) => normalizeRoutePath(route))),
           )
-          const serverRenderer = await loadServerRenderer(this.environment.config, serverEntryFileName)
+          const serverRenderer = await loadServerRenderer(
+            this.environment.config,
+            serverEntryFileName,
+          )
 
           // Keep static-host fallback for client-side routing.
           this.emitFile({
@@ -555,11 +541,17 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
         filter: {
           id: REG_ROUTE_QUERY,
         },
-        async handler(code, fullId) {
+        async handler(code, fullId, options) {
           const [id, query] = fullId.split('?')
           if (query && queryMap.has(query)) {
             const pick = queryMap.get(query)!
-            return await extract(code, id!, { entryFn: 'createRoute', pick }, verboseLog)
+            return await extract(
+              code,
+              id!,
+              { entryFn: 'createRoute', pick },
+              verboseLog,
+              `${fullId}?ssr=${options?.ssr === true}`,
+            )
           }
         },
       },

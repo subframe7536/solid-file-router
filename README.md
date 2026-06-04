@@ -426,6 +426,7 @@ The virtual module that exposes the generated routing configuration.
 - `FileRouter`: High-level component to render the app (Easy to use).
 - `fileRoutes`: The raw `RouteDefinition` array for `@solidjs/router`.
 - `Root`: The component exported from `_app.tsx`.
+- `createServerEntry`: Helper for SSR/SSG server entries.
 
 #### Example1: Custom Base URL
 
@@ -455,6 +456,29 @@ render(() => (
     {fileRoutes}
   </Router>
 ), document.getElementById('app')!)
+```
+
+#### Example3: Server Entry
+
+```tsx
+import { createServerEntry } from 'virtual:routes'
+
+export default createServerEntry()
+```
+
+By default, `createServerEntry()` renders `<FileRouter base={import.meta.env.BASE_URL} url={props.url} />`.
+
+You can customize the renderer, router props, or app factory:
+
+```tsx
+import { createServerEntry } from 'virtual:routes'
+
+export default createServerEntry({
+  getRouterProps: (props) => ({
+    base: '/docs',
+    url: props.url,
+  }),
+})
 ```
 
 #### Type Definition
@@ -490,13 +514,13 @@ interface FileRouterPluginOption {
    */
   output?: string
   /**
-    * The directory containing all route files.
+   * The directory containing all route files.
    *
-    * e.g. If your `_app.tsx` is located at `module/routes/_app.tsx`,
-    * You need to setup to `module/routes`
-    * @default 'src/pages'
+   * e.g. If your `_app.tsx` is located at `module/routes/_app.tsx`,
+   * You need to setup to `module/routes`
+   * @default 'src/pages'
    */
-    pagesDir?: string
+  pagesDir?: string
   /**
    * A list of glob patterns to be ignored during processing.
    *

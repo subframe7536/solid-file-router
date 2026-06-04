@@ -98,6 +98,7 @@ describe('generateDefinition', () => {
     const module = await buildDefinition(files, false, undefined, true)
     expect(module).toContain("import { createComponent, lazy } from 'solid-js'")
     expect(module).toContain("import { Router } from '@solidjs/router'")
+    expect(module).not.toContain("import { renderToStringAsync } from 'solid-js/web'")
     expect(module).toContain("import { __loader__ } from 'solid-file-router'")
     expect(module).toContain('export const Root = __loader__(__app_comp.component')
     expect(module).toContain(
@@ -105,6 +106,7 @@ describe('generateDefinition', () => {
     )
     expect(module).toContain("lazy(() => import('/root/project/src/pages/index.tsx?comp')")
     expect(module).toContain('get base()')
+    expect(module).toContain("throw new Error('createServerEntry() is only available in SSR builds")
   })
 
   it('generate fallback if no _app.tsx present', async () => {
@@ -291,11 +293,20 @@ describe('generateDefinition', () => {
 
     expect(module).toContain("import { createComponent } from 'solid-js'")
     expect(module).toContain("import { StaticRouter } from '@solidjs/router'")
+    expect(module).toContain("import { renderToStringAsync } from 'solid-js/web'")
     expect(module).toContain('export const Root = __app_comp.component')
     expect(module).toContain(
       `import ${getComponentImportName(`${root}/src/pages/dashboard/admin/users.tsx`)} from '/root/project/src/pages/dashboard/admin/users.tsx?comp'`,
     )
     expect(module).toContain('get url()')
+    expect(module).toContain('export const createServerEntry = (options = {})')
+    expect(module).toContain('base: import.meta.env.BASE_URL')
+    expect(module).toContain('url: props.url')
+    expect(module).toContain('const render = options.render || ((app) => renderToStringAsync(app))')
+    expect(module).toContain('const getRouterProps = options.getRouterProps')
+    expect(module).toContain('const createApp =')
+    expect(module).toContain('createComponent(FileRouter, getRouterProps(props))')
+    expect(module).toContain('return async (props) => await render(() => createApp(props), props)')
     expect(module).not.toContain('lazy(() => import(')
   })
 

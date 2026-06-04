@@ -546,4 +546,57 @@ export default createRoute({
       expect(result).toContain('GlobalErrorBoundary')
     })
   })
+
+  describe('AST cache variants', () => {
+    it('keeps separate AST cache entries for the same file with different cache keys', async () => {
+      const config: ExtractConfig = {
+        entryFn: 'createRoute',
+        pick: ['info'],
+      }
+      const first = await extract(
+        `export default createRoute({ info: { title: 'server' } })`,
+        'shared.tsx',
+        config,
+        false,
+        'shared.tsx?route&ssr=true',
+      )
+      const second = await extract(
+        `export default createRoute({ info: { title: 'client' } })`,
+        'shared.tsx',
+        config,
+        false,
+        'shared.tsx?route&ssr=false',
+      )
+
+      expect(first).toContain('server')
+      expect(second).toContain('client')
+    })
+
+    it('invalidates all cache variants for a route file', async () => {
+      const config: ExtractConfig = {
+        entryFn: 'createRoute',
+        pick: ['info'],
+      }
+
+      await extract(
+        `export default createRoute({ info: { title: 'before' } })`,
+        'route.tsx',
+        config,
+        false,
+        'route.tsx?route&ssr=false',
+      )
+      invalidateCache('route.tsx')
+
+      const result = await extract(
+        `export default createRoute({ info: { title: 'after' } })`,
+        'route.tsx',
+        config,
+        false,
+        'route.tsx?route&ssr=false',
+      )
+
+      expect(result).toContain('after')
+      expect(result).not.toContain('before')
+    })
+  })
 })

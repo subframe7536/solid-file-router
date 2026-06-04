@@ -174,8 +174,10 @@ async function getBabel() {
 }
 
 export function invalidateCache(id: string): void {
-  if (astPromiseCache.has(id)) {
-    astPromiseCache.delete(id)
+  for (const key of astPromiseCache.keys()) {
+    if (key === id || key.startsWith(`${id}?`)) {
+      astPromiseCache.delete(key)
+    }
   }
 }
 
@@ -183,15 +185,21 @@ export function clearCache(): void {
   astPromiseCache.clear()
 }
 
-export async function extract(code: string, id: string, config: ExtractConfig, verbose = false) {
+export async function extract(
+  code: string,
+  id: string,
+  config: ExtractConfig,
+  verbose = false,
+  cacheKey = id,
+) {
   const babel = await getBabel()
 
   // Get or create AST parsing promise
-  let astPromise = astPromiseCache.get(id)
+  let astPromise = astPromiseCache.get(cacheKey)
 
   if (!astPromise) {
     if (verbose) {
-      logger.info(`AST cache miss: ${id}`, { timestamp: false })
+      logger.info(`AST cache miss: ${cacheKey}`, { timestamp: false })
     }
 
     astPromise = babel
@@ -203,13 +211,13 @@ export async function extract(code: string, id: string, config: ExtractConfig, v
       })
       .catch((error) => {
         // Remove failed promise from cache to allow retry
-        astPromiseCache.delete(id)
+        astPromiseCache.delete(cacheKey)
         throw error
       })
 
-    astPromiseCache.set(id, astPromise)
+    astPromiseCache.set(cacheKey, astPromise)
   } else if (verbose) {
-    logger.info(`AST cache hit:  ${id}`, { timestamp: false })
+    logger.info(`AST cache hit:  ${cacheKey}`, { timestamp: false })
   }
 
   const ast = await astPromise

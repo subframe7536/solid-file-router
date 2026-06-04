@@ -36,6 +36,8 @@
     "test": "vitest",
     "test:run": "vitest --run",
     "play": "vite serve playground",
+    "play:ssg": "vite build playground --config ./playground/vite.ssg.config.ts",
+    "play:ssg:preview": "bun run play:ssg && vite preview --outDir playground/dist/client",
     "play:build": "bun run build && vite build playground",
     "play:preview": "bun run play:build && vite preview playground",
     "lint": "oxlint",
