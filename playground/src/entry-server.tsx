@@ -1,3 +1,3 @@
-import { createServerEntry } from 'virtual:routes'
+import { createServerEntry } from '../../src/runtime'
 
 export default createServerEntry()

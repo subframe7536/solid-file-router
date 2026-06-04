@@ -605,25 +605,5 @@ export const FileRouter = (props) => createComponent(${routerComponent}, {
     return fileRoutes
   }
 })
-
-${
-  lazy
-    ? `export const createServerEntry = () => {
-  throw new Error('createServerEntry() is only available in SSR builds of virtual:routes')
-}`
-    : `const __defaultServerEntryRouterProps = (props) => ({
-  base: import.meta.env.BASE_URL,
-  url: props.url,
-})
-export const createServerEntry = (options = {}) => {
-  const render = options.render || ((app) => renderToStringAsync(app))
-  const getRouterProps = options.getRouterProps || __defaultServerEntryRouterProps
-  const createApp =
-    options.createApp ||
-    ((props) => createComponent(FileRouter, getRouterProps(props)))
-
-  return async (props) => await render(() => createApp(props), props)
-}`
-}
 `
 }

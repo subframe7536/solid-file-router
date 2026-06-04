@@ -95,6 +95,11 @@ interface FileRouterPluginOption {
      */
     serverEntry?: string
     /**
+     * The ID of the root element where the app will be mounted.
+     * @default 'root'
+     */
+    id?: string
+    /**
      * Prerender routes or a lazy route producer.
      * @default ['/']
      */
@@ -238,9 +243,9 @@ async function loadServerRenderer(config: ResolvedConfig, entryFileName: string)
   )
 }
 
-function renderTemplate(template: string, app: string) {
+function renderTemplate(template: string, id: string, app: string) {
   return template
-    .replace(/<div id="root">.*?<\/div>/, `<div id="root">${app}</div>`)
+    .replace(new RegExp(`<div id="${id}">.*?</div>`), `<div id="${id}">${app}</div>`)
     .replace('</head>', `${generateHydrationScript()}${getAssets()}</head>`)
 }
 
@@ -281,9 +286,10 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     serverEntry: ssg?.serverEntry ?? 'src/entry-server.tsx',
     routes: ssg?.routes ?? ['/'],
     concurrency: Math.max(1, ssg?.concurrency ?? DEFAULT_PRERENDER_CONCURRENCY),
+    id: ssg?.id ?? 'root',
   }
   let logger: Logger | undefined
-  let serverEntryFileName: string | undefined
+  let serverEntryFileName: string
 
   const inheritanceConfig = {
     enabled: inheritance.enabled ?? true,
@@ -514,7 +520,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
 
               return {
                 route,
-                html: renderTemplate(htmlTemplate, str),
+                html: renderTemplate(htmlTemplate, ssgConfig.id, str),
               }
             },
           )
