@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { normalizePath } from 'vite'
 
 import { generateDefinition } from '../src/utils/definition'
 import { invalidateCache } from '../src/utils/extract'
@@ -135,8 +136,10 @@ export default createRoute({
     expect(first).toBe(second)
     expect(second).toBe(third)
     expect(generateDefinitionMock).toHaveBeenCalledTimes(2)
-    expect(generateDefinitionMock.mock.calls[0]?.[0]).toEqual([join(pagesDir, '_app.tsx')])
-    expect(generateDefinitionMock.mock.calls[1]?.[0]).toEqual([routeFile])
+    expect(generateDefinitionMock.mock.calls[0]?.[0]).toEqual([
+      normalizePath(join(pagesDir, '_app.tsx')),
+    ])
+    expect(generateDefinitionMock.mock.calls[1]?.[0]).toEqual([normalizePath(routeFile)])
     expect(generateRouteTypesMock).toHaveBeenCalledTimes(1)
   })
 
@@ -177,8 +180,8 @@ export default createRoute({
 
     expect(generateDefinitionMock).toHaveBeenCalledTimes(2)
     expect(generateRouteTypesMock).toHaveBeenCalledTimes(1)
-    expect(invalidateCacheMock).toHaveBeenCalledWith(routeFile)
-    expect((registry as any).definitionCache.has(routeFile)).toBe(true)
+    expect(invalidateCacheMock).toHaveBeenCalledWith(normalizePath(routeFile))
+    expect((registry as any).definitionCache.has(normalizePath(routeFile))).toBe(true)
   })
 
   it('regenerates route types when route files are added or removed', async () => {
@@ -220,8 +223,8 @@ export default createRoute({
 
     expect(generateDefinitionMock).toHaveBeenCalledTimes(3)
     expect(generateRouteTypesMock).toHaveBeenCalledTimes(3)
-    expect(invalidateCacheMock).toHaveBeenCalledWith(addedFile)
-    expect((registry as any).definitionCache.has(addedFile)).toBe(false)
+    expect(invalidateCacheMock).toHaveBeenCalledWith(normalizePath(addedFile))
+    expect((registry as any).definitionCache.has(normalizePath(addedFile))).toBe(false)
   })
 
   it('discovers route files under a custom root during initialization', async () => {
@@ -230,12 +233,12 @@ export default createRoute({
     const routeFile = join(pagesDir, 'index.tsx')
 
     expect(generateDefinitionMock).toHaveBeenCalledWith(
-      [join(pagesDir, '_app.tsx'), routeFile],
+      [normalizePath(join(pagesDir, '_app.tsx')), normalizePath(routeFile)],
       expect.any(Map),
-      pagesDir,
+      normalizePath(pagesDir),
     )
     expect(await registry.getDefinition(true)).toBe(
-      `mode:lazy:${join(pagesDir, '_app.tsx')}|${routeFile}`,
+      `mode:lazy:${normalizePath(join(pagesDir, '_app.tsx'))}|${normalizePath(routeFile)}`,
     )
   })
 
@@ -245,12 +248,12 @@ export default createRoute({
     const routeFile = join(pagesDir, 'index.tsx')
 
     expect(generateDefinitionMock).toHaveBeenCalledWith(
-      [join(pagesDir, '_app.tsx'), routeFile],
+      [normalizePath(join(pagesDir, '_app.tsx')), normalizePath(routeFile)],
       expect.any(Map),
-      pagesDir,
+      normalizePath(pagesDir),
     )
     expect(await registry.getDefinition(true)).toBe(
-      `mode:lazy:${join(pagesDir, '_app.tsx')}|${routeFile}`,
+      `mode:lazy:${normalizePath(join(pagesDir, '_app.tsx'))}|${normalizePath(routeFile)}`,
     )
   })
 })

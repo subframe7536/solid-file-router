@@ -1,6 +1,7 @@
 import type { RouteDefinition, RouteSectionProps } from '@solidjs/router'
 import type { Component } from 'solid-js'
 import { createComponent, ErrorBoundary, Suspense, untrack } from 'solid-js'
+import { hydrate, render, renderToStringAsync } from 'solid-js/web'
 
 type AnyComp = Component<any>
 
@@ -176,4 +177,35 @@ export function generatePath<T extends keyof FileRoutePath & string>(
   }
 
   return result
+}
+
+export function createClientEntry(
+  component: Parameters<typeof render>[0],
+  mount: Parameters<typeof render>[1],
+) {
+  if (import.meta.env.DEV) {
+    render(component, mount)
+  } else if ('_$HY' in window) {
+    hydrate(component, mount)
+  } else {
+    render(component, mount)
+  }
+}
+
+export async function createServerEntry(component?: Component<{ url: string; base: string }>) {
+  if (!component) {
+    component = await import('virtual:routes').then((mod) => mod.FileRouter)
+  }
+  return (props: { url: string }) => {
+    return renderToStringAsync(() =>
+      createComponent(component!, {
+        get base() {
+          return import.meta.env.BASE_URL
+        },
+        get url() {
+          return props.url
+        },
+      }),
+    )
+  }
 }

@@ -574,17 +574,17 @@ export function assembleDefinition(
   const routerImport = lazy
     ? `import { Router } from '@solidjs/router'`
     : `import { StaticRouter } from '@solidjs/router'`
+  const serverRenderImport = lazy ? '' : `import { renderToStringAsync } from 'solid-js/web'`
   const routerComponent = lazy ? 'Router' : 'StaticRouter'
   const routerUrlProp = lazy ? 'base' : 'url'
   const solidImports = lazy
     ? `import { createComponent, lazy } from 'solid-js'`
     : `import { createComponent } from 'solid-js'`
-  const rootExpr = lazy
-    ? `export const Root = __loader__(__app_comp.component, __app_route.loadingComponent, __app_route.errorComponent)`
-    : `export const Root = __app_comp.component`
+  const rootExpr = `export const Root = __app_comp.component`
 
   return `${solidImports}
 ${routerImport}
+${serverRenderImport}
 ${globalImports.join('\n')}
 ${routeImports.join('\n')}
 

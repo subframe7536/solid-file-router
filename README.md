@@ -457,6 +457,25 @@ render(() => (
 ), document.getElementById('app')!)
 ```
 
+#### Example3: Server Entry
+
+```tsx
+import { createServerEntry } from 'solid-file-router'
+
+export default createServerEntry()
+```
+
+By default, `createServerEntry()` renders `<FileRouter base={import.meta.env.BASE_URL} url={props.url} />`.
+
+You can pass a custom router component if you need full control:
+
+```tsx
+import { FileRouter } from 'virtual:routes'
+import { createServerEntry } from 'solid-file-router'
+
+export default createServerEntry((props) => <FileRouter base="/docs" url={props.url} />)
+```
+
 #### Type Definition
 
 In `tsconfig.json`
@@ -490,13 +509,13 @@ interface FileRouterPluginOption {
    */
   output?: string
   /**
-    * The directory containing all route files.
+   * The directory containing all route files.
    *
-    * e.g. If your `_app.tsx` is located at `module/routes/_app.tsx`,
-    * You need to setup to `module/routes`
-    * @default 'src/pages'
+   * e.g. If your `_app.tsx` is located at `module/routes/_app.tsx`,
+   * You need to setup to `module/routes`
+   * @default 'src/pages'
    */
-    pagesDir?: string
+  pagesDir?: string
   /**
    * A list of glob patterns to be ignored during processing.
    *
@@ -556,8 +575,69 @@ interface FileRouterPluginOption {
      */
     inheritError?: boolean
   }
+  /**
+   * Optional SSG configuration with Vite Environment API.
+   * `vite-plugin-solid` stays user-configured.
+   */
+  ssg?: {
+    /**
+     * SSR entry file path.
+     * @default 'src/entry-server.tsx'
+     */
+    serverEntry?: string
+    /**
+     * The ID of the root element where the app will be mounted.
+     * @default 'root'
+     */
+    id?: string
+    /**
+     * Prerender routes or a lazy route producer.
+     * @default ['/']
+     */
+    routes?: readonly string[] | (() => readonly string[] | Promise<readonly string[]>)
+    /**
+     * Max concurrent prerender tasks.
+     * @default 4
+     */
+    concurrency?: number
+  }
 }
 ````
+
+### Configuring SSG Prerender
+
+When using SSG, keep `vite-plugin-solid` in your own Vite config and enable prerendering through `fileRouter`.
+
+For SSG client entries, replace Solid's `render` with `createClientEntry`. It uses the same argument shape as `render`, but hydrates prerendered HTML in production:
+
+```tsx
+import { FileRouter } from 'virtual:routes'
+import { createClientEntry } from 'solid-file-router'
+
+createClientEntry(() => <FileRouter />, document.getElementById('root')!)
+```
+
+```ts
+import { fileRouter } from 'solid-file-router/plugin'
+import { defineConfig } from 'vite'
+import solidPlugin from 'vite-plugin-solid'
+
+export default defineConfig({
+  plugins: [
+    solidPlugin({ ssr: true }),
+    fileRouter({
+      ssg: {
+        serverEntry: 'src/entry-server.tsx',
+        routes: ['/', '/about'],
+        concurrency: 4,
+      },
+    }),
+  ],
+})
+```
+
+If `ssg` is configured without `vite-plugin-solid({ ssr: true })`, the plugin throws an actionable build error with setup guidance.
+For a complete runnable config, see `playground/vite.ssg.config.ts`.
 
 ### Configuring Component Inheritance
 

@@ -2,9 +2,11 @@ import { existsSync, mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import type { ConfigEnv, Plugin, UserConfig } from 'vite'
+import { normalizePath } from 'vite'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { fileRouter } from '../src/index'
+import { fileRouter, renderTemplate } from '../src/index'
 
 const tempDirs: string[] = []
 
@@ -100,7 +102,40 @@ async function createPlugin(root: string, lazy?: boolean, pagesDir = 'src/pages'
   return plugin as any
 }
 
+function getBuildConfig(plugin: Plugin, userConfig: UserConfig = {}) {
+  const configHook = plugin.config
+  if (!configHook || typeof configHook !== 'function') {
+    return
+  }
+
+  const env: ConfigEnv = { command: 'build', mode: 'production' }
+  return configHook.call({} as never, userConfig, env)
+}
+
+function createSolidPluginStub(transformedCode: string): Plugin {
+  return {
+    name: 'solid',
+    transform() {
+      return {
+        code: transformedCode,
+      }
+    },
+  }
+}
+
 describe('fileRouter', () => {
+  it('throws a helpful SSG error when the configured root id is missing', () => {
+    const html = '<html><head></head><body><div id="app"></div></body></html>'
+
+    expect(() => renderTemplate(html, 'root', '<main>app</main>')).toThrow(
+      [
+        '[solid-file-router] SSG could not find the app root element in index.html.',
+        'Expected to find: <div id="root"></div>',
+        "Either add that element to index.html, or set fileRouter({ ssg: { id: '...' } }) to match your root element id.",
+      ].join('\n'),
+    )
+  })
+
   it('respects lazy: false even in a client build', async () => {
     const root = createTempProject()
     const plugin = await createPlugin(root, false)
@@ -143,6 +178,108 @@ describe('fileRouter', () => {
 
     const module = await plugin.load.handler()
 
-    expect(module).toContain(`${join(root, 'app/routes/index.tsx')}?route`)
+    expect(module).toContain(`${normalizePath(join(root, 'app/routes/index.tsx'))}?route`)
+  })
+
+  it('does not inject ssg config unless explicitly enabled', () => {
+    const [plugin] = fileRouter()
+    const config = getBuildConfig(plugin!)
+    expect(config).toBeUndefined()
+  })
+
+  it('injects default ssg environment config when enabled', () => {
+    const [plugin] = fileRouter({
+      ssg: {},
+    })
+    const config = getBuildConfig(plugin!)
+    expect(config).toMatchObject({
+      build: { copyPublicDir: false },
+      environments: {
+        client: {
+          build: { outDir: 'dist/client', copyPublicDir: true },
+        },
+        ssr: {
+          build: {
+            outDir: 'dist/server',
+            ssr: 'src/entry-server.tsx',
+            copyPublicDir: false,
+          },
+        },
+      },
+    })
+  })
+
+  it('respects custom ssg server entry and outDir', () => {
+    const [plugin] = fileRouter({
+      ssg: {
+        serverEntry: 'app/entry-ssg.tsx',
+      },
+    })
+    const config = getBuildConfig(
+      plugin!,
+      {
+        environments: {
+          client: { build: { outDir: 'build' } },
+          ssr: { build: { outDir: 'build' } },
+        },
+      },
+    )
+    expect(config).toMatchObject({
+      environments: {
+        client: {
+          build: { outDir: 'build/client' },
+        },
+        ssr: {
+          build: {
+            outDir: 'build/server',
+            ssr: 'app/entry-ssg.tsx',
+          },
+        },
+      },
+    })
+  })
+
+  it('throws helpful error when ssg is enabled without vite-plugin-solid', async () => {
+    const root = createTempProject()
+    const [plugin] = fileRouter({
+      ssg: {},
+    })
+
+    await expect(
+      (plugin as any).configResolved({
+        root,
+        plugins: [],
+      })
+    ).rejects.toThrow(/missing vite-plugin-solid/)
+  })
+
+  it('throws helpful error when ssg is enabled without solid ssr transform', async () => {
+    const root = createTempProject()
+    const [plugin] = fileRouter({
+      ssg: {},
+    })
+    const solidWithoutSsr = createSolidPluginStub('export default () => null')
+
+    await expect(
+      (plugin as any).configResolved({
+        root,
+        plugins: [solidWithoutSsr],
+      })
+    ).rejects.toThrow(/must be configured with ssr: true/)
+  })
+
+  it('accepts ssg config when solid ssr transform is enabled', async () => {
+    const root = createTempProject()
+    const [plugin] = fileRouter({
+      ssg: {},
+    })
+    const solidWithSsr = createSolidPluginStub('import { ssr as _$ssr } from "solid-js/web"; export default _$ssr')
+
+    await expect(
+      (plugin as any).configResolved({
+        root,
+        plugins: [solidWithSsr],
+      })
+    ).resolves.toBeUndefined()
   })
 })

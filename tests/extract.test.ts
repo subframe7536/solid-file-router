@@ -1,11 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 
+import { logger } from '../src/const'
 import type { ExtractConfig } from '../src/utils/extract'
-import { extract, invalidateCache } from '../src/utils/extract'
+import { clearCache, extract, getAstCacheKey, invalidateCache } from '../src/utils/extract'
 
 describe('extractPlugin', () => {
   beforeEach(() => {
-    invalidateCache('test.tsx')
+    clearCache()
   })
   describe('Case 1: direct export default call', () => {
     it('extracts properties from direct call expression', async () => {
@@ -544,6 +545,114 @@ export default createRoute({
       const result = await extract(code, 'test.tsx', config)
       expect(result).toContain('errorComponent')
       expect(result).toContain('GlobalErrorBoundary')
+    })
+  })
+
+  describe('AST cache variants', () => {
+    it('reuses the parsed AST for the same source with different transform configs', async () => {
+      const code = `
+export default createRoute({
+  info: { title: 'shared' },
+  component: SharedPage
+})
+`
+      const routeConfig: ExtractConfig = {
+        entryFn: 'createRoute',
+        pick: ['info'],
+      }
+      const componentConfig: ExtractConfig = {
+        entryFn: 'createRoute',
+        pick: ['component'],
+      }
+      const cacheKey = getAstCacheKey('shared.tsx', code, false)
+      const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => {})
+
+      const routeResult = await extract(code, 'shared.tsx', routeConfig, true, cacheKey)
+      const componentResult = await extract(code, 'shared.tsx', componentConfig, true, cacheKey)
+
+      expect(routeResult).toContain('info')
+      expect(routeResult).not.toContain('component')
+      expect(componentResult).toContain('component')
+      expect(componentResult).not.toContain('info')
+      expect(infoSpy).toHaveBeenCalledWith(`AST cache miss: ${cacheKey}`, { timestamp: false })
+      expect(infoSpy).toHaveBeenCalledWith(`AST cache hit:  ${cacheKey}`, { timestamp: false })
+
+      infoSpy.mockRestore()
+    })
+
+    it('keeps changed source isolated by code hash', async () => {
+      const config: ExtractConfig = {
+        entryFn: 'createRoute',
+        pick: ['info'],
+      }
+      await extract(
+        `export default createRoute({ info: { title: 'before' } })`,
+        'shared.tsx',
+        config,
+        false,
+      )
+
+      const result = await extract(
+        `export default createRoute({ info: { title: 'after' } })`,
+        'shared.tsx',
+        config,
+        false,
+      )
+
+      expect(result).toContain('after')
+      expect(result).not.toContain('before')
+    })
+
+    it('keeps SSR cache entries isolated for the same source', async () => {
+      const code = `export default createRoute({ info: { title: 'same' } })`
+      const config: ExtractConfig = {
+        entryFn: 'createRoute',
+        pick: ['info'],
+      }
+      const clientKey = getAstCacheKey('shared.tsx', code, false)
+      const serverKey = getAstCacheKey('shared.tsx', code, true)
+      const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => {})
+
+      await extract(code, 'shared.tsx', config, true, clientKey)
+      await extract(code, 'shared.tsx', config, true, serverKey)
+
+      expect(infoSpy).toHaveBeenCalledWith(`AST cache miss: ${clientKey}`, { timestamp: false })
+      expect(infoSpy).toHaveBeenCalledWith(`AST cache miss: ${serverKey}`, { timestamp: false })
+      expect(infoSpy).not.toHaveBeenCalledWith(`AST cache hit:  ${serverKey}`, {
+        timestamp: false,
+      })
+
+      infoSpy.mockRestore()
+    })
+
+    it('invalidates all cache variants for a route file', async () => {
+      const config: ExtractConfig = {
+        entryFn: 'createRoute',
+        pick: ['info'],
+      }
+      const beforeCode = `export default createRoute({ info: { title: 'before' } })`
+      const afterCode = `export default createRoute({ info: { title: 'after' } })`
+
+      await extract(
+        beforeCode,
+        'route.tsx',
+        config,
+        false,
+        getAstCacheKey('route.tsx', beforeCode, false),
+      )
+      await extract(
+        beforeCode,
+        'route.tsx',
+        config,
+        false,
+        getAstCacheKey('route.tsx', beforeCode, true),
+      )
+      invalidateCache('route.tsx')
+
+      const result = await extract(afterCode, 'route.tsx', config, false)
+
+      expect(result).toContain('after')
+      expect(result).not.toContain('before')
     })
   })
 })

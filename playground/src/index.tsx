@@ -1,6 +1,7 @@
 import './style.css'
 
-import { render } from 'solid-js/web'
 import { FileRouter } from 'virtual:routes'
 
-render(() => <FileRouter />, document.getElementById('app')!)
+import { createClientEntry } from '../../src/runtime'
+
+createClientEntry(() => <FileRouter />, document.getElementById('root')!)
