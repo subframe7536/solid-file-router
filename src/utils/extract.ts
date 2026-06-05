@@ -168,6 +168,21 @@ export function extractPlugin({ types: t }: typeof Babel): Babel.PluginObj<State
 const astPromiseCache = new Map<string, Promise<Babel.types.File | null>>()
 let babelModulePromise: Promise<typeof Babel> | undefined
 
+function hashString(value: string): string {
+  let hash = 2166136261
+
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.codePointAt(index) ?? 0
+    hash = Math.imul(hash, 16777619)
+  }
+
+  return (hash >>> 0).toString(36)
+}
+
+export function getAstCacheKey(id: string, code: string, ssr: boolean): string {
+  return `${id}?ssr=${ssr}&hash=${hashString(code)}`
+}
+
 async function getBabel() {
   babelModulePromise ??= import('@babel/core')
   return await babelModulePromise
@@ -190,7 +205,7 @@ export async function extract(
   id: string,
   config: ExtractConfig,
   verbose = false,
-  cacheKey = id,
+  cacheKey = getAstCacheKey(id, code, false),
 ) {
   const babel = await getBabel()
 

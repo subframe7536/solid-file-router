@@ -7,7 +7,7 @@ import { normalizePath } from 'vite'
 
 import { PACKAGE_NAME, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
 import type { InheritanceConfig } from './utils/definition'
-import { extract } from './utils/extract'
+import { extract, getAstCacheKey } from './utils/extract'
 import { RouteRegistry } from './utils/registry'
 import type { InfoTypeDefinition } from './utils/route-type'
 
@@ -551,12 +551,13 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
           const [id, query] = fullId.split('?')
           if (query && queryMap.has(query)) {
             const pick = queryMap.get(query)!
+            const ssr = options?.ssr === true
             return await extract(
               code,
               id!,
               { entryFn: 'createRoute', pick },
               verboseLog,
-              `${fullId}?ssr=${options?.ssr === true}`,
+              getAstCacheKey(id!, code, ssr),
             )
           }
         },
