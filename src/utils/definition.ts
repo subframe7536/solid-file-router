@@ -580,9 +580,7 @@ export function assembleDefinition(
   const solidImports = lazy
     ? `import { createComponent, lazy } from 'solid-js'`
     : `import { createComponent } from 'solid-js'`
-  const rootExpr = lazy
-    ? `export const Root = __loader__(__app_comp.component, __app_route.loadingComponent, __app_route.errorComponent)`
-    : `export const Root = __app_comp.component`
+  const rootExpr = `export const Root = __app_comp.component`
 
   return `${solidImports}
 ${routerImport}

@@ -81,9 +81,7 @@ describe('generateDefinition', () => {
       `import ${getRouteImportName(`${root}/src/pages/index.tsx`)} from '/root/project/src/pages/index.tsx?route'`,
     )
     expect(module).toContain("import { __loader__ } from 'solid-file-router'")
-    expect(module).toContain(
-      'export const Root = __loader__(__app_comp.component, __app_route.loadingComponent, __app_route.errorComponent)',
-    )
+    expect(module).toContain('export const Root = __app_comp.component')
     expect(module).toContain(
       `__loader__(lazy(() => import('/root/project/src/pages/index.tsx?comp').then(mod => ({ default: mod.default.component }))), ${getRouteImportName(`${root}/src/pages/index.tsx`)}.loadingComponent || ((${getRouteImportName(`${root}/src/pages/index.tsx`)}.inherit === false || ${getRouteImportName(`${root}/src/pages/index.tsx`)}.inherit?.loading === false) ? undefined : (__app_route.loadingComponent)), ${getRouteImportName(`${root}/src/pages/index.tsx`)}.errorComponent || ((${getRouteImportName(`${root}/src/pages/index.tsx`)}.inherit === false || ${getRouteImportName(`${root}/src/pages/index.tsx`)}.inherit?.error === false) ? undefined : (__app_route.errorComponent)))`,
     )
@@ -100,7 +98,7 @@ describe('generateDefinition', () => {
     expect(module).toContain("import { Router } from '@solidjs/router'")
     expect(module).not.toContain("import { renderToStringAsync } from 'solid-js/web'")
     expect(module).toContain("import { __loader__ } from 'solid-file-router'")
-    expect(module).toContain('export const Root = __loader__(__app_comp.component')
+    expect(module).toContain('export const Root = __app_comp.component')
     expect(module).toContain(
       `import ${getRouteImportName(`${root}/src/pages/index.tsx`)} from '/root/project/src/pages/index.tsx?route'`,
     )
@@ -116,9 +114,7 @@ describe('generateDefinition', () => {
     )
     expect(module).toContain(`const __app_route = {}`)
     expect(module).toContain(`const __404_route = undefined`)
-    expect(module).toContain(
-      `export const Root = __loader__(__app_comp.component, __app_route.loadingComponent, __app_route.errorComponent)`,
-    )
+    expect(module).toContain(`export const Root = __app_comp.component`)
   })
 
   it('includes routeInfo in generated module', async () => {
