@@ -104,7 +104,7 @@ describe('generateDefinition', () => {
     )
     expect(module).toContain("lazy(() => import('/root/project/src/pages/index.tsx?comp')")
     expect(module).toContain('get base()')
-    expect(module).toContain("throw new Error('createServerEntry() is only available in SSR builds")
+    expect(module).not.toContain('createServerEntry')
   })
 
   it('generate fallback if no _app.tsx present', async () => {
@@ -295,14 +295,7 @@ describe('generateDefinition', () => {
       `import ${getComponentImportName(`${root}/src/pages/dashboard/admin/users.tsx`)} from '/root/project/src/pages/dashboard/admin/users.tsx?comp'`,
     )
     expect(module).toContain('get url()')
-    expect(module).toContain('export const createServerEntry = (options = {})')
-    expect(module).toContain('base: import.meta.env.BASE_URL')
-    expect(module).toContain('url: props.url')
-    expect(module).toContain('const render = options.render || ((app) => renderToStringAsync(app))')
-    expect(module).toContain('const getRouterProps = options.getRouterProps')
-    expect(module).toContain('const createApp =')
-    expect(module).toContain('createComponent(FileRouter, getRouterProps(props))')
-    expect(module).toContain('return async (props) => await render(() => createApp(props), props)')
+    expect(module).not.toContain('createServerEntry')
     expect(module).not.toContain('lazy(() => import(')
   })
 

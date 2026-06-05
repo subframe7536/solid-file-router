@@ -333,7 +333,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
         }
 
         const getOutDir = (envName: EnvironmentName, subDir: string) =>
-          path.join(userConfig.environments?.[envName]?.build?.outDir ?? 'dist', subDir)
+          normalizePath(path.join(userConfig.environments?.[envName]?.build?.outDir ?? 'dist', subDir))
         const clientOutDir = getOutDir(ENVIRONMENT.CLIENT, 'client')
         const serverOutDir = getOutDir(ENVIRONMENT.SERVER, 'server')
         return {

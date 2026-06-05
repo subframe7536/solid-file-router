@@ -426,7 +426,6 @@ The virtual module that exposes the generated routing configuration.
 - `FileRouter`: High-level component to render the app (Easy to use).
 - `fileRoutes`: The raw `RouteDefinition` array for `@solidjs/router`.
 - `Root`: The component exported from `_app.tsx`.
-- `createServerEntry`: Helper for SSR/SSG server entries.
 
 #### Example1: Custom Base URL
 
@@ -461,24 +460,20 @@ render(() => (
 #### Example3: Server Entry
 
 ```tsx
-import { createServerEntry } from 'virtual:routes'
+import { createServerEntry } from 'solid-file-router'
 
 export default createServerEntry()
 ```
 
 By default, `createServerEntry()` renders `<FileRouter base={import.meta.env.BASE_URL} url={props.url} />`.
 
-You can customize the renderer, router props, or app factory:
+You can pass a custom router component if you need full control:
 
 ```tsx
-import { createServerEntry } from 'virtual:routes'
+import { FileRouter } from 'virtual:routes'
+import { createServerEntry } from 'solid-file-router'
 
-export default createServerEntry({
-  getRouterProps: (props) => ({
-    base: '/docs',
-    url: props.url,
-  }),
-})
+export default createServerEntry((props) => <FileRouter base="/docs" url={props.url} />)
 ```
 
 #### Type Definition
@@ -607,6 +602,15 @@ interface FileRouterPluginOption {
 ### Configuring SSG Prerender
 
 When using SSG, keep `vite-plugin-solid` in your own Vite config and enable prerendering through `fileRouter`.
+
+For SSG client entries, replace Solid's `render` with `createClientEntry`. It uses the same argument shape as `render`, but hydrates prerendered HTML in production:
+
+```tsx
+import { FileRouter } from 'virtual:routes'
+import { createClientEntry } from 'solid-file-router'
+
+createClientEntry(() => <FileRouter />, document.getElementById('root')!)
+```
 
 ```ts
 import { fileRouter } from 'solid-file-router/plugin'

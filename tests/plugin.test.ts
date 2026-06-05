@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { ConfigEnv, Plugin, UserConfig } from 'vite'
+import { normalizePath } from 'vite'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { fileRouter } from '../src/index'
@@ -165,7 +166,7 @@ describe('fileRouter', () => {
 
     const module = await plugin.load.handler()
 
-    expect(module).toContain(`${join(root, 'app/routes/index.tsx')}?route`)
+    expect(module).toContain(`${normalizePath(join(root, 'app/routes/index.tsx'))}?route`)
   })
 
   it('does not inject ssg config unless explicitly enabled', () => {
