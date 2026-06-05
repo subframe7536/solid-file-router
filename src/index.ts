@@ -243,9 +243,21 @@ async function loadServerRenderer(config: ResolvedConfig, entryFileName: string)
   )
 }
 
-function renderTemplate(template: string, id: string, app: string) {
+export function renderTemplate(template: string, id: string, app: string) {
+  const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const rootPattern = new RegExp(`<div id="${escapedId}">.*?</div>`)
+  if (!rootPattern.test(template)) {
+    throw new Error(
+      [
+        `[solid-file-router] SSG could not find the app root element in ${INDEX_HTML_FILE_NAME}.`,
+        `Expected to find: <div id="${id}"></div>`,
+        `Either add that element to ${INDEX_HTML_FILE_NAME}, or set fileRouter({ ssg: { id: '...' } }) to match your root element id.`,
+      ].join('\n'),
+    )
+  }
+
   return template
-    .replace(new RegExp(`<div id="${id}">.*?</div>`), `<div id="${id}">${app}</div>`)
+    .replace(rootPattern, `<div id="${id}">${app}</div>`)
     .replace('</head>', `${generateHydrationScript()}${getAssets()}</head>`)
 }
 

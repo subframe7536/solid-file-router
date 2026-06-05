@@ -586,6 +586,11 @@ interface FileRouterPluginOption {
      */
     serverEntry?: string
     /**
+     * The ID of the root element where the app will be mounted.
+     * @default 'root'
+     */
+    id?: string
+    /**
      * Prerender routes or a lazy route producer.
      * @default ['/']
      */

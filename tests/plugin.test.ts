@@ -6,7 +6,7 @@ import type { ConfigEnv, Plugin, UserConfig } from 'vite'
 import { normalizePath } from 'vite'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { fileRouter } from '../src/index'
+import { fileRouter, renderTemplate } from '../src/index'
 
 const tempDirs: string[] = []
 
@@ -124,6 +124,18 @@ function createSolidPluginStub(transformedCode: string): Plugin {
 }
 
 describe('fileRouter', () => {
+  it('throws a helpful SSG error when the configured root id is missing', () => {
+    const html = '<html><head></head><body><div id="app"></div></body></html>'
+
+    expect(() => renderTemplate(html, 'root', '<main>app</main>')).toThrow(
+      [
+        '[solid-file-router] SSG could not find the app root element in index.html.',
+        'Expected to find: <div id="root"></div>',
+        "Either add that element to index.html, or set fileRouter({ ssg: { id: '...' } }) to match your root element id.",
+      ].join('\n'),
+    )
+  })
+
   it('respects lazy: false even in a client build', async () => {
     const root = createTempProject()
     const plugin = await createPlugin(root, false)
