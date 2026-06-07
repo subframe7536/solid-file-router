@@ -14,6 +14,7 @@ Generate type safe route definition and virtual module that return `@solidjs/rou
 - 🎯 **Flexible layouts** - Support for `_layout.tsx` files to define nested layouts
 - 🛡️ **Error boundaries** - Built-in error handling with custom error components
 - 📦 **Loading states** - Optional loading components while data is being fetched
+- 🧱 **SSG prerendering** - Optional static generation with Vite Environment API support
 
 ## Getting Started
 
@@ -87,6 +88,8 @@ src/
 
     # Dynamic & Optional Params
     -[lang]/
+      [user]/
+        index.tsx         # Matches: /:lang/:user
       index.tsx           # Matches: /:lang?
 
     # Pathless Layouts (Logical grouping without URL change)
@@ -359,11 +362,11 @@ src/pages/
 
 ### Benefits
 
-✅ **Less Boilerplate** - Define defaults once, use everywhere
-✅ **Consistent UX** - All routes in a section share the same loading/error experience
-✅ **Full Control** - Override at any level when you need custom behavior
-✅ **Type Safe** - Full TypeScript support with proper type inference
-✅ **Zero Runtime Cost** - Inheritance resolved at build time
+- ✅ **Less Boilerplate** - Define defaults once, use everywhere
+- ✅ **Consistent UX** - All routes in a section share the same loading/error experience
+- ✅ **Full Control** - Override at any level when you need custom behavior
+- ✅ **Type Safe** - Full TypeScript support with proper type inference
+- ✅ **Zero Runtime Cost** - Inheritance resolved at build time
 
 ---
 
@@ -606,9 +609,11 @@ interface FileRouterPluginOption {
 
 ### Configuring SSG Prerender
 
-When using SSG, keep `vite-plugin-solid` in your own Vite config and enable prerendering through `fileRouter`.
+When using SSG, keep `vite-plugin-solid` in your own Vite config, enable SSR transforms with `solidPlugin({ ssr: true })`, and configure prerendering through `fileRouter({ ssg: ... })`.
 
 For SSG client entries, replace Solid's `render` with `createClientEntry`. It uses the same argument shape as `render`, but hydrates prerendered HTML in production:
+
+_File: `src/index.tsx`_
 
 ```tsx
 import { FileRouter } from 'virtual:routes'
@@ -616,6 +621,20 @@ import { createClientEntry } from 'solid-file-router'
 
 createClientEntry(() => <FileRouter />, document.getElementById('root')!)
 ```
+
+Create the server entry referenced by `ssg.serverEntry`:
+
+_File: `src/entry-server.tsx`_
+
+```tsx
+import { createServerEntry } from 'solid-file-router'
+
+export default createServerEntry()
+```
+
+Then enable SSG in your Vite config:
+
+_File: `vite.config.ts`_
 
 ```ts
 import { fileRouter } from 'solid-file-router/plugin'
