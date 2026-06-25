@@ -410,6 +410,49 @@ export default createRoute({ component: () => null })
     )
   })
 
+  it('uses ignore patterns and inferred watch roots for glob route sources', async () => {
+    const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
+    tempDirs.push(workspaceRoot)
+    mkdirSync(join(workspaceRoot, 'docs/private'), { recursive: true })
+    writeFileSync(join(workspaceRoot, 'docs/button.mdx'), '# Button')
+    writeFileSync(join(workspaceRoot, 'docs/private/draft.mdx'), '# Draft')
+
+    const registry = new RouteRegistry({
+      pagesDir: 'src/pages',
+      ignore: ['**/private/**'],
+      output: 'src/routes.d.ts',
+      inheritance: {
+        enabled: true,
+        inheritLoading: true,
+        inheritError: true,
+      },
+      routeSource: {
+        scan: 'docs/**/*.mdx',
+        load: () => 'export default {}',
+      },
+    })
+
+    await registry.initialize(workspaceRoot)
+
+    expect(registry.getWatchFiles()).toStrictEqual([normalizePath(join(workspaceRoot, 'docs'))])
+    expect(generateDefinition).toHaveBeenLastCalledWith(
+      [
+        {
+          routeId: '/docs/button',
+          routePath: 'docs/button.tsx',
+          moduleId: normalizePath(join(workspaceRoot, 'docs/button.mdx.solid-file-router.tsx')),
+          sourcePath: normalizePath(join(workspaceRoot, 'docs/button.mdx')),
+        },
+      ],
+      expect.any(Map),
+      normalizePath(join(workspaceRoot, 'src/pages')),
+    )
+
+    writeFileSync(join(workspaceRoot, 'docs/input.mdx'), '# Input')
+
+    await expect(registry.addFile(join(workspaceRoot, 'docs/input.mdx'))).resolves.toBe(true)
+  })
+
   it('throws when route source load returns no code', async () => {
     const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
     tempDirs.push(workspaceRoot)

@@ -23,6 +23,7 @@ interface RouteRegistryOption {
 const REG_IS_ROUTE_FILE = /\.(jsx|tsx)$/
 const REG_QUERY = /\?.*$/
 const REG_ROUTE_SOURCE_EXT = /\.(jsx|tsx|mdx)$/i
+const REG_GLOB_CHAR = /[*?[{]/
 const ROUTE_SOURCE_MODULE_SUFFIX = '.solid-file-router.tsx'
 
 interface RouteRegistryChange {
@@ -184,7 +185,10 @@ export class RouteRegistry {
     this.pagesDir = resolveFromRoot(this.root, this.options.pagesDir)
     this.outputPath = normalizePath(`${this.root}/${this.options.output}`)
     if (this.options.routeSource) {
-      this.watchFiles = resolveWatchFiles(this.root, this.options.routeSource?.watchFiles ?? [])
+      this.watchFiles = resolveWatchFiles(
+        this.root,
+        getRouteSourceWatchFiles(this.options.routeSource),
+      )
       await this.refreshCustomEntries('')
       return
     }
@@ -218,6 +222,7 @@ export class RouteRegistry {
     if (typeof source.scan === 'string') {
       const files = await glob(source.scan, {
         cwd: this.root,
+        ignore: this.options.ignore,
         absolute: false,
       })
 
@@ -403,6 +408,34 @@ function stripQuery(id: string): string {
 
 function resolveWatchFiles(root: string, files: string[]): string[] {
   return files.map((file) => resolveFromRoot(root, file))
+}
+
+function getRouteSourceWatchFiles(source: RouteSourceProvider): string[] {
+  if (source.watchFiles) {
+    return source.watchFiles
+  }
+
+  if (typeof source.scan !== 'string') {
+    return []
+  }
+
+  return [getGlobWatchRoot(source.scan)]
+}
+
+function getGlobWatchRoot(pattern: string): string {
+  const normalized = normalizePath(pattern).replace(/^(?:\.\/|\/+)/g, '')
+  const globIndex = normalized.search(REG_GLOB_CHAR)
+  if (globIndex < 0) {
+    return normalized
+  }
+
+  const prefix = normalized.slice(0, globIndex)
+  const lastSlashIndex = prefix.lastIndexOf('/')
+  if (lastSlashIndex < 0) {
+    return ''
+  }
+
+  return prefix.slice(0, lastSlashIndex)
 }
 
 function getSnapshot(entries: NormalizedRouteEntry[]): string {
