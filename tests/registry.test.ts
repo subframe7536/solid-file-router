@@ -373,6 +373,43 @@ export default createRoute({ component: () => null })
     })
   })
 
+  it('normalizes mdx glob route sources without leaking the source extension', async () => {
+    const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
+    tempDirs.push(workspaceRoot)
+    mkdirSync(join(workspaceRoot, 'docs'), { recursive: true })
+    writeFileSync(join(workspaceRoot, 'docs/button.mdx'), '# Button')
+
+    const registry = new RouteRegistry({
+      pagesDir: 'src/pages',
+      ignore: [],
+      output: 'src/routes.d.ts',
+      inheritance: {
+        enabled: true,
+        inheritLoading: true,
+        inheritError: true,
+      },
+      routeSource: {
+        scan: 'docs/**/*.mdx',
+        load: () => 'export default {}',
+      },
+    })
+
+    await registry.initialize(workspaceRoot)
+
+    expect(generateDefinition).toHaveBeenCalledWith(
+      [
+        {
+          routeId: '/docs/button',
+          routePath: 'docs/button.tsx',
+          moduleId: normalizePath(join(workspaceRoot, 'docs/button.mdx.solid-file-router.tsx')),
+          sourcePath: normalizePath(join(workspaceRoot, 'docs/button.mdx')),
+        },
+      ],
+      expect.any(Map),
+      normalizePath(join(workspaceRoot, 'src/pages')),
+    )
+  })
+
   it('throws when route source load returns no code', async () => {
     const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
     tempDirs.push(workspaceRoot)

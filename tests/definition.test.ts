@@ -147,14 +147,14 @@ describe('generateDefinition', () => {
     )
   })
 
-  it('derives public route IDs from routeId and imports module IDs', async () => {
+  it('builds custom source route tree from routeId and imports module IDs', async () => {
     const appModuleId = `${root}/docs/routes/_app.tsx.solid-file-router.tsx`
     const moduleId = `${root}/docs/pages/button.mdx.solid-file-router.tsx`
     const notFoundModuleId = `${root}/docs/routes/404.tsx.solid-file-router.tsx`
     const cache = generateDefinition(
       [
         { routeId: '/', routePath: '_app.tsx', moduleId: appModuleId },
-        { routeId: '/button', routePath: '(general)/button.tsx', moduleId },
+        { routeId: '/docs/button', routePath: '(general)/button.tsx', moduleId },
         { routeId: '/404', routePath: '404.tsx', moduleId: notFoundModuleId },
       ],
       new Map(),
@@ -163,7 +163,7 @@ describe('generateDefinition', () => {
     const module = assembleDefinition(
       [
         { routeId: '/', routePath: '_app.tsx', moduleId: appModuleId },
-        { routeId: '/button', routePath: '(general)/button.tsx', moduleId },
+        { routeId: '/docs/button', routePath: '(general)/button.tsx', moduleId },
         { routeId: '/404', routePath: '404.tsx', moduleId: notFoundModuleId },
       ],
       cache,
@@ -175,8 +175,10 @@ describe('generateDefinition', () => {
 
     expect(module).toContain(`import ${getRouteImportName(moduleId)} from '${moduleId}?route'`)
     expect(module).toContain(`import ${getComponentImportName(moduleId)} from '${moduleId}?comp'`)
-    expect(module).toContain(`"id": "/button"`)
-    expect(module).toContain(`"/button": ${getRouteImportName(moduleId)}.info`)
+    expect(module).toContain(`"path": "docs"`)
+    expect(module).toContain(`"path": "button"`)
+    expect(module).toContain(`"id": "/docs/button"`)
+    expect(module).toContain(`"/docs/button": ${getRouteImportName(moduleId)}.info`)
   })
 
   it('orders ancestor layouts by proximity and skips self inheritance', async () => {

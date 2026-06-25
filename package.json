@@ -46,7 +46,7 @@
     "typecheck": "tsc --noEmit",
     "oxc": "oxlint --fix && oxfmt",
     "qa": "bun run --parallel oxc typecheck",
-    "release": "bun run build && bun run qa && bun run test:run && bumpp --all"
+    "release": "bun run build && bun run qa && bun run test && bumpp --all"
   },
   "devDependencies": {
     "@solidjs/meta": "^0.29.4",

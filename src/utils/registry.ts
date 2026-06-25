@@ -22,6 +22,7 @@ interface RouteRegistryOption {
 
 const REG_IS_ROUTE_FILE = /\.(jsx|tsx)$/
 const REG_QUERY = /\?.*$/
+const REG_ROUTE_SOURCE_EXT = /\.(jsx|tsx|mdx)$/i
 const ROUTE_SOURCE_MODULE_SUFFIX = '.solid-file-router.tsx'
 
 interface RouteRegistryChange {
@@ -222,9 +223,10 @@ export class RouteRegistry {
 
       return files.map((file) => {
         const normalized = normalizePath(file)
+        const pathWithoutExtension = normalized.replace(REG_ROUTE_SOURCE_EXT, '')
         return {
-          routeId: getRoutePath(normalized, '') ?? `/${normalized.replace(/\.(jsx|tsx)$/i, '')}`,
-          routePath: normalized,
+          routeId: getRoutePath(normalized, '') ?? `/${pathWithoutExtension}`,
+          routePath: `${pathWithoutExtension}.tsx`,
           sourcePath: normalized,
         }
       })

@@ -205,7 +205,7 @@ function createRouteEntry(entry: RouteInput, routeRoot: string): RouteEntry {
   const moduleId = getEntryModuleId(entry)
   const routeId = getEntryRouteId(entry)
   const routePath = getEntryRoutePath(entry)
-  const routeKey = getRouteTreeKey(routePath, routeRoot)
+  const routeKey = getRouteTreeKey(typeof entry === 'string' ? routePath : routeId, routeRoot)
 
   return {
     moduleId,
