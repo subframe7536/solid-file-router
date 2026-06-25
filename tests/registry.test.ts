@@ -2,8 +2,8 @@ import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
 import { normalizePath } from 'vite'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { generateDefinition } from '../src/utils/definition'
 import { invalidateCache } from '../src/utils/extract'
@@ -16,18 +16,25 @@ vi.mock('../src/utils/definition', async () => {
   return {
     ...actual,
     generateDefinition: vi.fn(
-      (files: string[], cache: Map<string, { file: string; id: string; segments: string[] }>) => {
-        for (const file of files.filter(
-          (f) => !cache.has(f) && !f.includes('/_app.') && !f.endsWith('/404.tsx'),
-        )) {
-          cache.set(file, { file, id: file, segments: ['index'] })
+      (
+        files: Array<string | { moduleId: string; routeId: string; routePath: string }>,
+        cache: Map<string, { file: string; id: string; segments: string[] }>,
+      ) => {
+        for (const file of files.filter((f) => {
+          const moduleId = typeof f === 'string' ? f : f.moduleId
+          return (
+            !cache.has(moduleId) && !moduleId.includes('/_app.') && !moduleId.endsWith('/404.tsx')
+          )
+        })) {
+          const moduleId = typeof file === 'string' ? file : file.moduleId
+          cache.set(moduleId, { file: moduleId, id: moduleId, segments: ['index'] })
         }
         return cache
       },
     ),
     assembleDefinition: vi.fn(
-      (files: string[], _cache: unknown, lazy: boolean) =>
-        `mode:${lazy ? 'lazy' : 'eager'}:${files.join('|')}`,
+      (files: Array<string | { moduleId: string }>, _cache: unknown, lazy: boolean) =>
+        `mode:${lazy ? 'lazy' : 'eager'}:${files.map((file) => (typeof file === 'string' ? file : file.moduleId)).join('|')}`,
     ),
   }
 })
@@ -175,7 +182,7 @@ export default createRoute({
 `,
     )
 
-    expect(registry.markChanged(routeFile)).toBe(true)
+    await expect(registry.markChanged(routeFile)).resolves.toMatchObject({ matched: true })
     await registry.getDefinition(true)
 
     expect(generateDefinitionMock).toHaveBeenCalledTimes(2)
@@ -255,5 +262,148 @@ export default createRoute({
     expect(await registry.getDefinition(true)).toBe(
       `mode:lazy:${normalizePath(join(pagesDir, '_app.tsx'))}|${normalizePath(routeFile)}`,
     )
+  })
+
+  it('rescans custom route sources when watched files change', async () => {
+    const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
+    tempDirs.push(workspaceRoot)
+    mkdirSync(join(workspaceRoot, 'docs/pages'), { recursive: true })
+
+    let entries = [
+      { routeId: '/', routePath: '_app.tsx', sourcePath: 'docs/pages/_app.tsx' },
+      {
+        routeId: '/button',
+        routePath: '(general)/button.tsx',
+        sourcePath: 'docs/pages/button.mdx',
+      },
+    ]
+    const registry = new RouteRegistry({
+      pagesDir: 'src/pages',
+      ignore: [],
+      output: 'src/routes.d.ts',
+      inheritance: {
+        enabled: true,
+        inheritLoading: true,
+        inheritError: true,
+      },
+      routeSource: {
+        scan: () => entries,
+        load: () => 'export default {}',
+        watchFiles: ['docs/pages'],
+      },
+    })
+
+    await registry.initialize(workspaceRoot)
+    await registry.getDefinition(true)
+
+    entries = [
+      ...entries,
+      { routeId: '/input', routePath: '(general)/input.tsx', sourcePath: 'docs/pages/input.mdx' },
+    ]
+
+    const change = await registry.markChanged(join(workspaceRoot, 'docs/pages/button.mdx'))
+    expect(change).toMatchObject({
+      matched: true,
+      structureChanged: true,
+    })
+    expect(change.changedModuleIds).toStrictEqual([
+      normalizePath(join(workspaceRoot, 'docs/pages/_app.tsx.solid-file-router.tsx')),
+      normalizePath(join(workspaceRoot, 'docs/pages/button.mdx.solid-file-router.tsx')),
+    ])
+    await registry.getDefinition(true)
+
+    expect(generateRouteTypes).toHaveBeenCalledTimes(2)
+  })
+
+  it('invalidates all custom route modules when extra watched files change', async () => {
+    const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
+    tempDirs.push(workspaceRoot)
+    mkdirSync(join(workspaceRoot, 'docs/config'), { recursive: true })
+
+    const registry = new RouteRegistry({
+      pagesDir: 'src/pages',
+      ignore: [],
+      output: 'src/routes.d.ts',
+      inheritance: {
+        enabled: true,
+        inheritLoading: true,
+        inheritError: true,
+      },
+      routeSource: {
+        scan: () => [
+          { routeId: '/', routePath: '_app.tsx', sourcePath: 'docs/pages/_app.tsx' },
+          {
+            routeId: '/button',
+            routePath: '(general)/button.tsx',
+            sourcePath: 'docs/pages/button.mdx',
+          },
+        ],
+        load: () => 'export default {}',
+        watchFiles: ['docs/config'],
+      },
+    })
+
+    await registry.initialize(workspaceRoot)
+
+    const change = await registry.markChanged(join(workspaceRoot, 'docs/config/routes.ts'))
+
+    expect(change).toMatchObject({
+      matched: true,
+      structureChanged: false,
+    })
+    expect(change.changedModuleIds).toStrictEqual([
+      normalizePath(join(workspaceRoot, 'docs/pages/_app.tsx.solid-file-router.tsx')),
+      normalizePath(join(workspaceRoot, 'docs/pages/button.mdx.solid-file-router.tsx')),
+    ])
+  })
+
+  it('ignores mdx files in the built-in pagesDir source', async () => {
+    const { registry, pagesDir } = await createTempRegistry()
+    writeFileSync(
+      join(pagesDir, 'content.mdx'),
+      `import { createRoute } from 'solid-file-router'
+export default createRoute({ component: () => null })
+`,
+    )
+
+    await registry.initialize(join(pagesDir, '../..'))
+
+    await expect(registry.markChanged(join(pagesDir, 'content.mdx'))).resolves.toMatchObject({
+      matched: false,
+    })
+  })
+
+  it('throws when route source load returns no code', async () => {
+    const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
+    tempDirs.push(workspaceRoot)
+
+    const registry = new RouteRegistry({
+      pagesDir: 'src/pages',
+      ignore: [],
+      output: 'src/routes.d.ts',
+      inheritance: {
+        enabled: true,
+        inheritLoading: true,
+        inheritError: true,
+      },
+      routeSource: {
+        scan: () => [
+          {
+            routeId: '/button',
+            routePath: '(general)/button.tsx',
+            sourcePath: 'docs/pages/button.mdx',
+          },
+        ],
+        load: () => undefined,
+      },
+    })
+
+    await registry.initialize(workspaceRoot)
+
+    await expect(
+      registry.loadRouteSourceModule(
+        normalizePath(join(workspaceRoot, 'docs/pages/button.mdx.solid-file-router.tsx')),
+      ),
+    ).rejects.toThrow('routeSource.load returned no code for routeId: /button')
   })
 })

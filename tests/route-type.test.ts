@@ -49,7 +49,6 @@ describe('generateRouteTypes', () => {
       "'/blog/:slug': { $slug: string }",
       "'/blog': never",
       "'/blog/tags': never",
-      "'/content': never",
       "'/docs/:lang?': { $lang?: string }",
       "'/docs/:lang?/resources': { $lang?: string }",
       "'/docs/en?/support': never",
@@ -64,6 +63,37 @@ describe('generateRouteTypes', () => {
       "'/blog/:slug': { $slug: string }",
       "'/docs/:lang?': { $lang?: string }",
       "'/': never",
+    ])
+  })
+
+  it('supports logical route paths from custom sources', () => {
+    const params = parseParams([
+      {
+        routeId: '/',
+        routePath: 'index.tsx',
+        moduleId: '/root/docs/index.mdx.solid-file-router.tsx',
+      },
+      {
+        routeId: '/button',
+        routePath: '(general)/button.tsx',
+        moduleId: '/root/docs/button.mdx.solid-file-router.tsx',
+      },
+      {
+        routeId: '/docs/:slug',
+        routePath: 'docs/[slug].tsx',
+        moduleId: '/root/docs/slug.mdx.solid-file-router.tsx',
+      },
+      {
+        routeId: '/404',
+        routePath: '404.tsx',
+        moduleId: '/root/docs/404.mdx.solid-file-router.tsx',
+      },
+    ])
+
+    expect(params).toStrictEqual([
+      "'/': never",
+      "'/button': never",
+      "'/docs/:slug': { $slug: string }",
     ])
   })
 })

@@ -12,18 +12,37 @@ export const patterns = {
 const REG_LAYOUT = /_layout\.(jsx|tsx)$/
 const REG_GROUP = /\([\w-]+\)/
 const REG_INSERT = /^\w|\//
-const REG_ROUTE_EXT = /\.(jsx|tsx|mdx)$/
+const REG_ROUTE_EXT = /\.(jsx|tsx)$/
+const REG_UNSUPPORTED_ROUTE_EXT = /\.mdx$/
 
 function isNotFoundRoute(file: string) {
-  return file.endsWith('404.tsx') || file.endsWith('404.jsx')
+  return (
+    file === '404' || file.endsWith('/404') || file.endsWith('404.tsx') || file.endsWith('404.jsx')
+  )
+}
+
+function hasPrivateSegment(file: string) {
+  return file.split('/').some((segment) => segment.startsWith('_'))
 }
 
 export function getRoutePath(key: string, routeRoot = 'src/pages'): string | undefined {
+  if (REG_UNSUPPORTED_ROUTE_EXT.test(key)) {
+    return undefined
+  }
+
+  if (key === '/') {
+    return '/'
+  }
+
+  if (isLogicalUrlRoutePath(key, routeRoot)) {
+    return key
+  }
+
   if (key.includes('/_') && !key.endsWith('/404.tsx') && !key.endsWith('/404.jsx')) {
     return undefined
   }
 
-  if (key.includes('/404.')) {
+  if (isNotFoundRoute(key)) {
     return '/404'
   }
 
@@ -96,10 +115,22 @@ interface RouteInheritanceLogRow {
 }
 
 export interface RouteEntry {
-  file: string
+  moduleId: string
+  routeId: string
+  routePath: string
+  sourcePath?: string
   id: string
   segments: string[]
 }
+
+export interface NormalizedRouteEntry {
+  routeId: string
+  routePath: string
+  moduleId: string
+  sourcePath?: string
+}
+
+export type RouteInput = string | NormalizedRouteEntry
 
 const DEFAULT_INHERITANCE_CONFIG = {
   enabled: true,
@@ -107,8 +138,23 @@ const DEFAULT_INHERITANCE_CONFIG = {
   inheritError: true,
 } satisfies InheritanceConfig
 
-function isGeneratedRouteFile(file: string): boolean {
-  return (!file.includes('/_') || REG_LAYOUT.test(file)) && !isNotFoundRoute(file)
+function getEntryModuleId(entry: RouteInput | RouteEntry): string {
+  return typeof entry === 'string' ? entry : entry.moduleId
+}
+
+function getEntryRouteId(entry: RouteInput | RouteEntry): string {
+  return typeof entry === 'string' ? entry : entry.routeId
+}
+
+function getEntryRoutePath(entry: RouteInput | RouteEntry): string {
+  return typeof entry === 'string' ? entry : entry.routePath
+}
+
+function isGeneratedRouteFile(entry: RouteInput | RouteEntry): boolean {
+  const routePath = getEntryRoutePath(entry)
+  return (
+    (!hasPrivateSegment(routePath) || REG_LAYOUT.test(routePath)) && !isNotFoundRoute(routePath)
+  )
 }
 
 function hashString(value: string): string {
@@ -131,6 +177,10 @@ export function getComponentImportName(file: string): string {
 }
 
 function getRouteKey(file: string, routeRoot: string): string {
+  if (file === '/') {
+    return '/'
+  }
+
   const normalizedFile = normalizePath(file)
   const normalizedRouteRoot = normalizePath(routeRoot).replace(/\/+$/g, '')
   const prefixedRouteRoot = normalizedRouteRoot ? `${normalizedRouteRoot}/` : ''
@@ -151,18 +201,47 @@ function getRouteKey(file: string, routeRoot: string): string {
   return normalizedFile.replace(REG_ROUTE_EXT, '')
 }
 
-function createRouteEntry(file: string, routeRoot: string): RouteEntry {
-  const routeKey = getRouteKey(file, routeRoot)
+function createRouteEntry(entry: RouteInput, routeRoot: string): RouteEntry {
+  const moduleId = getEntryModuleId(entry)
+  const routeId = getEntryRouteId(entry)
+  const routePath = getEntryRoutePath(entry)
+  const routeKey = getRouteTreeKey(routePath, routeRoot)
 
   return {
-    file,
-    id: routeKey,
+    moduleId,
+    routeId,
+    routePath,
+    sourcePath: typeof entry === 'string' ? undefined : entry.sourcePath,
+    id: typeof entry === 'string' ? routeKey : routeId,
     segments: routeKey
       .replace(...patterns.splat)
       .replace(...patterns.param)
       .split('/')
       .filter(Boolean),
   }
+}
+
+function getRouteTreeKey(routeId: string, routeRoot: string): string {
+  if (routeId === '/') {
+    return 'index'
+  }
+
+  if (isLogicalUrlRoutePath(routeId, routeRoot)) {
+    return routeId.replace(/^\/+/, '')
+  }
+
+  return getRouteKey(routeId, routeRoot)
+}
+
+function isLogicalUrlRoutePath(routePath: string, routeRoot: string): boolean {
+  if (!routePath.startsWith('/')) {
+    return false
+  }
+
+  return (
+    !REG_ROUTE_EXT.test(routePath) &&
+    !normalizePath(routePath).startsWith(normalizePath(routeRoot).replace(/\/+$/g, ''))
+  )
 }
 
 /**
@@ -188,10 +267,10 @@ function createRouteEntry(file: string, routeRoot: string): RouteEntry {
  * //   ]
  * // }
  */
-function buildRouteLayoutMap(routeFiles: string[], layouts: LayoutInfo[]): RouteLayoutMap {
+function buildRouteLayoutMap(routeFiles: RouteEntry[], layouts: LayoutInfo[]): RouteLayoutMap {
   const map: RouteLayoutMap = {}
 
-  for (const routePath of routeFiles) {
+  for (const route of routeFiles) {
     const ancestorLayouts: LayoutInfo[] = []
 
     // Find layouts in ancestor directories
@@ -200,8 +279,8 @@ function buildRouteLayoutMap(routeFiles: string[], layouts: LayoutInfo[]): Route
 
       // Check if layout is an ancestor of this route
       if (
-        layout.path !== routePath &&
-        (layout.path.includes('_app.') || routePath.startsWith(`${layoutDir}/`))
+        layout.path !== route.routePath &&
+        (layout.path.includes('_app.') || route.routePath.startsWith(`${layoutDir}/`))
       ) {
         // Layout is in an ancestor directory
         ancestorLayouts.push(layout)
@@ -219,7 +298,7 @@ function buildRouteLayoutMap(routeFiles: string[], layouts: LayoutInfo[]): Route
       return b.path.length - a.path.length
     })
 
-    map[routePath] = ancestorLayouts
+    map[route.moduleId] = ancestorLayouts
   }
 
   return map
@@ -287,17 +366,19 @@ function resolveInheritedComponents(
   return { loadExpr, errorExpr }
 }
 
-function computeGlobalContext(files: string[], lazy: boolean) {
+function computeGlobalContext(entries: RouteEntry[], lazy: boolean) {
   const globalImports: string[] = lazy ? [`import { __loader__ } from '${PACKAGE_NAME}'`] : []
   const layouts: LayoutInfo[] = []
 
-  const appPath = files.find((key) => key.endsWith('_app.tsx') || key.endsWith('_app.jsx'))
-  if (appPath) {
-    globalImports.push(`import __app_comp from '${appPath}?comp'`)
+  const appEntry = entries.find(
+    (entry) => entry.routePath.endsWith('_app.tsx') || entry.routePath.endsWith('_app.jsx'),
+  )
+  if (appEntry) {
+    globalImports.push(`import __app_comp from '${appEntry.moduleId}?comp'`)
     if (lazy) {
-      globalImports.push(`import __app_route from '${appPath}?route'`)
+      globalImports.push(`import __app_route from '${appEntry.moduleId}?route'`)
       layouts.push({
-        path: appPath,
+        path: appEntry.routePath,
         loadImportName: '__app_route.loadingComponent',
         errorImportName: '__app_route.errorComponent',
       })
@@ -318,25 +399,25 @@ function computeGlobalContext(files: string[], lazy: boolean) {
   }
 
   if (lazy) {
-    const layoutFiles = files.filter((key) => REG_LAYOUT.test(key))
-    layoutFiles.forEach((layoutPath) => {
-      const layoutImportName = getRouteImportName(layoutPath)
-      globalImports.push(`import ${layoutImportName} from '${layoutPath}?route'`)
+    const layoutEntries = entries.filter((entry) => REG_LAYOUT.test(entry.routePath))
+    layoutEntries.forEach((layoutEntry) => {
+      const layoutImportName = getRouteImportName(layoutEntry.moduleId)
+      globalImports.push(`import ${layoutImportName} from '${layoutEntry.moduleId}?route'`)
       layouts.push({
-        path: layoutPath,
+        path: layoutEntry.routePath,
         loadImportName: `${layoutImportName}.loadingComponent`,
         errorImportName: `${layoutImportName}.errorComponent`,
       })
     })
   }
 
-  const filteredFiles = files.filter(isGeneratedRouteFile)
-  const routeLayoutMap = lazy ? buildRouteLayoutMap(filteredFiles, layouts) : {}
+  const filteredEntries = entries.filter(isGeneratedRouteFile)
+  const routeLayoutMap = lazy ? buildRouteLayoutMap(filteredEntries, layouts) : {}
 
-  const notFoundPath = files.find((key) => isNotFoundRoute(key))
-  if (notFoundPath) {
-    globalImports.push(`import __404_comp from '${notFoundPath}?comp'`)
-    globalImports.push(`import __404_route from '${notFoundPath}?route'`)
+  const notFoundEntry = entries.find((entry) => isNotFoundRoute(entry.routePath))
+  if (notFoundEntry) {
+    globalImports.push(`import __404_comp from '${notFoundEntry.moduleId}?comp'`)
+    globalImports.push(`import __404_route from '${notFoundEntry.moduleId}?route'`)
   } else {
     logger.warn('No `404.jsx` or `404.tsx` found, fallback to `() => null`', {
       timestamp: true,
@@ -345,7 +426,7 @@ function computeGlobalContext(files: string[], lazy: boolean) {
     globalImports.push(`const __404_route = undefined`)
   }
 
-  return { globalImports, filteredFiles, routeLayoutMap }
+  return { globalImports, filteredEntries, routeLayoutMap }
 }
 
 function generateSingleRouteDefinition(
@@ -356,14 +437,14 @@ function generateSingleRouteDefinition(
   verbose: boolean,
   routeRoot: string,
 ): { imports: string[]; route: BaseRoute; inheritanceLogRow?: RouteInheritanceLogRow } {
-  const routeImportName = getRouteImportName(entry.file)
-  const imports: string[] = [`import ${routeImportName} from '${entry.file}?route'`]
+  const routeImportName = getRouteImportName(entry.moduleId)
+  const imports: string[] = [`import ${routeImportName} from '${entry.moduleId}?route'`]
   let route: BaseRoute
   let inheritanceLogRow: RouteInheritanceLogRow | undefined
 
   if (!lazy) {
-    const componentImportName = getComponentImportName(entry.file)
-    imports.push(`import ${componentImportName} from '${entry.file}?comp'`)
+    const componentImportName = getComponentImportName(entry.moduleId)
+    imports.push(`import ${componentImportName} from '${entry.moduleId}?comp'`)
     route = {
       id: entry.id,
       component: wrapInline(`${componentImportName}.component`),
@@ -403,7 +484,7 @@ function generateSingleRouteDefinition(
     route = {
       id: entry.id,
       component: wrapInline(
-        `__loader__(lazy(() => import('${entry.file}?comp').then(mod => ({ default: mod.default.component }))), ${loadExpr}, ${errorExpr})`,
+        `__loader__(lazy(() => import('${entry.moduleId}?comp').then(mod => ({ default: mod.default.component }))), ${loadExpr}, ${errorExpr})`,
       ),
       __: wrapInline(`...${routeImportName}`),
     }
@@ -440,38 +521,41 @@ export interface InheritanceConfig {
 }
 
 export function generateDefinition(
-  files: string[],
+  files: RouteInput[],
   cache: Map<string, RouteEntry> = new Map(),
   routeRoot = 'src/pages',
 ): Map<string, RouteEntry> {
   for (const file of files.filter(isGeneratedRouteFile)) {
-    if (cache.has(file)) {
+    const moduleId = getEntryModuleId(file)
+    if (cache.has(moduleId)) {
       continue
     }
 
-    cache.set(file, createRouteEntry(file, routeRoot))
+    cache.set(moduleId, createRouteEntry(file, routeRoot))
   }
 
   return cache
 }
 
 export function assembleDefinition(
-  files: string[],
+  files: RouteInput[],
   cache: Map<string, RouteEntry>,
   lazy = true,
   inheritanceConfig: InheritanceConfig = DEFAULT_INHERITANCE_CONFIG,
   verbose = false,
   routeRoot = 'src/pages',
 ): string {
-  const { globalImports, filteredFiles, routeLayoutMap } = computeGlobalContext(files, lazy)
+  const entries = files.map(
+    (file) => cache.get(getEntryModuleId(file)) ?? createRouteEntry(file, routeRoot),
+  )
+  const { globalImports, filteredEntries, routeLayoutMap } = computeGlobalContext(entries, lazy)
 
   const routeImports: string[] = []
   const regularRoutes: BaseRoute[] = []
   const inheritanceLogRows: RouteInheritanceLogRow[] = []
 
-  for (const file of filteredFiles) {
-    const entry = cache.get(file) ?? createRouteEntry(file, routeRoot)
-    const ancestorLayouts = routeLayoutMap[file] ?? []
+  for (const entry of filteredEntries) {
+    const ancestorLayouts = routeLayoutMap[entry.moduleId] ?? []
     const { imports, route, inheritanceLogRow } = generateSingleRouteDefinition(
       entry,
       ancestorLayouts,
@@ -482,7 +566,7 @@ export function assembleDefinition(
     )
     // In lazy mode, _layout.tsx files already have their `?route` import
     // emitted by computeGlobalContext. Skip the duplicate here.
-    const importsToAdd = lazy && REG_LAYOUT.test(entry.file) ? imports.slice(1) : imports
+    const importsToAdd = lazy && REG_LAYOUT.test(entry.routePath) ? imports.slice(1) : imports
     routeImports.push(...importsToAdd)
 
     if (verbose && inheritanceLogRow) {
@@ -545,23 +629,23 @@ export function assembleDefinition(
     ...(lazy ? { __: wrapInline(`...__404_route`) } : {}),
   })
 
-  const routeInfoEntries = files
-    .filter((file) => !file.includes('/_'))
-    .map((file) => {
-      const path = getRoutePath(file, routeRoot)
+  const routeInfoEntries = entries
+    .filter((entry) => !entry.routePath.includes('/_'))
+    .map((entry) => {
+      const path = getRoutePath(entry.routeId, routeRoot)
       if (!path) {
         return undefined
       }
 
-      if (isNotFoundRoute(file)) {
+      if (isNotFoundRoute(entry.routePath)) {
         return { path, importName: '__404_route' }
       }
 
-      if (!isGeneratedRouteFile(file)) {
+      if (!isGeneratedRouteFile(entry)) {
         return undefined
       }
 
-      return { path, importName: getRouteImportName(file) }
+      return { path, importName: getRouteImportName(entry.moduleId) }
     })
     .filter((entry): entry is RouteInfoModuleEntry => !!entry)
 

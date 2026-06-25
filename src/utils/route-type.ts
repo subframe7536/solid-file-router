@@ -3,16 +3,21 @@ import { writeFileSync } from 'node:fs'
 import { PACKAGE_NAME } from '../const'
 
 import { getRoutePath } from './definition'
+import type { RouteInput } from './definition'
 
 export interface InfoTypeDefinition {
   [key: string]: string | InfoTypeDefinition
 }
 
-export function parseParams(files: string[], routeRoot = 'src/pages') {
+function getRouteInputPath(file: RouteInput): string {
+  return typeof file === 'string' ? file : file.routeId
+}
+
+export function parseParams(files: RouteInput[], routeRoot = 'src/pages') {
   const params: string[] = []
 
   for (const key of files) {
-    const path = getRoutePath(key, routeRoot)
+    const path = getRoutePath(getRouteInputPath(key), routeRoot)
     if (path && path !== '/404') {
       const param = path.split('/').filter((segment) => segment.startsWith(':'))
 
@@ -74,7 +79,7 @@ function generateInlineObjectType(obj: InfoTypeDefinition, indentLevel: number =
 let cache = ''
 
 export function generateRouteTypes(
-  files: string[],
+  files: RouteInput[],
   output: string,
   infoDts?: InfoTypeDefinition,
   routeRoot = 'src/pages',

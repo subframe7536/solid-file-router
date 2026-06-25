@@ -181,6 +181,61 @@ describe('fileRouter', () => {
     expect(module).toContain(`${normalizePath(join(root, 'app/routes/index.tsx'))}?route`)
   })
 
+  it('supports custom route sources with generated route modules', async () => {
+    const root = createTempProject()
+    const buttonSourcePath = 'docs/pages/general/button.mdx'
+    const buttonModuleId = normalizePath(
+      join(root, 'docs/pages/general/button.mdx.solid-file-router.tsx'),
+    )
+    const modules = new Map([
+      [
+        '/',
+        `import { createRoute } from 'solid-file-router'
+export default createRoute({ component: (props) => <main>{props.children}</main> })
+`,
+      ],
+      [
+        '/button',
+        `import { createRoute } from 'solid-file-router'
+export default createRoute({ info: { title: 'Button' }, component: () => <h1>button</h1> })
+`,
+      ],
+      [
+        '/404',
+        `import { createRoute } from 'solid-file-router'
+export default createRoute({ component: () => <h1>missing</h1> })
+`,
+      ],
+    ])
+    const [plugin] = fileRouter({
+      lazy: false,
+      routeSource: {
+        scan: () => [
+          { routeId: '/', routePath: '_app.tsx', sourcePath: 'docs/routes/_app.tsx' },
+          { routeId: '/button', routePath: '(general)/button.tsx', sourcePath: buttonSourcePath },
+          { routeId: '/404', routePath: '404.tsx', sourcePath: 'docs/routes/404.tsx' },
+        ],
+        load: (entry) => modules.get(entry.routeId),
+      },
+    })
+
+    await (plugin as any).configResolved({
+      build: { ssr: false },
+      root,
+    })
+
+    const module = await (plugin as any).load.handler()
+
+    expect(module).toContain(`${buttonModuleId}?route`)
+    expect(module).toContain(`${buttonModuleId}?comp`)
+    expect(module).toContain('"id": "/button"')
+    expect(module).toContain('"/button":')
+    expect(module).toContain('"/404": __404_route.info')
+
+    const routeModule = await (plugin as any).load.handler(buttonModuleId)
+    expect(routeModule).toContain('title')
+  })
+
   it('does not inject ssg config unless explicitly enabled', () => {
     const [plugin] = fileRouter()
     const config = getBuildConfig(plugin!)
@@ -215,15 +270,12 @@ describe('fileRouter', () => {
         serverEntry: 'app/entry-ssg.tsx',
       },
     })
-    const config = getBuildConfig(
-      plugin!,
-      {
-        environments: {
-          client: { build: { outDir: 'build' } },
-          ssr: { build: { outDir: 'build' } },
-        },
+    const config = getBuildConfig(plugin!, {
+      environments: {
+        client: { build: { outDir: 'build' } },
+        ssr: { build: { outDir: 'build' } },
       },
-    )
+    })
     expect(config).toMatchObject({
       environments: {
         client: {
@@ -249,7 +301,7 @@ describe('fileRouter', () => {
       (plugin as any).configResolved({
         root,
         plugins: [],
-      })
+      }),
     ).rejects.toThrow(/missing vite-plugin-solid/)
   })
 
@@ -264,7 +316,7 @@ describe('fileRouter', () => {
       (plugin as any).configResolved({
         root,
         plugins: [solidWithoutSsr],
-      })
+      }),
     ).rejects.toThrow(/must be configured with ssr: true/)
   })
 
@@ -273,13 +325,15 @@ describe('fileRouter', () => {
     const [plugin] = fileRouter({
       ssg: {},
     })
-    const solidWithSsr = createSolidPluginStub('import { ssr as _$ssr } from "solid-js/web"; export default _$ssr')
+    const solidWithSsr = createSolidPluginStub(
+      'import { ssr as _$ssr } from "solid-js/web"; export default _$ssr',
+    )
 
     await expect(
       (plugin as any).configResolved({
         root,
         plugins: [solidWithSsr],
-      })
+      }),
     ).resolves.toBeUndefined()
   })
 })
