@@ -8,13 +8,20 @@ import { normalizePath } from 'vite'
 import { PACKAGE_NAME, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
 import type { InheritanceConfig } from './utils/definition'
 import { extract, getAstCacheKey } from './utils/extract'
-import { RouteRegistry } from './utils/registry'
+import { isRouteSourceModuleId, resolveRouteSourceModuleId, RouteRegistry } from './utils/registry'
 import type { InfoTypeDefinition } from './utils/route-type'
+import type {
+  Promisable,
+  RouteSourceEntry,
+  RouteSourceLoadContext,
+  RouteSourceProvider,
+} from './utils/source'
 
 type Awaitable<T> = T | Promise<T>
 export type PrerenderRoutesSource = readonly string[] | (() => Awaitable<readonly string[]>)
+export type { Promisable, RouteSourceEntry, RouteSourceLoadContext, RouteSourceProvider }
 
-interface FileRouterPluginOption {
+export interface FileRouterPluginOption {
   /**
    * The output file path where the page types will be saved.
    * @default 'src/routes.d.ts'
@@ -28,6 +35,10 @@ interface FileRouterPluginOption {
    * @default 'src/pages'
    */
   pagesDir?: string
+  /**
+   * Custom route source. When provided, pagesDir scanning is disabled.
+   */
+  routeSource?: RouteSourceProvider
   /**
    * A list of glob patterns to be ignored during processing.
    *
@@ -132,6 +143,7 @@ const queryMap = new Map<string, string[]>([
   ['comp', ['component']],
 ])
 const REG_ROUTE_QUERY = /\?(route|comp)$/
+const REG_ROUTE_SOURCE_MODULE_ID = /\.solid-file-router\.tsx(?:\?.*)?$/
 const ENVIRONMENT = {
   CLIENT: 'client',
   SERVER: 'ssr',
@@ -290,6 +302,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     infoDts,
     verboseLog,
     inheritance = { enabled: true },
+    routeSource,
     ssg,
   } = options
 
@@ -316,6 +329,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     infoDts,
     verboseLog,
     inheritance: inheritanceConfig,
+    routeSource,
   })
 
   return [
@@ -345,7 +359,9 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
         }
 
         const getOutDir = (envName: EnvironmentName, subDir: string) =>
-          normalizePath(path.join(userConfig.environments?.[envName]?.build?.outDir ?? 'dist', subDir))
+          normalizePath(
+            path.join(userConfig.environments?.[envName]?.build?.outDir ?? 'dist', subDir),
+          )
         const clientOutDir = getOutDir(ENVIRONMENT.CLIENT, 'client')
         const serverOutDir = getOutDir(ENVIRONMENT.SERVER, 'server')
         return {
@@ -397,17 +413,25 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
       },
       resolveId: {
         filter: {
-          id: new RegExp(VID_EXTRACT),
+          id: new RegExp(`^${VID_EXTRACT}$|${REG_ROUTE_SOURCE_MODULE_ID.source}`),
         },
-        handler() {
-          return VID_EXTRACT_RESOLVED
+        handler(id) {
+          if (id === VID_EXTRACT) {
+            return VID_EXTRACT_RESOLVED
+          }
+
+          return resolveRouteSourceModuleId(id)
         },
       },
       load: {
         filter: {
-          id: new RegExp(VID_EXTRACT_RESOLVED),
+          id: new RegExp(`^${VID_EXTRACT_RESOLVED}$|${REG_ROUTE_SOURCE_MODULE_ID.source}`),
         },
-        handler(_, options) {
+        async handler(id, options) {
+          if (id && isRouteSourceModuleId(id)) {
+            return await registry.loadRouteSourceModule(id)
+          }
+
           return registry.getDefinition(lazy ?? !options?.ssr)
         },
       },
@@ -430,6 +454,14 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
           }
         }
 
+        const invalidateModuleIds = (ids: string[]) => {
+          for (const id of ids) {
+            invalidateVirtualModule(id)
+            invalidateVirtualModule(`${id}?route`)
+            invalidateVirtualModule(`${id}?comp`)
+          }
+        }
+
         const handleStructureEvent =
           (handler: (file: string) => Promise<boolean>) => async (file: string) => {
             if (!(await handler(file))) {
@@ -442,6 +474,11 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
             })
           }
 
+        const watchedFiles = registry.getWatchFiles()
+        if (watchedFiles.length > 0) {
+          server.watcher.add(watchedFiles)
+        }
+
         server.watcher
           .on(
             'add',
@@ -451,15 +488,19 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
             'unlink',
             handleStructureEvent((file) => registry.removeFile(file)),
           )
-          .on('change', (file) => {
-            if (!registry.markChanged(file)) {
+          .on('change', async (file) => {
+            const change = await registry.markChanged(file)
+            if (!change.matched) {
               return
             }
 
-            invalidateFileModules(file)
+            for (const changedFile of change.changedFiles) {
+              invalidateFileModules(changedFile)
+            }
+            invalidateModuleIds(change.changedModuleIds)
             invalidateVirtualModule(VID_EXTRACT_RESOLVED)
 
-            if (reloadOnChange) {
+            if (reloadOnChange || change.structureChanged) {
               server.ws.send({
                 type: 'full-reload',
               })

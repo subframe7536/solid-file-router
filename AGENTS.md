@@ -3,6 +3,7 @@
 ## Project Overview
 
 Type-safe file-based router for Solid.js. The package provides:
+
 - A Vite plugin that generates routes from `src/pages/` directory structure
 - Runtime utilities (`createRoute`, `generatePath`)
 - Component inheritance system for loading/error boundaries
@@ -14,8 +15,8 @@ Runtime: **Bun**. All scripts use `bun --bun`.
 
 ```bash
 bun run build          # Build library with tsdown
-bun run test           # Run vitest in watch mode
-bun run test:run       # Run vitest once (CI mode)
+bun run test           # Run vitest once (CI mode) in
+bun run test:dev       # Run vitest watch mode
 bun run lint           # Lint with oxlint
 bun run format         # Format with oxfmt
 bun run typecheck      # TypeScript type checking (tsc --noEmit)
@@ -130,6 +131,7 @@ src/
 ### Virtual Modules
 
 The plugin uses Vite virtual modules for route injection:
+
 - `virtual:routes` - resolved to `\0virtual:routes`, exports `FileRouter`, `fileRoutes`, `Root`, `routeInfo`
 - `virtual:router-entry` - client/server helper exports `renderClient`, `renderServer`
 

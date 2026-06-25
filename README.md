@@ -520,6 +520,10 @@ interface FileRouterPluginOption {
    */
   pagesDir?: string
   /**
+   * Custom route source. When provided, pagesDir scanning is disabled.
+   */
+  routeSource?: RouteSourceProvider
+  /**
    * A list of glob patterns to be ignored during processing.
    *
    * Default is {@link DEFAULT_IGNORES}: all files in `components/`, `node_modules/` and `dist/`
@@ -605,7 +609,69 @@ interface FileRouterPluginOption {
     concurrency?: number
   }
 }
+
+type Promisable<T> = T | Promise<T>
+
+interface RouteSourceEntry {
+  routeId: string
+  routePath: string
+  sourcePath: string
+}
+
+interface RouteSourceLoadContext {
+  routeId: string
+  routePath: string
+  sourcePath: string
+  moduleId: string
+}
+
+interface RouteSourceProvider {
+  scan:
+    | string
+    | ((glob: typeof import('tinyglobby').glob, root: string) => Promisable<RouteSourceEntry[]>)
+  load: (entry: RouteSourceLoadContext) => Promisable<string | null | undefined | false | void>
+  watchFiles?: string[]
+}
 ````
+
+### Custom Route Sources
+
+Use `routeSource` when routes come from generated modules, MDX, a CMS, or another source that should not be staged under `pagesDir`.
+
+```ts
+import { fileRouter } from 'solid-file-router/plugin'
+
+fileRouter({
+  routeSource: {
+    scan: () => [
+      { routeId: '/', routePath: '_app.tsx', sourcePath: 'docs/routes/_app.tsx' },
+      {
+        routeId: '/button',
+        routePath: '(general)/button.tsx',
+        sourcePath: 'docs/pages/general/button/button.mdx',
+      },
+      { routeId: '/404', routePath: '404.tsx', sourcePath: 'docs/routes/404.tsx' },
+    ],
+    load(entry) {
+      if (entry.routePath === '_app.tsx') {
+        return `import { createRoute } from 'solid-file-router'
+export default createRoute({ component: (props) => <main>{props.children}</main> })`
+      }
+
+      if (entry.routeId === '/button') {
+        return `import { createRoute } from 'solid-file-router'
+export default createRoute({ info: { title: 'Button' }, component: () => <h1>Button</h1> })`
+      }
+
+      return `import { createRoute } from 'solid-file-router'
+export default createRoute({ component: () => <h1>Not found</h1> })`
+    },
+    watchFiles: ['docs/pages'],
+  },
+})
+```
+
+`routeId` controls the public URL, route type generation, `routeInfo`, and generated `RouteDefinition.id`. `routePath` is the file-router ID used for `_app.tsx`, `_layout.tsx`, `404.tsx`, pathless groups, and layout inheritance. `sourcePath` is resolved from Vite root and used to create an internal TSX facade module at `${sourcePath}.solid-file-router.tsx`. `load(entry)` receives the normalized `routeId`, `routePath`, absolute `sourcePath`, and facade `moduleId`, and must return the full route wrapper source. Relative `watchFiles` values are resolved from Vite root for dev invalidation.
 
 ### Configuring SSG Prerender
 
