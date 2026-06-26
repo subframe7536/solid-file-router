@@ -1,3 +1,3 @@
-import { createServerEntry } from '../../src/runtime'
+import { createServerEntry } from 'solid-file-router'
 
 export default createServerEntry()
