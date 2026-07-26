@@ -162,6 +162,21 @@ describe('fileRouter', () => {
     expect(module).toContain('lazy(() => import(')
   })
 
+  it('keeps loader boundaries in default client and SSR definitions', async () => {
+    const root = createTempProject()
+    const plugin = await createPlugin(root)
+    const clientModule = await plugin.load.handler(undefined, { ssr: false })
+    const ssrModule = await plugin.load.handler(undefined, { ssr: true })
+
+    expect(clientModule).toContain("import { createComponent, lazy } from 'solid-js'")
+    expect(clientModule).toContain("import { __loader__ } from 'solid-file-router'")
+    expect(clientModule).toContain('__loader__(lazy(() => import(')
+    expect(ssrModule).toContain("import { createComponent } from 'solid-js'")
+    expect(ssrModule).toContain("import { __loader__ } from 'solid-file-router'")
+    expect(ssrModule).toContain('__loader__(')
+    expect(ssrModule).not.toContain('__loader__(lazy(() => import(')
+  })
+
   it('supports a custom Vite root from config', async () => {
     const { workspaceRoot, root } = createTempProjectWithCustomRoot('apps/site')
     const plugin = await createPlugin(root, false)

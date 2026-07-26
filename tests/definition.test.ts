@@ -56,6 +56,13 @@ const routeComponentExpression = (
 ) =>
   `__loader__(lazy(() => import('${filePath}?comp').then(mod => ({ default: mod.default.component }))), ${loadingExpression}, ${errorExpression})`
 
+const eagerRouteComponentExpression = (
+  filePath: string,
+  loadingExpression: string,
+  errorExpression: string,
+) =>
+  `__loader__(${getComponentImportName(filePath)}.component, ${loadingExpression}, ${errorExpression})`
+
 const inheritedExpression = (
   filePath: string,
   channel: 'loading' | 'error',
@@ -103,6 +110,7 @@ describe('generateDefinition', () => {
       `import ${getRouteImportName(`${root}/src/pages/index.tsx`)} from '/root/project/src/pages/index.tsx?route'`,
     )
     expect(module).toContain("lazy(() => import('/root/project/src/pages/index.tsx?comp')")
+    expect(module).toContain('"component": __404_comp.component')
     expect(module).toContain('get base()')
     expect(module).not.toContain('createServerEntry')
   })
@@ -113,6 +121,7 @@ describe('generateDefinition', () => {
       `const __app_comp = { component: (props) => memo(() => props.children) }`,
     )
     expect(module).toContain(`const __app_route = {}`)
+    expect(module).toContain(`const __404_comp = { component: () => null }`)
     expect(module).toContain(`const __404_route = undefined`)
     expect(module).toContain(`export const Root = __app_comp.component`)
   })
@@ -233,14 +242,17 @@ describe('generateDefinition', () => {
     )
   })
 
-  it('emits each lazy layout route import only once', async () => {
-    const module = await buildDefinition(inheritanceFiles)
+  it('emits each layout route import only once in lazy and eager modes', async () => {
+    const lazyModule = await buildDefinition(inheritanceFiles)
+    const eagerModule = await buildDefinition(inheritanceFiles, false, undefined, false)
     const dashboardLayoutImport = `import ${getRouteImportName(`${root}/src/pages/dashboard/_layout.tsx`)} from '/root/project/src/pages/dashboard/_layout.tsx?route'`
     const adminLayoutImport = `import ${getRouteImportName(`${root}/src/pages/dashboard/admin/_layout.tsx`)} from '/root/project/src/pages/dashboard/admin/_layout.tsx?route'`
 
-    expect(countOccurrences(module, dashboardLayoutImport)).toBe(1)
-    expect(countOccurrences(module, adminLayoutImport)).toBe(1)
-    expect(module).toContain(
+    expect(countOccurrences(lazyModule, dashboardLayoutImport)).toBe(1)
+    expect(countOccurrences(lazyModule, adminLayoutImport)).toBe(1)
+    expect(countOccurrences(eagerModule, dashboardLayoutImport)).toBe(1)
+    expect(countOccurrences(eagerModule, adminLayoutImport)).toBe(1)
+    expect(eagerModule).toContain(
       `${getRouteImportName(`${root}/src/pages/dashboard/admin/_layout.tsx`)}.loadingComponent || ${getRouteImportName(`${root}/src/pages/dashboard/_layout.tsx`)}.loadingComponent || __app_route.loadingComponent`,
     )
   })
@@ -318,16 +330,35 @@ describe('generateDefinition', () => {
     )
   })
 
-  it('generates SSR routes without lazy helpers', async () => {
+  it('generates eager SSR routes with the same loader boundaries', async () => {
     const module = await buildDefinition(inheritanceFiles, false, undefined, false)
+    const usersFile = `${root}/src/pages/dashboard/admin/users.tsx`
 
     expect(module).toContain("import { createComponent } from 'solid-js'")
     expect(module).toContain("import { StaticRouter } from '@solidjs/router'")
     expect(module).toContain("import { renderToStringAsync } from 'solid-js/web'")
+    expect(module).toContain("import { __loader__ } from 'solid-file-router'")
+    expect(module).toContain("import __app_route from '/root/project/src/pages/_app.tsx?route'")
     expect(module).toContain('export const Root = __app_comp.component')
     expect(module).toContain(
-      `import ${getComponentImportName(`${root}/src/pages/dashboard/admin/users.tsx`)} from '/root/project/src/pages/dashboard/admin/users.tsx?comp'`,
+      `import ${getComponentImportName(usersFile)} from '/root/project/src/pages/dashboard/admin/users.tsx?comp'`,
     )
+    expect(module).toContain(
+      eagerRouteComponentExpression(
+        usersFile,
+        inheritedExpression(
+          usersFile,
+          'loading',
+          `${getRouteImportName(`${root}/src/pages/dashboard/admin/_layout.tsx`)}.loadingComponent || ${getRouteImportName(`${root}/src/pages/dashboard/_layout.tsx`)}.loadingComponent || __app_route.loadingComponent`,
+        ),
+        inheritedExpression(
+          usersFile,
+          'error',
+          `${getRouteImportName(`${root}/src/pages/dashboard/admin/_layout.tsx`)}.errorComponent || ${getRouteImportName(`${root}/src/pages/dashboard/_layout.tsx`)}.errorComponent || __app_route.errorComponent`,
+        ),
+      ),
+    )
+    expect(module).toContain('"component": __404_comp.component')
     expect(module).toContain('get url()')
     expect(module).not.toContain('createServerEntry')
     expect(module).not.toContain('lazy(() => import(')
@@ -405,5 +436,7 @@ describe('generateDefinition', () => {
     expect(eagerModule).toContain(
       `import ${getComponentImportName(`${root}/src/pages/dashboard/admin/users.tsx`)} from '/root/project/src/pages/dashboard/admin/users.tsx?comp'`,
     )
+    expect(lazyModule).toContain("import { __loader__ } from 'solid-file-router'")
+    expect(eagerModule).toContain("import { __loader__ } from 'solid-file-router'")
   })
 })

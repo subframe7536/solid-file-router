@@ -367,7 +367,7 @@ function resolveInheritedComponents(
 }
 
 function computeGlobalContext(entries: RouteEntry[], lazy: boolean) {
-  const globalImports: string[] = lazy ? [`import { __loader__ } from '${PACKAGE_NAME}'`] : []
+  const globalImports: string[] = [`import { __loader__ } from '${PACKAGE_NAME}'`]
   const layouts: LayoutInfo[] = []
 
   const appEntry = entries.find(
@@ -375,14 +375,12 @@ function computeGlobalContext(entries: RouteEntry[], lazy: boolean) {
   )
   if (appEntry) {
     globalImports.push(`import __app_comp from '${appEntry.moduleId}?comp'`)
-    if (lazy) {
-      globalImports.push(`import __app_route from '${appEntry.moduleId}?route'`)
-      layouts.push({
-        path: appEntry.routePath,
-        loadImportName: '__app_route.loadingComponent',
-        errorImportName: '__app_route.errorComponent',
-      })
-    }
+    globalImports.push(`import __app_route from '${appEntry.moduleId}?route'`)
+    layouts.push({
+      path: appEntry.routePath,
+      loadImportName: '__app_route.loadingComponent',
+      errorImportName: '__app_route.errorComponent',
+    })
   } else {
     logger.warn('No `_app.jsx` or `_app.tsx` found, fallback to parent component', {
       timestamp: true,
@@ -398,21 +396,19 @@ function computeGlobalContext(entries: RouteEntry[], lazy: boolean) {
     }
   }
 
-  if (lazy) {
-    const layoutEntries = entries.filter((entry) => REG_LAYOUT.test(entry.routePath))
-    layoutEntries.forEach((layoutEntry) => {
-      const layoutImportName = getRouteImportName(layoutEntry.moduleId)
-      globalImports.push(`import ${layoutImportName} from '${layoutEntry.moduleId}?route'`)
-      layouts.push({
-        path: layoutEntry.routePath,
-        loadImportName: `${layoutImportName}.loadingComponent`,
-        errorImportName: `${layoutImportName}.errorComponent`,
-      })
+  const layoutEntries = entries.filter((entry) => REG_LAYOUT.test(entry.routePath))
+  layoutEntries.forEach((layoutEntry) => {
+    const layoutImportName = getRouteImportName(layoutEntry.moduleId)
+    globalImports.push(`import ${layoutImportName} from '${layoutEntry.moduleId}?route'`)
+    layouts.push({
+      path: layoutEntry.routePath,
+      loadImportName: `${layoutImportName}.loadingComponent`,
+      errorImportName: `${layoutImportName}.errorComponent`,
     })
-  }
+  })
 
   const filteredEntries = entries.filter(isGeneratedRouteFile)
-  const routeLayoutMap = lazy ? buildRouteLayoutMap(filteredEntries, layouts) : {}
+  const routeLayoutMap = buildRouteLayoutMap(filteredEntries, layouts)
 
   const notFoundEntry = entries.find((entry) => isNotFoundRoute(entry.routePath))
   if (notFoundEntry) {
@@ -422,7 +418,7 @@ function computeGlobalContext(entries: RouteEntry[], lazy: boolean) {
     logger.warn('No `404.jsx` or `404.tsx` found, fallback to `() => null`', {
       timestamp: true,
     })
-    globalImports.push(`const __404_comp = ${lazy ? '() => null' : '{ component: () => null }'}`)
+    globalImports.push(`const __404_comp = { component: () => null }`)
     globalImports.push(`const __404_route = undefined`)
   }
 
@@ -441,22 +437,23 @@ function generateSingleRouteDefinition(
   const imports: string[] = [`import ${routeImportName} from '${entry.moduleId}?route'`]
   let route: BaseRoute
   let inheritanceLogRow: RouteInheritanceLogRow | undefined
+  const { loadExpr, errorExpr } = resolveInheritedComponents(
+    routeImportName,
+    ancestorLayouts,
+    inheritanceConfig,
+  )
 
   if (!lazy) {
     const componentImportName = getComponentImportName(entry.moduleId)
     imports.push(`import ${componentImportName} from '${entry.moduleId}?comp'`)
     route = {
       id: entry.id,
-      component: wrapInline(`${componentImportName}.component`),
+      component: wrapInline(
+        `__loader__(${componentImportName}.component, ${loadExpr}, ${errorExpr})`,
+      ),
       __: wrapInline(`...${routeImportName}`),
     }
   } else {
-    const { loadExpr, errorExpr } = resolveInheritedComponents(
-      routeImportName,
-      ancestorLayouts,
-      inheritanceConfig,
-    )
-
     if (verbose && ancestorLayouts.length > 0) {
       const loadChain: string[] = ['route']
       const errorChain: string[] = ['route']
@@ -564,9 +561,8 @@ export function assembleDefinition(
       verbose,
       routeRoot,
     )
-    // In lazy mode, _layout.tsx files already have their `?route` import
-    // emitted by computeGlobalContext. Skip the duplicate here.
-    const importsToAdd = lazy && REG_LAYOUT.test(entry.routePath) ? imports.slice(1) : imports
+    // Layout route imports are already emitted by computeGlobalContext.
+    const importsToAdd = REG_LAYOUT.test(entry.routePath) ? imports.slice(1) : imports
     routeImports.push(...importsToAdd)
 
     if (verbose && inheritanceLogRow) {
@@ -625,7 +621,7 @@ export function assembleDefinition(
   regularRoutes.push({
     id: '*',
     path: '*',
-    component: wrapInline(lazy ? '__404_comp' : '__404_comp.component'),
+    component: wrapInline('__404_comp.component'),
     ...(lazy ? { __: wrapInline(`...__404_route`) } : {}),
   })
 
