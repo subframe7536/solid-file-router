@@ -193,12 +193,15 @@ export function createClientEntry(
 }
 
 export async function createServerEntry(component?: Component<{ url: string; base: string }>) {
-  if (!component) {
-    component = await import('virtual:routes').then((mod) => mod.FileRouter)
-  }
+  const renderRoot: Component<{ url: string; base: string }> =
+    component ??
+    (await import('virtual:routes').then(
+      (mod) => (props: { url: string; base: string }) => createComponent(mod.FileRouter, props),
+    ))
+
   return (props: { url: string }) => {
     return renderToStringAsync(() =>
-      createComponent(component!, {
+      renderRoot({
         get base() {
           return import.meta.env.BASE_URL
         },
