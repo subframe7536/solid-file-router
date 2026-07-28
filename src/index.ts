@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-import { generateHydrationScript, getAssets } from 'solid-js/web'
+import { generateHydrationScript } from 'solid-js/web'
 import type { Logger, Plugin, ResolvedConfig } from 'vite'
 import { normalizePath } from 'vite'
 
@@ -46,8 +46,10 @@ export interface FileRouterPluginOption {
    */
   ignore?: string[]
   /**
-   * Whether to reload the page when route files change.
-   * @default true
+   * Escape hatch that reloads the page for route content updates. Structural
+   * changes may still reload automatically.
+   * @default false
+   * @deprecated Prefer Vite's normal HMR behavior.
    */
   reloadOnChange?: boolean
   /**
@@ -101,8 +103,8 @@ export interface FileRouterPluginOption {
    */
   ssg?: {
     /**
-     * SSR entry file path.
-     * @default 'src/entry-server.tsx'
+     * Custom build-time renderer entry. When omitted, the generated internal
+     * prerender entry is used.
      */
     serverEntry?: string
     /**
@@ -112,7 +114,7 @@ export interface FileRouterPluginOption {
     id?: string
     /**
      * Prerender routes or a lazy route producer.
-     * @default ['/']
+     * When omitted, every concrete static route in the registry is rendered.
      */
     routes?: PrerenderRoutesSource
     /**
@@ -152,17 +154,12 @@ const INDEX_HTML_FILE_NAME = 'index.html'
 const DEFAULT_PRERENDER_CONCURRENCY = 4
 const CACHE_BUST_PARAM = 't'
 const SLASH_CODE_POINT = '/'.codePointAt(0)!
-const SOLID_SSR_PROBE_ID = `${PACKAGE_NAME}:ssg-ssr-probe.tsx`
-const SOLID_SSR_PROBE_CODE = 'export default () => <div />'
+const ID_PRERENDER = 'virtual:solid-file-router/prerender-entry'
+const VID_PRERENDER = `\0${ID_PRERENDER}`
+const OUTLET_MARKER = '<!--solid-file-router-outlet-->'
+const HEAD_MARKER = '<!--solid-file-router-head-->'
 
 type EnvironmentName = typeof ENVIRONMENT.CLIENT | typeof ENVIRONMENT.SERVER
-const SSG_SOLID_HELP = [
-  '[solid-file-router] `ssg` requires `vite-plugin-solid({ ssr: true })`.',
-  'Configure plugins like:',
-  '  plugins: [solidPlugin({ ssr: true }), fileRouter({ ssg: { ... } })]',
-  'See the README "Configuring SSG Prerender" section for a complete example.',
-].join('\n')
-
 function trimTrailingSlashes(value: string) {
   let end = value.length
   while (end > 0 && value.codePointAt(end - 1) === SLASH_CODE_POINT) {
@@ -178,6 +175,11 @@ function normalizeRoutePath(route: string) {
   }
 
   const withLeadingSlash = trimmedRoute.startsWith('/') ? trimmedRoute : `/${trimmedRoute}`
+  if (withLeadingSlash.split('/').some((segment) => segment === '..' || segment === '.')) {
+    throw new Error(
+      `[solid-file-router] Invalid prerender route outside output directory: ${route}`,
+    )
+  }
   const withoutTrailingSlash = trimTrailingSlashes(withLeadingSlash)
   return withoutTrailingSlash || '/'
 }
@@ -206,15 +208,13 @@ function findIndexHtmlAsset(bundle: BundleOutput) {
   return htmlAsset
 }
 
-function findSsrEntryChunk(bundle: BundleOutput, root: string, serverEntry: string) {
-  const resolvedServerEntry = normalizePath(path.resolve(root, serverEntry))
+function findSsrEntryChunk(bundle: BundleOutput, entryModuleId: string) {
   const entryChunks = Object.values(bundle).filter(
     (item): item is BundleChunk => item.type === 'chunk' && !!item.isEntry,
   )
 
-  return (
-    entryChunks.find((item) => normalizePath(item.facadeModuleId ?? '') === resolvedServerEntry) ??
-    entryChunks[0]
+  return entryChunks.find(
+    (item) => normalizePath(item.facadeModuleId ?? '') === normalizePath(entryModuleId),
   )
 }
 
@@ -256,37 +256,48 @@ async function loadServerRenderer(config: ResolvedConfig, entryFileName: string)
 }
 
 export function renderTemplate(template: string, id: string, app: string) {
-  const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const rootPattern = new RegExp(`<div id="${escapedId}">.*?</div>`)
-  if (!rootPattern.test(template)) {
+  const markerCount = template.split(OUTLET_MARKER).length - 1
+  if (markerCount > 1) {
+    throw new Error(`[solid-file-router] SSG found duplicate ${OUTLET_MARKER} markers`)
+  }
+
+  let rendered = template
+  if (markerCount === 1) {
+    rendered = rendered.replace(OUTLET_MARKER, `<div id="${id}">${app}</div>`)
+  } else {
+    const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const rootPattern = new RegExp(
+      `<([a-z][\\w:-]*)\\b([^>]*\\bid\\s*=\\s*(['"])${escapedId}\\3[^>]*)>[\\s\\S]*?</\\1>`,
+      'i',
+    )
+    if (rootPattern.test(rendered)) {
+      rendered = rendered.replace(
+        rootPattern,
+        (_match, tag, attributes) => `<${tag}${attributes}>${app}</${tag}>`,
+      )
+    } else {
+      throw new Error(
+        [
+          `[solid-file-router] SSG could not find an outlet in ${INDEX_HTML_FILE_NAME}.`,
+          `Add ${OUTLET_MARKER} or an element with id="${id}".`,
+        ].join('\n'),
+      )
+    }
+  }
+
+  // Vite has already injected client assets into the HTML template. Only the
+  // Solid hydration bootstrap belongs here; calling getAssets outside an SSR
+  // render owner is invalid and can duplicate Vite's tags.
+  const headAssets = generateHydrationScript()
+  if (rendered.includes(HEAD_MARKER)) {
+    return rendered.replace(HEAD_MARKER, headAssets)
+  }
+  if (!/<\/head\s*>/i.test(rendered)) {
     throw new Error(
-      [
-        `[solid-file-router] SSG could not find the app root element in ${INDEX_HTML_FILE_NAME}.`,
-        `Expected to find: <div id="${id}"></div>`,
-        `Either add that element to ${INDEX_HTML_FILE_NAME}, or set fileRouter({ ssg: { id: '...' } }) to match your root element id.`,
-      ].join('\n'),
+      `[solid-file-router] SSG could not find </head> or ${HEAD_MARKER} in ${INDEX_HTML_FILE_NAME}`,
     )
   }
-
-  return template
-    .replace(rootPattern, `<div id="${id}">${app}</div>`)
-    .replace('</head>', `${generateHydrationScript()}${getAssets()}</head>`)
-}
-
-async function hasSolidSsrTransform(plugin: Plugin) {
-  if (!plugin.transform) {
-    return false
-  }
-
-  const transform =
-    typeof plugin.transform === 'function' ? plugin.transform : plugin.transform.handler
-  const result = await transform.call({} as never, SOLID_SSR_PROBE_CODE, SOLID_SSR_PROBE_ID, {
-    moduleType: 'js',
-    ssr: true,
-  })
-
-  const code = typeof result === 'string' ? result : result?.code
-  return typeof code === 'string' && code.includes('solid-js/web') && code.includes('ssr')
+  return rendered.replace(/<\/head\s*>/i, `${headAssets}</head>`)
 }
 
 /**
@@ -297,7 +308,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     output = 'src/routes.d.ts',
     pagesDir = 'src/pages',
     ignore = DEFAULT_IGNORES,
-    reloadOnChange = true,
+    reloadOnChange = false,
     lazy,
     infoDts,
     verboseLog,
@@ -308,8 +319,9 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
 
   const ssgConfig = {
     enabled: !!ssg,
-    serverEntry: ssg?.serverEntry ?? 'src/entry-server.tsx',
-    routes: ssg?.routes ?? ['/'],
+    internalEntry: ssg?.serverEntry === undefined,
+    serverEntry: ssg?.serverEntry ?? ID_PRERENDER,
+    routes: ssg?.routes,
     concurrency: Math.max(1, ssg?.concurrency ?? DEFAULT_PRERENDER_CONCURRENCY),
     id: ssg?.id ?? 'root',
   }
@@ -337,19 +349,6 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
       name: `${PACKAGE_NAME}:extract`,
       sharedDuringBuild: true,
       async configResolved(config) {
-        if (ssgConfig.enabled) {
-          const solidPlugin = config.plugins.find((plugin) => plugin.name === 'solid')
-          if (!solidPlugin) {
-            throw new Error(`${SSG_SOLID_HELP}\nDetected issue: missing vite-plugin-solid.`)
-          }
-
-          if (!(await hasSolidSsrTransform(solidPlugin))) {
-            throw new Error(
-              `${SSG_SOLID_HELP}\nDetected issue: vite-plugin-solid must be configured with ssr: true.`,
-            )
-          }
-        }
-
         logger = config.logger
         await registry.initialize(config.root)
       },
@@ -401,7 +400,14 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
               consumer: 'server',
               build: {
                 outDir: serverOutDir,
-                ssr: ssgConfig.serverEntry,
+                ssr: ssgConfig.internalEntry ? true : ssgConfig.serverEntry,
+                ...(ssgConfig.internalEntry
+                  ? {
+                      rolldownOptions: {
+                        input: ID_PRERENDER,
+                      },
+                    }
+                  : {}),
                 copyPublicDir: false,
               },
               optimizeDeps: {
@@ -413,9 +419,12 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
       },
       resolveId: {
         filter: {
-          id: new RegExp(`^${VID_EXTRACT}$|${REG_ROUTE_SOURCE_MODULE_ID.source}`),
+          id: new RegExp(`^${VID_EXTRACT}$|^${ID_PRERENDER}$|${REG_ROUTE_SOURCE_MODULE_ID.source}`),
         },
         handler(id) {
+          if (id === ID_PRERENDER) {
+            return VID_PRERENDER
+          }
           if (id === VID_EXTRACT) {
             return VID_EXTRACT_RESOLVED
           }
@@ -425,9 +434,23 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
       },
       load: {
         filter: {
-          id: new RegExp(`^${VID_EXTRACT_RESOLVED}$|${REG_ROUTE_SOURCE_MODULE_ID.source}`),
+          id: new RegExp(
+            `^${VID_EXTRACT_RESOLVED}$|^${VID_PRERENDER}$|${REG_ROUTE_SOURCE_MODULE_ID.source}`,
+          ),
         },
         async handler(id, options) {
+          if (id === VID_PRERENDER) {
+            return `import { createComponent } from 'solid-js'
+import { StaticRouter } from '@solidjs/router'
+import { renderToStringAsync } from 'solid-js/web'
+import { Root, fileRoutes } from '${VID_EXTRACT}'
+
+export default ({ url }) => renderToStringAsync(() => createComponent(StaticRouter, {
+  url,
+  root: Root,
+  get children() { return fileRoutes }
+}))`
+          }
           if (id && isRouteSourceModuleId(id)) {
             return await registry.loadRouteSourceModule(id)
           }
@@ -515,11 +538,10 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
           }
 
           if (this.environment.name === ENVIRONMENT.SERVER) {
-            const ssrEntryChunk = findSsrEntryChunk(
-              bundle as BundleOutput,
-              this.environment.config.root,
-              ssgConfig.serverEntry,
-            )
+            const serverEntryModuleId = ssgConfig.internalEntry
+              ? VID_PRERENDER
+              : normalizePath(path.resolve(this.environment.config.root, ssgConfig.serverEntry))
+            const ssrEntryChunk = findSsrEntryChunk(bundle as BundleOutput, serverEntryModuleId)
             if (!ssrEntryChunk) {
               this.error(`Missing SSR entry chunk for ${ssgConfig.serverEntry}`)
             }
@@ -541,8 +563,11 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
             typeof indexHtmlAsset.source === 'string'
               ? indexHtmlAsset.source
               : Buffer.from(indexHtmlAsset.source).toString('utf-8')
-          const resolvedRoutes =
-            typeof ssgConfig.routes === 'function' ? await ssgConfig.routes() : ssgConfig.routes
+          const resolvedRoutes = ssgConfig.routes
+            ? typeof ssgConfig.routes === 'function'
+              ? await ssgConfig.routes()
+              : ssgConfig.routes
+            : registry.getStaticRoutes()
           const prerenderRoutes = Array.from(
             new Set(resolvedRoutes.map((route) => normalizeRoutePath(route))),
           )

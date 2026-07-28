@@ -1,4 +1,5 @@
-import { writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 
 import { PACKAGE_NAME } from '../const'
 
@@ -76,8 +77,6 @@ function generateInlineObjectType(obj: InfoTypeDefinition, indentLevel: number =
   }
   return `{${content}\n${indent}}`
 }
-let cache = ''
-
 export function generateRouteTypes(
   files: RouteInput[],
   output: string,
@@ -116,8 +115,9 @@ declare module '@solidjs/router' {
 }
 `
 
-  if (cache !== routeInfo) {
-    cache = routeInfo
+  const previous = existsSync(output) ? readFileSync(output, 'utf8') : undefined
+  if (previous !== routeInfo) {
+    mkdirSync(dirname(output), { recursive: true })
     writeFileSync(output, routeInfo)
   }
   return params.length

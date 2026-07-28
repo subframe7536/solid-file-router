@@ -11,6 +11,8 @@ export interface ExtractConfig {
 type State = Omit<Babel.PluginPass, 'opts'> & {
   opts: ExtractConfig
   hasExport: boolean
+  routeBindings: Set<string>
+  hasEntryBinding: boolean
 }
 
 interface TransformContext {
@@ -26,15 +28,21 @@ interface TransformContext {
 function validateCallExpression(callExpr: any, ctx: TransformContext): void {
   const { t, entryFn } = ctx
 
-  if (!t.isIdentifier(callExpr.callee) || callExpr.callee.name !== entryFn) {
-    throw new Error(
-      `Expected function name to be "${entryFn}", but got "${callExpr.callee.name || 'unknown'}"`,
-    )
-  }
-
   if (callExpr.arguments.length !== 1 || !t.isObjectExpression(callExpr.arguments[0])) {
     throw new Error(`Expected exactly one object argument for "${entryFn}"`)
   }
+}
+
+function isRouteCall(callExpr: Babel.types.CallExpression, state: State, t: typeof Babel.types) {
+  if (!t.isIdentifier(callExpr.callee)) {
+    return false
+  }
+  if (state.routeBindings.size > 0) {
+    return state.routeBindings.has(callExpr.callee.name)
+  }
+  // Preserve the historical transform for virtual/custom modules that omit an
+  // import, while never accepting a binding from another module or local scope.
+  return !state.hasEntryBinding && callExpr.callee.name === state.opts.entryFn
 }
 
 /**
@@ -82,6 +90,26 @@ export function extractPlugin({ types: t }: typeof Babel): Babel.PluginObj<State
       }
     },
     visitor: {
+      Program(path, state) {
+        state.routeBindings = new Set()
+        state.hasEntryBinding = false
+        for (const statement of path.node.body) {
+          if (!t.isImportDeclaration(statement) || statement.source.value !== 'solid-file-router') {
+            continue
+          }
+          for (const specifier of statement.specifiers) {
+            if (
+              t.isImportSpecifier(specifier) &&
+              t.isIdentifier(specifier.imported) &&
+              specifier.imported.name === state.opts.entryFn
+            ) {
+              state.routeBindings.add(specifier.local.name)
+            }
+          }
+        }
+        const binding = path.scope.getBinding(state.opts.entryFn)
+        state.hasEntryBinding = !!binding
+      },
       ExportNamedDeclaration(path, state) {
         const { entryFn, pick, targetFn } = state.opts
 
@@ -102,7 +130,7 @@ export function extractPlugin({ types: t }: typeof Babel): Babel.PluginObj<State
 
         if (binding && t.isVariableDeclarator(binding.path.node)) {
           const init = binding.path.node.init
-          if (!t.isCallExpression(init)) {
+          if (!t.isCallExpression(init) || !isRouteCall(init, state, t)) {
             return
           }
 
@@ -141,7 +169,7 @@ export function extractPlugin({ types: t }: typeof Babel): Babel.PluginObj<State
         }
 
         // Transform if we found a call expression
-        if (!callExpr || !updatePath) {
+        if (!callExpr || !updatePath || !isRouteCall(callExpr, state, t)) {
           return
         }
 
@@ -251,8 +279,14 @@ export async function extract(
       cloneInputAst: true,
     })
 
-    return transformed?.code ?? undefined
+    if (!transformed?.code) {
+      return undefined
+    }
+    return {
+      code: transformed.code,
+      map: transformed.map ?? null,
+    }
   } catch (error) {
-    throw new Error(`${error}`)
+    throw new Error(`[solid-file-router] Failed to extract route ${id}: ${error}`)
   }
 }

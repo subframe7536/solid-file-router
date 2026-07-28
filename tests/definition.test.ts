@@ -335,8 +335,8 @@ describe('generateDefinition', () => {
     const usersFile = `${root}/src/pages/dashboard/admin/users.tsx`
 
     expect(module).toContain("import { createComponent } from 'solid-js'")
-    expect(module).toContain("import { StaticRouter } from '@solidjs/router'")
-    expect(module).toContain("import { renderToStringAsync } from 'solid-js/web'")
+    expect(module).toContain("import { Router } from '@solidjs/router'")
+    expect(module).not.toContain('StaticRouter')
     expect(module).toContain("import { __loader__ } from 'solid-file-router'")
     expect(module).toContain("import __app_route from '/root/project/src/pages/_app.tsx?route'")
     expect(module).toContain('export const Root = __app_comp.component')
@@ -359,7 +359,7 @@ describe('generateDefinition', () => {
       ),
     )
     expect(module).toContain('"component": __404_comp.component')
-    expect(module).toContain('get url()')
+    expect(module).toContain('get base()')
     expect(module).not.toContain('createServerEntry')
     expect(module).not.toContain('lazy(() => import(')
   })

@@ -651,12 +651,9 @@ export function assembleDefinition(
     ),
   )
 
-  const routerImport = lazy
-    ? `import { Router } from '@solidjs/router'`
-    : `import { StaticRouter } from '@solidjs/router'`
-  const serverRenderImport = lazy ? '' : `import { renderToStringAsync } from 'solid-js/web'`
-  const routerComponent = lazy ? 'Router' : 'StaticRouter'
-  const routerUrlProp = lazy ? 'base' : 'url'
+  // Loading strategy must never select the router runtime. FileRouter is always
+  // browser-capable; build-time prerendering has its own private virtual entry.
+  const routerImport = `import { Router } from '@solidjs/router'`
   const solidImports = lazy
     ? `import { createComponent, lazy } from 'solid-js'`
     : `import { createComponent } from 'solid-js'`
@@ -664,7 +661,6 @@ export function assembleDefinition(
 
   return `${solidImports}
 ${routerImport}
-${serverRenderImport}
 ${globalImports.join('\n')}
 ${routeImports.join('\n')}
 
@@ -672,9 +668,12 @@ ${rootExpr}
 
 export const fileRoutes = ${unwrapInline(regularRoutes)}
 export const routeInfo = ${routeInfo}
-export const FileRouter = (props) => createComponent(${routerComponent}, {
-  get ${routerUrlProp}() {
-    return props.${routerUrlProp}
+export const FileRouter = (props) => createComponent(Router, {
+  get base() {
+    return props.base
+  },
+  get url() {
+    return props.url
   },
   get root() {
     return Root
