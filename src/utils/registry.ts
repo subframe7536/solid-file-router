@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 
 import { glob } from 'tinyglobby'
-import { normalizePath } from 'vite'
+import { createFilter, normalizePath } from 'vite'
 
 import { logger } from '../const'
 
@@ -22,7 +22,6 @@ interface RouteRegistryOption {
   routeSource?: RouteSourceProvider
 }
 
-const REG_IS_ROUTE_FILE = /\.(jsx|tsx)$/
 const REG_QUERY = /\?.*$/
 const REG_ROUTE_SOURCE_EXT = /\.(jsx|tsx|mdx)$/i
 const REG_GLOB_CHAR = /[*?[{]/
@@ -45,8 +44,11 @@ export class RouteRegistry {
   private watchFiles: string[] = []
   private typesDirty = true
   private readonly definitionCache = new Map<string, RouteEntry>()
+  private readonly routeFileFilter: ReturnType<typeof createFilter>
 
-  constructor(private readonly options: RouteRegistryOption) {}
+  constructor(private readonly options: RouteRegistryOption) {
+    this.routeFileFilter = createFilter(['**/*.{jsx,tsx}'], options.ignore)
+  }
 
   async markChanged(file: string): Promise<RouteRegistryChange> {
     const normalized = normalizePath(file)
@@ -222,12 +224,12 @@ export class RouteRegistry {
   }
 
   private isRouteFileNormalized(file: string): boolean {
-    if (!file.startsWith(`${this.pagesDir}/`) || !REG_IS_ROUTE_FILE.test(file)) {
+    if (!file.startsWith(`${this.pagesDir}/`)) {
       return false
     }
 
     const relative = file.slice(this.pagesDir.length + 1)
-    return !this.options.ignore.some((pattern) => matchesGlob(relative, pattern))
+    return this.routeFileFilter(relative)
   }
 
   private async scanCustomRouteSource(): Promise<RouteSourceEntry[]> {
@@ -471,11 +473,4 @@ function noChange(): RouteRegistryChange {
     changedModuleIds: [],
     changedFiles: [],
   }
-}
-
-function matchesGlob(file: string, pattern: string): boolean {
-  const normalized = normalizePath(pattern).replace(/^\.\//, '')
-  const escaped = normalized.replace(/[.+^$()|\\]/g, '\\$&')
-  const expression = escaped.replaceAll('**', '\0').replaceAll('*', '[^/]*').replaceAll('\0', '.*')
-  return new RegExp(`^(?:${expression}|.*/${expression})$`).test(file)
 }

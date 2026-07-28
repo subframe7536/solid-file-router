@@ -12,7 +12,7 @@ type State = Omit<Babel.PluginPass, 'opts'> & {
   opts: ExtractConfig
   hasExport: boolean
   routeBindings: Set<string>
-  hasLocalEntryBinding: boolean
+  hasEntryBinding: boolean
 }
 
 interface TransformContext {
@@ -41,8 +41,8 @@ function isRouteCall(callExpr: Babel.types.CallExpression, state: State, t: type
     return state.routeBindings.has(callExpr.callee.name)
   }
   // Preserve the historical transform for virtual/custom modules that omit an
-  // import, while never accepting a locally-bound function with this name.
-  return !state.hasLocalEntryBinding && callExpr.callee.name === state.opts.entryFn
+  // import, while never accepting a binding from another module or local scope.
+  return !state.hasEntryBinding && callExpr.callee.name === state.opts.entryFn
 }
 
 /**
@@ -92,7 +92,7 @@ export function extractPlugin({ types: t }: typeof Babel): Babel.PluginObj<State
     visitor: {
       Program(path, state) {
         state.routeBindings = new Set()
-        state.hasLocalEntryBinding = false
+        state.hasEntryBinding = false
         for (const statement of path.node.body) {
           if (!t.isImportDeclaration(statement) || statement.source.value !== 'solid-file-router') {
             continue
@@ -108,7 +108,7 @@ export function extractPlugin({ types: t }: typeof Babel): Babel.PluginObj<State
           }
         }
         const binding = path.scope.getBinding(state.opts.entryFn)
-        state.hasLocalEntryBinding = !!binding && !binding.path.isImportSpecifier()
+        state.hasEntryBinding = !!binding
       },
       ExportNamedDeclaration(path, state) {
         const { entryFn, pick, targetFn } = state.opts

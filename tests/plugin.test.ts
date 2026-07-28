@@ -1,9 +1,19 @@
-import { existsSync, mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import type { ConfigEnv, Plugin, UserConfig } from 'vite'
-import { normalizePath } from 'vite'
+import { createBuilder, normalizePath } from 'vite'
+import solidPlugin from 'vite-plugin-solid'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { fileRouter, renderTemplate } from '../src/index'
@@ -44,6 +54,54 @@ export default createRoute({
   )
 
   return root
+}
+
+async function buildTempSsgProject(serverEntry?: string) {
+  const root = createTempProject()
+  writeFileSync(
+    join(root, 'index.html'),
+    '<!doctype html><html><head></head><body><div id="root"></div></body></html>',
+  )
+  writeFileSync(
+    join(root, 'src/index.tsx'),
+    `import { FileRouter } from 'virtual:routes'
+import { createClientEntry } from 'solid-file-router'
+
+createClientEntry(() => <FileRouter />, document.getElementById('root')!)
+`,
+  )
+  if (serverEntry) {
+    writeFileSync(
+      join(root, serverEntry),
+      `export default ({ url }: { url: string }) => Promise.resolve('<p>custom:' + url + '</p>')
+`,
+    )
+  }
+
+  const builder = await createBuilder({
+    configFile: false,
+    root,
+    resolve: {
+      alias: {
+        'solid-file-router': fileURLToPath(new URL('../src/runtime.ts', import.meta.url)),
+        'solid-js': fileURLToPath(new URL('../node_modules/solid-js', import.meta.url)),
+        '@solidjs/router': fileURLToPath(
+          new URL('../node_modules/@solidjs/router', import.meta.url),
+        ),
+      },
+    },
+    plugins: [
+      solidPlugin({ ssr: true }),
+      fileRouter({
+        ssg: {
+          ...(serverEntry ? { serverEntry } : {}),
+          routes: ['/'],
+        },
+      }),
+    ],
+  })
+  await builder.buildApp()
+  return readFileSync(join(root, 'dist/client/index.html'), 'utf8')
 }
 
 function createTempProjectWithCustomRoot(customRoot: string, routeRoot = 'src/pages') {
@@ -292,12 +350,23 @@ export default createRoute({ component: () => <h1>missing</h1> })
         ssr: {
           build: {
             outDir: 'dist/server',
-            ssr: 'virtual:solid-file-router/prerender-entry',
+            ssr: true,
+            rolldownOptions: {
+              input: 'virtual:solid-file-router/prerender-entry',
+            },
             copyPublicDir: false,
           },
         },
       },
     })
+  })
+
+  it('builds SSG with the internal renderer by default', async () => {
+    await expect(buildTempSsgProject()).resolves.toContain('>home</h1>')
+  })
+
+  it('uses a custom SSG server entry when configured', async () => {
+    await expect(buildTempSsgProject('src/custom-server.ts')).resolves.toContain('custom:/')
   })
 
   it('respects custom ssg server entry and outDir', () => {
@@ -325,6 +394,7 @@ export default createRoute({ component: () => <h1>missing</h1> })
         },
       },
     })
+    expect((config as any).environments.ssr.build.rolldownOptions).toBeUndefined()
   })
 
   it('accepts ssg config when solid ssr transform is enabled', async () => {

@@ -103,9 +103,8 @@ export interface FileRouterPluginOption {
    */
   ssg?: {
     /**
-     * Custom build-time renderer entry. Normally the generated internal entry
-     * should be used.
-     * @deprecated SSG no longer requires a user-maintained server entry.
+     * Custom build-time renderer entry. When omitted, the generated internal
+     * prerender entry is used.
      */
     serverEntry?: string
     /**
@@ -209,15 +208,13 @@ function findIndexHtmlAsset(bundle: BundleOutput) {
   return htmlAsset
 }
 
-function findSsrEntryChunk(bundle: BundleOutput, root: string, serverEntry: string) {
-  const resolvedServerEntry = normalizePath(path.resolve(root, serverEntry))
+function findSsrEntryChunk(bundle: BundleOutput, entryModuleId: string) {
   const entryChunks = Object.values(bundle).filter(
     (item): item is BundleChunk => item.type === 'chunk' && !!item.isEntry,
   )
 
-  return (
-    entryChunks.find((item) => normalizePath(item.facadeModuleId ?? '') === resolvedServerEntry) ??
-    entryChunks[0]
+  return entryChunks.find(
+    (item) => normalizePath(item.facadeModuleId ?? '') === normalizePath(entryModuleId),
   )
 }
 
@@ -322,6 +319,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
 
   const ssgConfig = {
     enabled: !!ssg,
+    internalEntry: ssg?.serverEntry === undefined,
     serverEntry: ssg?.serverEntry ?? ID_PRERENDER,
     routes: ssg?.routes,
     concurrency: Math.max(1, ssg?.concurrency ?? DEFAULT_PRERENDER_CONCURRENCY),
@@ -402,7 +400,14 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
               consumer: 'server',
               build: {
                 outDir: serverOutDir,
-                ssr: ssgConfig.serverEntry,
+                ssr: ssgConfig.internalEntry ? true : ssgConfig.serverEntry,
+                ...(ssgConfig.internalEntry
+                  ? {
+                      rolldownOptions: {
+                        input: ID_PRERENDER,
+                      },
+                    }
+                  : {}),
                 copyPublicDir: false,
               },
               optimizeDeps: {
@@ -533,11 +538,10 @@ export default ({ url }) => renderToStringAsync(() => createComponent(StaticRout
           }
 
           if (this.environment.name === ENVIRONMENT.SERVER) {
-            const ssrEntryChunk = findSsrEntryChunk(
-              bundle as BundleOutput,
-              this.environment.config.root,
-              ssgConfig.serverEntry,
-            )
+            const serverEntryModuleId = ssgConfig.internalEntry
+              ? VID_PRERENDER
+              : normalizePath(path.resolve(this.environment.config.root, ssgConfig.serverEntry))
+            const ssrEntryChunk = findSsrEntryChunk(bundle as BundleOutput, serverEntryModuleId)
             if (!ssrEntryChunk) {
               this.error(`Missing SSR entry chunk for ${ssgConfig.serverEntry}`)
             }

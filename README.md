@@ -414,8 +414,11 @@ Requirements:
 
 - Use `vite-plugin-solid({ ssr: true })`
 - Use `createClientEntry(...)` in the browser entry
-- Add a server entry that exports `createServerEntry(...)`
 - Ensure `index.html` contains the configured root element, default `root`
+
+When `ssg.serverEntry` is omitted, the plugin provides the build-time renderer
+internally. You can provide a custom server entry when you need custom server
+rendering behavior.
 
 Client entry:
 
@@ -427,7 +430,7 @@ import { createClientEntry } from 'solid-file-router'
 createClientEntry(() => <FileRouter />, document.getElementById('root')!)
 ```
 
-Server entry:
+Optional custom server entry:
 
 ```tsx
 // src/entry-server.tsx
@@ -448,7 +451,6 @@ export default defineConfig({
     solidPlugin({ ssr: true }),
     fileRouter({
       ssg: {
-        serverEntry: 'src/entry-server.tsx',
         id: 'root',
         routes: ['/', '/about'],
         concurrency: 4,
@@ -457,6 +459,9 @@ export default defineConfig({
   ],
 })
 ```
+
+To use the custom server entry above, set `serverEntry: 'src/entry-server.tsx'`
+inside the `ssg` options. Existing custom server entries remain supported.
 
 Custom server router:
 
@@ -555,7 +560,7 @@ Pass options to `fileRouter(options)` in `vite.config.ts`.
 | `pagesDir`       | `'src/pages'`                                              | Route file directory                      |
 | `output`         | `'src/routes.d.ts'`                                        | Generated type declaration path           |
 | `ignore`         | `['**/components/**', '**/node_modules/**', '**/dist/**']` | Glob patterns to skip                     |
-| `reloadOnChange` | `true`                                                     | Full page reload on route file HMR        |
+| `reloadOnChange` | `false`                                                    | Full page reload on route file HMR        |
 | `lazy`           | client: `true`, SSR: `false`                               | Lazy route component imports              |
 | `infoDts`        | `undefined`                                                | Generated metadata type shape             |
 | `verboseLog`     | `false`                                                    | Extra plugin logging                      |

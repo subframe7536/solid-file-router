@@ -122,6 +122,39 @@ export default createRoute({
 }
 
 describe('RouteRegistry', () => {
+  it('applies ignore globs consistently to watcher events', async () => {
+    const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
+    const pagesDir = join(workspaceRoot, 'src/pages')
+    tempDirs.push(workspaceRoot)
+    mkdirSync(pagesDir, { recursive: true })
+    writeFileSync(join(pagesDir, '_app.tsx'), 'export default {}')
+
+    const registry = new RouteRegistry({
+      pagesDir: 'src/pages',
+      ignore: ['**/components/**', '**/node_modules/**', '**/dist/**', '**/private/**'],
+      output: 'src/routes.d.ts',
+      inheritance: {
+        enabled: true,
+        inheritLoading: true,
+        inheritError: true,
+      },
+    })
+    await registry.initialize(workspaceRoot)
+
+    for (const relative of [
+      'components/button.tsx',
+      'nested/components/button.tsx',
+      'node_modules/package.tsx',
+      'dist/generated.tsx',
+      'private/draft.tsx',
+    ]) {
+      const file = join(pagesDir, relative)
+      expect(await registry.addFile(file)).toBe(false)
+      await expect(registry.markChanged(file)).resolves.toMatchObject({ matched: false })
+      expect(await registry.removeFile(file)).toBe(false)
+    }
+  })
+
   it('caches definition and avoids repeated generation', async () => {
     const generateDefinitionMock = vi.mocked(generateDefinition)
     const generateRouteTypesMock = vi.mocked(generateRouteTypes)

@@ -29,6 +29,18 @@ export default createRoute({ component: Page })`
         extract(code, '/routes/shadow.tsx', { entryFn: 'createRoute', pick: ['component'] }),
       ).rejects.toThrow('/routes/shadow.tsx')
     })
+
+    it('does not transform createRoute imported from another package', async () => {
+      const code = `import { createRoute } from 'other-router'
+export default createRoute({ info: { title: 'Other' }, component: Page })`
+      await expect(
+        extract(code, '/routes/other-package.tsx', {
+          entryFn: 'createRoute',
+          pick: ['info'],
+        }),
+      ).rejects.toThrow('/routes/other-package.tsx')
+    })
+
     it('extracts properties from direct call expression', async () => {
       const code = `
 export default createRoute({
