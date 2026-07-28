@@ -13,6 +13,10 @@ export default defineConfig({
   plugins: [
     solidPlugin({ ssr: true }),
     fileRouter({
+      infoDts: {
+        name: 'string',
+        role: 'string',
+      },
       ssg: {
         serverEntry: 'src/entry-server.tsx',
         routes: ['/', '/about'],
