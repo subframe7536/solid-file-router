@@ -414,11 +414,43 @@ Requirements:
 
 - Use `vite-plugin-solid({ ssr: true })`
 - Use `createClientEntry(...)` in the browser entry
-- Ensure `index.html` contains the configured root element, default `root`
+- Ensure `index.html` contains either the configured root element (default `root`)
+  or the SSG outlet marker
 
 When `ssg.serverEntry` is omitted, the plugin provides the build-time renderer
 internally. You can provide a custom server entry when you need custom server
 rendering behavior.
+
+### SSG HTML markers
+
+The HTML markers are optional:
+
+- `<!--solid-file-router-outlet-->` marks where the prerendered application
+  should be inserted.
+- `<!--solid-file-router-head-->` marks where Solid's hydration bootstrap
+  should be inserted.
+
+If the markers are omitted, the plugin falls back to replacing the contents of
+the element whose `id` matches `ssg.id` and inserting the hydration bootstrap
+immediately before `</head>`. With the default configuration, this means a
+simple `<div id="root"></div>` and a normal `<head>...</head>` are sufficient.
+
+Use one outlet strategy at a time. When the outlet marker is present, it is
+replaced with `<div id="{ssg.id}">...</div>`; do not also keep another element
+with the same id in the template. Duplicate outlet markers are rejected during
+the build.
+
+For a template that needs an explicit insertion point, use:
+
+```html
+<head>
+  <!--solid-file-router-head-->
+</head>
+<body>
+  <!--solid-file-router-outlet-->
+  <script type="module" src="/src/index.tsx"></script>
+</body>
+```
 
 Client entry:
 
