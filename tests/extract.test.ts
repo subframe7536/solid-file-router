@@ -9,6 +9,26 @@ describe('extractPlugin', () => {
     clearCache()
   })
   describe('Case 1: direct export default call', () => {
+    it('resolves aliased imports and returns a source map', async () => {
+      const result = await extract(
+        `import { createRoute as defineRoute } from 'solid-file-router'
+export default defineRoute({ info: { title: 'Alias' }, component: Page })`,
+        '/routes/alias.tsx',
+        { entryFn: 'createRoute', pick: ['info'] },
+      )
+
+      expect(result?.code).toContain('title')
+      expect(result?.code).not.toContain('component: Page')
+      expect(result?.map).toBeTruthy()
+    })
+
+    it('does not transform a shadowed local createRoute function', async () => {
+      const code = `function createRoute(value: unknown) { return value }
+export default createRoute({ component: Page })`
+      await expect(
+        extract(code, '/routes/shadow.tsx', { entryFn: 'createRoute', pick: ['component'] }),
+      ).rejects.toThrow('/routes/shadow.tsx')
+    })
     it('extracts properties from direct call expression', async () => {
       const code = `
 export default createRoute({
@@ -22,9 +42,9 @@ export default createRoute({
         pick: ['info', 'component'],
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('info')
-      expect(result).toContain('component')
-      expect(result).not.toContain('other')
+      expect(result?.code).toContain('info')
+      expect(result?.code).toContain('component')
+      expect(result?.code).not.toContain('other')
     })
 
     it('wraps with targetFn when provided', async () => {
@@ -40,7 +60,7 @@ export default createRoute({
         targetFn: 'defineRoute',
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('defineRoute')
+      expect(result?.code).toContain('defineRoute')
     })
 
     it('throws error when function name does not match', async () => {
@@ -54,7 +74,7 @@ export default wrongFunction({
         pick: ['info'],
       }
       await expect(extract(code, 'test.tsx', config)).rejects.toThrow(
-        'Expected function name to be "createRoute"',
+        'No default export with `createRoute({})`',
       )
     })
 
@@ -112,11 +132,11 @@ export default createRoute({
         pick: ['info', 'component'],
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('info')
-      expect(result).toContain('component')
-      expect(result).not.toContain('meta')
+      expect(result?.code).toContain('info')
+      expect(result?.code).toContain('component')
+      expect(result?.code).not.toContain('meta')
       // Should preserve nested structure
-      expect(result).toContain('nested')
+      expect(result?.code).toContain('nested')
     })
   })
 
@@ -135,9 +155,9 @@ export default routeConfig
         pick: ['info', 'component'],
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('info')
-      expect(result).toContain('component')
-      expect(result).not.toContain('unused')
+      expect(result?.code).toContain('info')
+      expect(result?.code).toContain('component')
+      expect(result?.code).not.toContain('unused')
     })
 
     it('throws error when identifier is not a createRoute call', async () => {
@@ -197,8 +217,8 @@ export default createRoute({
         pick: ['info', 'nonexistent', 'alsoMissing'],
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('info')
-      expect(result).not.toContain('component')
+      expect(result?.code).toContain('info')
+      expect(result?.code).not.toContain('component')
     })
 
     it('throws error when no default export exists', async () => {
@@ -228,8 +248,8 @@ export default createRoute({
         pick: ['info', 'component'],
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('info')
-      expect(result).toContain('component')
+      expect(result?.code).toContain('info')
+      expect(result?.code).toContain('component')
     })
 
     it('preserves method shorthand properties', async () => {
@@ -244,8 +264,8 @@ export default createRoute({
         pick: ['info', 'loader'],
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('info')
-      expect(result).toContain('loader')
+      expect(result?.code).toContain('info')
+      expect(result?.code).toContain('loader')
     })
 
     it('works with TypeScript annotations', async () => {
@@ -260,8 +280,8 @@ export default createRoute({
         pick: ['info', 'component'],
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('info')
-      expect(result).toContain('component')
+      expect(result?.code).toContain('info')
+      expect(result?.code).toContain('component')
     })
 
     it('filters out arrow function properties not in pick', async () => {
@@ -278,10 +298,10 @@ export default createRoute({
         pick: ['info', 'component'],
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('info')
-      expect(result).toContain('component')
-      expect(result).not.toContain('preload')
-      expect(result).not.toContain('loader')
+      expect(result?.code).toContain('info')
+      expect(result?.code).toContain('component')
+      expect(result?.code).not.toContain('preload')
+      expect(result?.code).not.toContain('loader')
     })
 
     it('handles computed property names', async () => {
@@ -298,7 +318,7 @@ export default createRoute({
       }
       // Computed properties won't match by identifier check
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('component')
+      expect(result?.code).toContain('component')
     })
   })
 
@@ -317,9 +337,9 @@ export { route as default }
         pick: ['info', 'component'],
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('info')
-      expect(result).toContain('component')
-      expect(result).not.toContain('other')
+      expect(result?.code).toContain('info')
+      expect(result?.code).toContain('component')
+      expect(result?.code).not.toContain('other')
     })
 
     it('wraps with targetFn when provided', async () => {
@@ -336,7 +356,7 @@ export { route as default }
         targetFn: 'defineRoute',
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('defineRoute')
+      expect(result?.code).toContain('defineRoute')
     })
 
     it('throws error when function name does not match', async () => {
@@ -351,7 +371,7 @@ export { route as default }
         pick: ['info'],
       }
       await expect(extract(code, 'test.tsx', config)).rejects.toThrow(
-        'Expected function name to be "createRoute"',
+        'No default export with `createRoute({})`',
       )
     })
 
@@ -394,10 +414,10 @@ export default createRoute({
         pick: ['info', 'preload', 'matchFilters'],
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('info')
-      expect(result).toContain('preload')
-      expect(result).toContain('matchFilters')
-      expect(result).not.toContain('errorComponent')
+      expect(result?.code).toContain('info')
+      expect(result?.code).toContain('preload')
+      expect(result?.code).toContain('matchFilters')
+      expect(result?.code).not.toContain('errorComponent')
     })
 
     it('transforms to component wrapper', async () => {
@@ -414,7 +434,7 @@ export default createRoute({
         targetFn: '__wrapRoute',
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('__wrapRoute')
+      expect(result?.code).toContain('__wrapRoute')
     })
   })
 
@@ -433,10 +453,10 @@ export default createRoute({
         pick: ['loadingComponent'],
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('loadingComponent')
-      expect(result).not.toContain('component')
-      expect(result).not.toContain('errorComponent')
-      expect(result).not.toContain('info')
+      expect(result?.code).toContain('loadingComponent')
+      expect(result?.code).not.toContain('component')
+      expect(result?.code).not.toContain('errorComponent')
+      expect(result?.code).not.toContain('info')
     })
 
     it('extracts only errorComponent with ?error transform', async () => {
@@ -453,10 +473,10 @@ export default createRoute({
         pick: ['errorComponent'],
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('errorComponent')
-      expect(result).not.toContain('component')
-      expect(result).not.toContain('loadingComponent')
-      expect(result).not.toContain('info')
+      expect(result?.code).toContain('errorComponent')
+      expect(result?.code).not.toContain('component')
+      expect(result?.code).not.toContain('loadingComponent')
+      expect(result?.code).not.toContain('info')
     })
 
     it('extracts only component with ?comp transform', async () => {
@@ -474,11 +494,11 @@ export default createRoute({
         targetFn: '__comp',
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('__comp')
-      expect(result).toContain('component')
-      expect(result).not.toContain('errorComponent')
-      expect(result).not.toContain('loadingComponent')
-      expect(result).not.toContain('info')
+      expect(result?.code).toContain('__comp')
+      expect(result?.code).toContain('component')
+      expect(result?.code).not.toContain('errorComponent')
+      expect(result?.code).not.toContain('loadingComponent')
+      expect(result?.code).not.toContain('info')
     })
 
     it('handles missing loadingComponent gracefully', async () => {
@@ -494,7 +514,7 @@ export default createRoute({
       }
       const result = await extract(code, 'test.tsx', config)
       expect(result).toBeTruthy()
-      expect(result).not.toContain('loadingComponent')
+      expect(result?.code).not.toContain('loadingComponent')
     })
 
     it('handles missing errorComponent gracefully', async () => {
@@ -510,7 +530,7 @@ export default createRoute({
       }
       const result = await extract(code, 'test.tsx', config)
       expect(result).toBeTruthy()
-      expect(result).not.toContain('errorComponent')
+      expect(result?.code).not.toContain('errorComponent')
     })
 
     it('extracts loadingComponent from layout file', async () => {
@@ -526,8 +546,8 @@ export default createRoute({
         pick: ['loadingComponent'],
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('loadingComponent')
-      expect(result).toContain('Loading layout...')
+      expect(result?.code).toContain('loadingComponent')
+      expect(result?.code).toContain('Loading layout...')
     })
 
     it('extracts errorComponent from app file', async () => {
@@ -543,8 +563,8 @@ export default createRoute({
         pick: ['errorComponent'],
       }
       const result = await extract(code, 'test.tsx', config)
-      expect(result).toContain('errorComponent')
-      expect(result).toContain('GlobalErrorBoundary')
+      expect(result?.code).toContain('errorComponent')
+      expect(result?.code).toContain('GlobalErrorBoundary')
     })
   })
 
@@ -570,10 +590,10 @@ export default createRoute({
       const routeResult = await extract(code, 'shared.tsx', routeConfig, true, cacheKey)
       const componentResult = await extract(code, 'shared.tsx', componentConfig, true, cacheKey)
 
-      expect(routeResult).toContain('info')
-      expect(routeResult).not.toContain('component')
-      expect(componentResult).toContain('component')
-      expect(componentResult).not.toContain('info')
+      expect(routeResult?.code).toContain('info')
+      expect(routeResult?.code).not.toContain('component')
+      expect(componentResult?.code).toContain('component')
+      expect(componentResult?.code).not.toContain('info')
       expect(infoSpy).toHaveBeenCalledWith(`AST cache miss: ${cacheKey}`, { timestamp: false })
       expect(infoSpy).toHaveBeenCalledWith(`AST cache hit:  ${cacheKey}`, { timestamp: false })
 
@@ -599,8 +619,8 @@ export default createRoute({
         false,
       )
 
-      expect(result).toContain('after')
-      expect(result).not.toContain('before')
+      expect(result?.code).toContain('after')
+      expect(result?.code).not.toContain('before')
     })
 
     it('keeps SSR cache entries isolated for the same source', async () => {
@@ -651,8 +671,8 @@ export default createRoute({
 
       const result = await extract(afterCode, 'route.tsx', config, false)
 
-      expect(result).toContain('after')
-      expect(result).not.toContain('before')
+      expect(result?.code).toContain('after')
+      expect(result?.code).not.toContain('before')
     })
   })
 })

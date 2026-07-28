@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+
 import { glob } from 'tinyglobby'
 import { normalizePath } from 'vite'
 
@@ -137,7 +139,7 @@ export class RouteRegistry {
   async getDefinition(lazy: boolean): Promise<string> {
     const entries = this.getRouteInputs()
 
-    if (this.typesDirty) {
+    if (this.typesDirty || !existsSync(this.outputPath)) {
       generateRouteTypes(entries, this.outputPath, this.options.infoDts, this.pagesDir)
       this.typesDirty = false
     }
@@ -157,6 +159,16 @@ export class RouteRegistry {
 
   getWatchFiles(): string[] {
     return this.watchFiles
+  }
+
+  getStaticRoutes(): string[] {
+    return this.getEntries()
+      .map((entry) => getRoutePath(entry.routeId, this.pagesDir))
+      .filter(
+        (route): route is string =>
+          !!route && route !== '/404' && !route.includes(':') && !route.includes('*'),
+      )
+      .sort()
   }
 
   async loadRouteSourceModule(id: string): Promise<string | undefined> {
@@ -210,7 +222,12 @@ export class RouteRegistry {
   }
 
   private isRouteFileNormalized(file: string): boolean {
-    return file.startsWith(`${this.pagesDir}/`) && REG_IS_ROUTE_FILE.test(file)
+    if (!file.startsWith(`${this.pagesDir}/`) || !REG_IS_ROUTE_FILE.test(file)) {
+      return false
+    }
+
+    const relative = file.slice(this.pagesDir.length + 1)
+    return !this.options.ignore.some((pattern) => matchesGlob(relative, pattern))
   }
 
   private async scanCustomRouteSource(): Promise<RouteSourceEntry[]> {
@@ -454,4 +471,11 @@ function noChange(): RouteRegistryChange {
     changedModuleIds: [],
     changedFiles: [],
   }
+}
+
+function matchesGlob(file: string, pattern: string): boolean {
+  const normalized = normalizePath(pattern).replace(/^\.\//, '')
+  const escaped = normalized.replace(/[.+^$()|\\]/g, '\\$&')
+  const expression = escaped.replaceAll('**', '\0').replaceAll('*', '[^/]*').replaceAll('\0', '.*')
+  return new RegExp(`^(?:${expression}|.*/${expression})$`).test(file)
 }

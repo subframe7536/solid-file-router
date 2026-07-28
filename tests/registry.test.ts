@@ -44,7 +44,11 @@ vi.mock('../src/utils/route-type', async () => {
     await vi.importActual<typeof import('../src/utils/route-type')>('../src/utils/route-type')
   return {
     ...actual,
-    generateRouteTypes: vi.fn(() => 0),
+    generateRouteTypes: vi.fn((_files, output: string) => {
+      mkdirSync(join(output, '..'), { recursive: true })
+      writeFileSync(output, 'generated')
+      return 0
+    }),
   }
 })
 

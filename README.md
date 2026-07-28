@@ -1,5 +1,8 @@
 # solid-file-router
 
+An opinionated Solid + Vite file router. SSG is **build-time prerendering** only;
+the package does not provide a runtime SSR server.
+
 Type-safe file-based routing for Solid. It scans route modules, generates
 `@solidjs/router` route definitions, exposes a ready-to-render `<FileRouter />`,
 and writes route path types for navigation helpers.

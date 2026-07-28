@@ -124,14 +124,35 @@ function createSolidPluginStub(transformedCode: string): Plugin {
 }
 
 describe('fileRouter', () => {
+  it.each([
+    '<div id="root"></div>',
+    '<div class="app" id="root">\n</div>',
+    "<div id='root'></div>",
+    '<main id="root"></main>',
+    '<!--solid-file-router-outlet-->',
+  ])('renders supported SSG outlet %s', (outlet) => {
+    const html = `<html><head><title>app</title></head><body>${outlet}</body></html>`
+    const rendered = renderTemplate(html, 'root', '<p>rendered</p>')
+    expect(rendered).toContain('<p>rendered</p>')
+    expect(rendered).toContain('<title>app</title>')
+  })
+
+  it('rejects duplicate SSG outlet markers', () => {
+    expect(() =>
+      renderTemplate(
+        '<html><head></head><body><!--solid-file-router-outlet--><!--solid-file-router-outlet--></body></html>',
+        'root',
+        'app',
+      ),
+    ).toThrow('duplicate')
+  })
   it('throws a helpful SSG error when the configured root id is missing', () => {
     const html = '<html><head></head><body><div id="app"></div></body></html>'
 
     expect(() => renderTemplate(html, 'root', '<main>app</main>')).toThrow(
       [
-        '[solid-file-router] SSG could not find the app root element in index.html.',
-        'Expected to find: <div id="root"></div>',
-        "Either add that element to index.html, or set fileRouter({ ssg: { id: '...' } }) to match your root element id.",
+        '[solid-file-router] SSG could not find an outlet in index.html.',
+        'Add <!--solid-file-router-outlet--> or an element with id="root".',
       ].join('\n'),
     )
   })
@@ -142,7 +163,7 @@ describe('fileRouter', () => {
     const module = await plugin.load.handler()
 
     expect(module).toContain("import { createComponent } from 'solid-js'")
-    expect(module).toContain("import { StaticRouter } from '@solidjs/router'")
+    expect(module).toContain("import { Router } from '@solidjs/router'")
     expect(module).not.toContain('lazy(() => import(')
   })
 
@@ -271,7 +292,7 @@ export default createRoute({ component: () => <h1>missing</h1> })
         ssr: {
           build: {
             outDir: 'dist/server',
-            ssr: 'src/entry-server.tsx',
+            ssr: 'virtual:solid-file-router/prerender-entry',
             copyPublicDir: false,
           },
         },
@@ -304,35 +325,6 @@ export default createRoute({ component: () => <h1>missing</h1> })
         },
       },
     })
-  })
-
-  it('throws helpful error when ssg is enabled without vite-plugin-solid', async () => {
-    const root = createTempProject()
-    const [plugin] = fileRouter({
-      ssg: {},
-    })
-
-    await expect(
-      (plugin as any).configResolved({
-        root,
-        plugins: [],
-      }),
-    ).rejects.toThrow(/missing vite-plugin-solid/)
-  })
-
-  it('throws helpful error when ssg is enabled without solid ssr transform', async () => {
-    const root = createTempProject()
-    const [plugin] = fileRouter({
-      ssg: {},
-    })
-    const solidWithoutSsr = createSolidPluginStub('export default () => null')
-
-    await expect(
-      (plugin as any).configResolved({
-        root,
-        plugins: [solidWithoutSsr],
-      }),
-    ).rejects.toThrow(/must be configured with ssr: true/)
   })
 
   it('accepts ssg config when solid ssr transform is enabled', async () => {
