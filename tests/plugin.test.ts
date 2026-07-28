@@ -222,6 +222,7 @@ describe('fileRouter', () => {
 
     expect(module).toContain("import { createComponent } from 'solid-js'")
     expect(module).toContain("import { Router } from '@solidjs/router'")
+    expect(module).toContain('get url()')
     expect(module).not.toContain('lazy(() => import(')
   })
 
@@ -238,6 +239,7 @@ describe('fileRouter', () => {
 
     expect(module).toContain("import { createComponent, lazy } from 'solid-js'")
     expect(module).toContain("import { Router } from '@solidjs/router'")
+    expect(module).toContain('get url()')
     expect(module).toContain('lazy(() => import(')
   })
 

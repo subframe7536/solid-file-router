@@ -672,6 +672,9 @@ export const FileRouter = (props) => createComponent(Router, {
   get base() {
     return props.base
   },
+  get url() {
+    return props.url
+  },
   get root() {
     return Root
   },
