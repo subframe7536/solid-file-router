@@ -1,3 +1,5 @@
 import { subfLint } from '@subf/config/oxlint'
 
-export default subfLint()
+export default subfLint({
+  ignorePatterns: ['*.d.ts'],
+})

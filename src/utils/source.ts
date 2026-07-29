@@ -40,12 +40,12 @@ export interface RouteSourceProvider<TData = unknown> {
   filter: string
   /**
    * Optional custom glob implementation.
-   * @default The built-in tinyglobby `glob` function.
+   * @default (glob, filter, root) => glob(filter, { cwd: root, absolute: false })
    */
   glob?: RouteSourceGlob
   /**
    * Maps each discovered source path to its logical route entry.
-   * @default Returns `{ path }`.
+   * @default (path) => ({ path }).
    */
   transformPath?: (path: string) => RouteSourceEntry<TData>
   /** Loads the generated route module source. */
@@ -54,7 +54,7 @@ export interface RouteSourceProvider<TData = unknown> {
   ) => Promisable<string | null | undefined | false | void>
   /**
    * Additional files or globs that trigger provider rescans.
-   * @default `[]`.
+   * @default [].
    */
   watch?: string[]
 }
@@ -67,7 +67,7 @@ export interface FsRouteSourceOptions {
   filter?: string
   /**
    * Directory used by the default filter.
-   * @default `'src/pages'`.
+   * @default 'src/pages'.
    */
   pagesDir?: string
 }

@@ -13,9 +13,8 @@ export interface MdxOptions extends MdxCompileOptions {
    */
   filter?: string
   /**
-   * Directory used by the default filter.
-   * When configured through `fileRouter`, defaults to its `pagesDir`.
-   * @default `'src/pages'` when used directly.
+   * Directory used by the default filter, inherit from `FileRouterPluginOption.pagesDir` by default
+   * @default 'src/pages'
    */
   pagesDir?: string
 }
