@@ -90,7 +90,7 @@ import { fileRouter } from 'solid-file-router/plugin'
 | `output`         | `string`                     | `'src/routes.d.ts'`        | Generated declaration path                   |
 | `routeSource`    | `RouteSourceProvider<TData>` | `undefined`                | Replaces built-in directory scanning         |
 | `ignore`         | `string[]`                   | see below                  | Globs ignored by scanning and watcher events |
-| `reloadOnChange` | `boolean`                    | `false`                    | Deprecated full-reload escape hatch          |
+| `reloadOnChange` | `boolean`                    | `false`                    | Full-reload escape hatch for nonstandard HMR |
 | `lazy`           | `boolean`                    | client `true`, SSR `false` | Lazy component imports                       |
 | `infoDts`        | `InfoTypeDefinition`         | `undefined`                | Metadata declaration shape                   |
 | `verboseLog`     | `boolean`                    | `false`                    | Additional plugin logging                    |
@@ -103,8 +103,10 @@ Default ignores:
 ;['**/components/**', '**/node_modules/**', '**/dist/**']
 ```
 
-`reloadOnChange` is deprecated. Prefer Vite's normal HMR behavior. Structural
-route changes still trigger a full reload when required.
+Use `reloadOnChange` when generated route modules depend on external or
+provider-specific state that Vite cannot invalidate through its normal HMR
+module graph. Leave it disabled for ordinary route modules to preserve stateful
+HMR. Structural route changes still trigger a full reload when required.
 
 `lazy` can explicitly override either environment default. Loading and error
 boundaries are generated in both lazy and eager modes.
