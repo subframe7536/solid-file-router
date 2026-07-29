@@ -1,54 +1,60 @@
 # solid-file-router
 
-An opinionated Solid + Vite file router. SSG is **build-time prerendering** only;
-the package does not provide a runtime SSR server.
+Type-safe file-based routing for Solid and Vite.
 
-Type-safe file-based routing for Solid. It scans route modules, generates
-`@solidjs/router` route definitions, exposes a ready-to-render `<FileRouter />`,
-and writes route path types for navigation helpers.
+`solid-file-router` scans route modules, generates `@solidjs/router` route
+definitions, exposes a ready-to-render `<FileRouter />`, and writes route path
+types for navigation. It also supports nested layouts, loading and error
+inheritance, route metadata, custom route sources, and build-time SSG (Static Site Generation).
 
-ESM only.
+> [!WARNING]
+> This project is under active development and is still pre-1.0. Minor releases
+> may contain breaking changes. Review the release notes before upgrading.
+>
+> This package is ESM only.
 
-## What It Does
+## Features
 
-- Generates routes from `src/pages/**`
-- Generates `src/routes.d.ts` with typed paths, params, and route metadata
-- Exposes `virtual:routes` with `FileRouter`, `fileRoutes`, `Root`, and `routeInfo`
-- Supports `_app.tsx` root layout and nested `_layout.tsx` layouts
-- Inherits loading and error components from app/layout routes
-- Supports route `preload`, `matchFilters`, metadata, lazy loading, and SSG
-- Supports custom route providers for MDX, CMS, docs, or generated modules
+- File routes from `src/pages/**/*.{jsx,tsx}`
+- Generated path, parameter, and metadata types
+- `_app.tsx`, nested `_layout.tsx`, and `404.tsx` conventions
+- Route `preload`, `matchFilters`, metadata, and lazy components
+- Inherited loading and error components
+- Custom route providers for MDX, CMS, or generated modules
+- Build-time static HTML generation
 
-## When To Use It
+## Install
 
-Use `solid-file-router` when you want file-based routing while keeping direct
-control over your Solid and Vite setup.
-
-This package does not configure `vite-plugin-solid` for you. Add it in your app
-Vite config.
-
-## Quick Start
-
-Install:
+Install the router and the Solid/Vite dependencies:
 
 ```bash
-bun add solid-file-router vite-plugin-solid
+bun add solid-file-router @solidjs/router solid-js
+bun add -d vite vite-plugin-solid
 ```
+
+`@babel/core` and `tinyglobby` are already provided through
+`vite-plugin-solid` and Vite, so applications do not need to install them
+directly.
+
+This package does not configure `vite-plugin-solid`; keep that plugin in your
+application's Vite config.
+
+## Quick Start
 
 Configure Vite:
 
 ```ts
 // vite.config.ts
+import { fileRouter } from 'solid-file-router/plugin'
 import { defineConfig } from 'vite'
 import solidPlugin from 'vite-plugin-solid'
-import { fileRouter } from 'solid-file-router/plugin'
 
 export default defineConfig({
   plugins: [solidPlugin(), fileRouter()],
 })
 ```
 
-Add generated route types:
+Load the generated virtual-module types:
 
 ```jsonc
 // tsconfig.json
@@ -57,17 +63,6 @@ Add generated route types:
     "types": ["solid-file-router/client"],
   },
 }
-```
-
-Create the required root route:
-
-```tsx
-// src/pages/_app.tsx
-import { createRoute } from 'solid-file-router'
-
-export default createRoute({
-  component: (props) => <main>{props.children}</main>,
-})
 ```
 
 Create a page:
@@ -88,417 +83,47 @@ Render the generated router:
 import { render } from 'solid-js/web'
 import { FileRouter } from 'virtual:routes'
 
-render(() => <FileRouter />, document.getElementById('app')!)
+render(() => <FileRouter />, document.getElementById('root')!)
 ```
 
-## Agent Map
+An `_app.tsx` root layout is recommended but optional. Without one, the plugin
+generates a pass-through root component.
 
-Use this section when editing or integrating the package.
+## Documentation
 
-| Task                                | Read                                                         |
-| ----------------------------------- | ------------------------------------------------------------ |
-| Add a route                         | [Route Files](#route-files), [Route Modules](#route-modules) |
-| Understand generated URLs           | [File Conventions](#file-conventions)                        |
-| Use generated route output          | [Generated Virtual Module](#generated-virtual-module)        |
-| Add route metadata                  | [Route Metadata](#route-metadata)                            |
-| Add loading/error fallbacks         | [Component Inheritance](#component-inheritance)              |
-| Configure the Vite plugin           | [Plugin Options](#plugin-options)                            |
-| Build static HTML                   | [SSG Prerendering](#ssg-prerendering)                        |
-| Generate routes from another source | [Custom Route Sources](#custom-route-sources)                |
+| Document                       | Use it for                                                            |
+| ------------------------------ | --------------------------------------------------------------------- |
+| [Guide](docs/guide.md)         | Installation, routing workflows, layouts, SSG, and custom sources     |
+| [Reference](docs/reference.md) | File conventions, plugin options, generated modules, and runtime APIs |
+| [Agent Guide](docs/agents.md)  | Integration recipes, repository map, invariants, and verification     |
 
-## Core Concepts
+Common tasks:
 
-### Route Files
+| Task                              | Start here                                                                   |
+| --------------------------------- | ---------------------------------------------------------------------------- |
+| Add or rename a route             | [File conventions](docs/guide.md#file-conventions)                           |
+| Load route data                   | [Data preloading](docs/guide.md#data-preloading)                             |
+| Add loading or error UI           | [Loading and error inheritance](docs/guide.md#loading-and-error-inheritance) |
+| Generate static HTML              | [SSG](docs/guide.md#ssg)                                                     |
+| Generate routes from MDX or a CMS | [Custom route sources](docs/guide.md#custom-route-sources)                   |
+| Look up an option or API          | [Reference](docs/reference.md)                                               |
 
-Routes live in `src/pages` by default. Every route, layout, and app file must
-default-export `createRoute(...)`.
+## SSG
 
-```tsx
-import { createRoute } from 'solid-file-router'
-
-export default createRoute({
-  component: () => <div>Page</div>,
-})
-```
-
-### Generated Virtual Module
-
-Import generated routes from `virtual:routes`:
-
-```tsx
-import { FileRouter, Root, fileRoutes, routeInfo } from 'virtual:routes'
-```
-
-| Export       | Use                                             |
-| ------------ | ----------------------------------------------- |
-| `FileRouter` | Ready-to-render router component                |
-| `fileRoutes` | Raw `RouteDefinition[]` for custom router setup |
-| `Root`       | Generated root component from `_app.tsx`        |
-| `routeInfo`  | Metadata keyed by route pattern                 |
-
-### Generated Types
-
-The plugin writes `src/routes.d.ts` by default. It augments:
-
-- `solid-file-router` route path and metadata types
-- `@solidjs/router` `A`, `Navigator`, and `redirect` path types
-
-## File Conventions
-
-```txt
-src/pages/
-  _app.tsx              # required root layout
-  index.tsx             # /
-  about.tsx             # /about
-  404.tsx               # catch-all route
-
-  blog/
-    _layout.tsx         # wraps /blog/*
-    index.tsx           # /blog
-    [id].tsx            # /blog/:id
-
-  -[lang]/
-    index.tsx           # /:lang?
-
-  (auth)/
-    login.tsx           # /login
-
-  path.to.some.url.tsx  # /path/to/some/url
-```
-
-| Convention       | File                      | URL               |
-| ---------------- | ------------------------- | ----------------- |
-| Root app         | `pages/_app.tsx`          | wraps every route |
-| Index            | `pages/index.tsx`         | `/`               |
-| Nested index     | `pages/blog/index.tsx`    | `/blog`           |
-| Static segment   | `pages/about.tsx`         | `/about`          |
-| Dynamic param    | `pages/blog/[id].tsx`     | `/blog/:id`       |
-| Optional segment | `pages/-[lang]/index.tsx` | `/:lang?`         |
-| Dot notation     | `pages/a.b.c.tsx`         | `/a/b/c`          |
-| Pathless group   | `pages/(auth)/login.tsx`  | `/login`          |
-| 404              | `pages/404.tsx`           | `*`               |
-| Layout           | `pages/blog/_layout.tsx`  | wraps `/blog/*`   |
-
-## Route Modules
-
-`createRoute(config)` returns the route config unchanged. The plugin extracts
-specific properties at build time.
-
-```tsx
-import { createRoute } from 'solid-file-router'
-
-export default createRoute({
-  info: {
-    title: 'Dashboard',
-  },
-  preload: async () => fetch('/api/stats').then((res) => res.json()),
-  loadingComponent: () => <div>Loading...</div>,
-  errorComponent: (props) => (
-    <section>
-      <p>{props.error.message}</p>
-      <button onClick={props.reset}>Retry</button>
-    </section>
-  ),
-  component: (props) => <pre>{JSON.stringify(props.data)}</pre>,
-})
-```
-
-| Property           | Required | Use                                                   |
-| ------------------ | -------- | ----------------------------------------------------- |
-| `component`        | yes      | Page or layout component                              |
-| `preload`          | no       | Async data loader passed to `@solidjs/router`         |
-| `loadingComponent` | no       | Suspense fallback for this route or descendants       |
-| `errorComponent`   | no       | Error boundary fallback for this route or descendants |
-| `info`             | no       | Route metadata                                        |
-| `matchFilters`     | no       | Param validation                                      |
-| `inherit`          | no       | Per-route loading/error inheritance control           |
-
-## Navigation
-
-Use generated path types with router APIs, or build paths with `generatePath`.
-
-```tsx
-import { generatePath } from 'solid-file-router'
-
-const href = generatePath('/blog/:id', {
-  $id: '42',
-  ref: 'home',
-})
-// /blog/42?ref=home
-```
-
-Param keys use a `$` prefix. Other keys become query parameters.
-
-## Route Metadata
-
-Add metadata in route modules:
-
-```tsx
-export default createRoute({
-  info: {
-    title: 'Blog',
-    auth: { required: false },
-  },
-  component: () => <h1>Blog</h1>,
-})
-```
-
-Define metadata types in the plugin config:
+SSG renders static HTML during `vite build`; it does not provide a runtime SSR
+server. Enable Solid's SSR transform and pass an `ssg` object to the router:
 
 ```ts
-fileRouter({
-  infoDts: {
-    title: 'string',
-    description: 'string',
-    auth: {
-      required: 'boolean',
-    },
-    tags: 'string[]',
-  },
-})
-```
-
-Or reuse an existing interface. `from` is emitted relative to the generated
-declaration file, and the imported type must be compatible with an object
-interface:
-
-```ts
-fileRouter({
-  infoDts: {
-    type: 'import',
-    from: '../docs/build/routes',
-    name: 'DocsRouteInfo',
-  },
-})
-```
-
-Read metadata from router matches:
-
-```tsx
-import { useCurrentMatches } from '@solidjs/router'
-import { readRouteInfo } from 'solid-file-router'
-
-const matches = useCurrentMatches()
-const info = () => readRouteInfo(matches())
-```
-
-Or read generated metadata directly:
-
-```ts
-import { routeInfo } from 'virtual:routes'
-
-const home = routeInfo['/']
-```
-
-## Layouts
-
-`_app.tsx` is required and wraps every route.
-
-```tsx
-// src/pages/_app.tsx
-import { createRoute } from 'solid-file-router'
-
-export default createRoute({
-  component: (props) => <main>{props.children}</main>,
-})
-```
-
-`_layout.tsx` wraps child routes in its directory.
-
-```tsx
-// src/pages/settings/_layout.tsx
-import { A } from '@solidjs/router'
-import { createRoute } from 'solid-file-router'
-
-export default createRoute({
-  component: (props) => (
-    <section>
-      <nav>
-        <A href="/settings/profile">Profile</A>
-        <A href="/settings/account">Account</A>
-      </nav>
-      {props.children}
-    </section>
-  ),
-})
-```
-
-## Component Inheritance
-
-Loading and error components cascade from app to layout to route:
-
-```txt
-route component
-nearest _layout.tsx
-src/pages/_app.tsx
-none
-```
-
-Define app-wide defaults:
-
-```tsx
-// src/pages/_app.tsx
-import { createRoute } from 'solid-file-router'
-
-export default createRoute({
-  component: (props) => <main>{props.children}</main>,
-  loadingComponent: () => <div>Loading...</div>,
-  errorComponent: (props) => (
-    <section>
-      <h1>Error</h1>
-      <p>{props.error.message}</p>
-      <button onClick={props.reset}>Retry</button>
-    </section>
-  ),
-})
-```
-
-Override at layout or route level:
-
-```tsx
-export default createRoute({
-  component: (props) => <section>{props.children}</section>,
-  loadingComponent: () => <div>Loading dashboard...</div>,
-})
-```
-
-Disable inheritance per route:
-
-```tsx
-export default createRoute({
-  component: () => <SpecialPage />,
-  inherit: false,
-})
-```
-
-Disable only one channel:
-
-```tsx
-export default createRoute({
-  component: () => <SpecialPage />,
-  inherit: { error: false },
-})
-```
-
-Configure inheritance globally:
-
-```ts
-fileRouter({
-  inheritance: {
-    enabled: true,
-    inheritLoading: true,
-    inheritError: true,
-  },
-})
-```
-
-## Custom Router Setup
-
-`FileRouter` is the default integration:
-
-```tsx
-import { render } from 'solid-js/web'
-import { FileRouter } from 'virtual:routes'
-
-render(() => <FileRouter base="/app" />, document.getElementById('app')!)
-```
-
-Use `fileRoutes` and `Root` for manual `@solidjs/router` setup:
-
-```tsx
-import { Router } from '@solidjs/router'
-import { render } from 'solid-js/web'
-import { Root, fileRoutes } from 'virtual:routes'
-
-render(
-  () => (
-    <Router root={(props) => <Root>{props.children}</Root>} preload={true}>
-      {fileRoutes}
-    </Router>
-  ),
-  document.getElementById('app')!,
-)
-```
-
-## SSG Prerendering
-
-Enable SSG with `fileRouter({ ssg })`.
-
-Requirements:
-
-- Use `vite-plugin-solid({ ssr: true })`
-- Use `createClientEntry(...)` in the browser entry
-- Ensure `index.html` contains either the configured root element (default `root`)
-  or the SSG outlet marker
-
-When `ssg.serverEntry` is omitted, the plugin provides the build-time renderer
-internally. You can provide a custom server entry when you need custom server
-rendering behavior.
-
-### SSG HTML markers
-
-The HTML markers are optional:
-
-- `<!--solid-file-router-outlet-->` marks where the prerendered application
-  should be inserted.
-- `<!--solid-file-router-head-->` marks where Solid's hydration bootstrap
-  should be inserted.
-
-If the markers are omitted, the plugin falls back to replacing the contents of
-the element whose `id` matches `ssg.id` and inserting the hydration bootstrap
-immediately before `</head>`. With the default configuration, this means a
-simple `<div id="root"></div>` and a normal `<head>...</head>` are sufficient.
-
-Use one outlet strategy at a time. When the outlet marker is present, it is
-replaced with `<div id="{ssg.id}">...</div>`; do not also keep another element
-with the same id in the template. Duplicate outlet markers are rejected during
-the build.
-
-For a template that needs an explicit insertion point, use:
-
-```html
-<head>
-  <!--solid-file-router-head-->
-</head>
-<body>
-  <!--solid-file-router-outlet-->
-  <script type="module" src="/src/index.tsx"></script>
-</body>
-```
-
-Client entry:
-
-```tsx
-// src/index.tsx
-import { FileRouter } from 'virtual:routes'
-import { createClientEntry } from 'solid-file-router'
-
-createClientEntry(() => <FileRouter />, document.getElementById('root')!)
-```
-
-Optional custom server entry:
-
-```tsx
-// src/entry-server.tsx
-import { FileRouter } from 'virtual:routes'
-import { createServerEntry } from 'solid-file-router'
-
-export default createServerEntry((props) => <FileRouter {...props} />)
-```
-
-Vite config:
-
-```ts
+// vite.config.ts
+import { fileRouter } from 'solid-file-router/plugin'
 import { defineConfig } from 'vite'
 import solidPlugin from 'vite-plugin-solid'
-import { fileRouter } from 'solid-file-router/plugin'
 
 export default defineConfig({
   plugins: [
     solidPlugin({ ssr: true }),
     fileRouter({
       ssg: {
-        id: 'root',
         routes: ['/', '/about'],
         concurrency: 4,
       },
@@ -507,228 +132,44 @@ export default defineConfig({
 })
 ```
 
-To use the custom server entry above, set `serverEntry: 'src/entry-server.tsx'`
-inside the `ssg` options. Existing custom server entries remain supported.
-
-Custom server router:
+Use `createClientEntry` so production builds hydrate prerendered HTML:
 
 ```tsx
+// src/index.tsx
+import { createClientEntry } from 'solid-file-router'
 import { FileRouter } from 'virtual:routes'
-import { createServerEntry } from 'solid-file-router'
 
-export default createServerEntry((props) => <FileRouter base="/docs" url={props.url} />)
-```
-
-See `playground/vite.ssg.config.ts` for a runnable example.
-
-## Custom Route Sources
-
-Use `routeSource` when route modules come from MDX, a CMS, docs, or generated
-files. When `routeSource` is provided, `pagesDir` scanning is disabled.
-
-```ts
-import { fileRouter } from 'solid-file-router/plugin'
-
-fileRouter({
-  routeSource: {
-    scan: () => [
-      {
-        routeId: '/',
-        routePath: '_app.tsx',
-        sourcePath: 'docs/routes/_app.tsx',
-      },
-      {
-        routeId: '/button',
-        routePath: '(general)/button.tsx',
-        sourcePath: 'docs/button.mdx',
-      },
-      {
-        routeId: '/404',
-        routePath: '404.tsx',
-        sourcePath: 'docs/routes/404.tsx',
-      },
-    ],
-    load(entry) {
-      if (entry.routePath === '_app.tsx') {
-        return `import { createRoute } from 'solid-file-router'
-export default createRoute({ component: (props) => <main>{props.children}</main> })`
-      }
-
-      if (entry.routeId === '/button') {
-        return `import { createRoute } from 'solid-file-router'
-export default createRoute({ info: { title: 'Button' }, component: () => <h1>Button</h1> })`
-      }
-
-      return `import { createRoute } from 'solid-file-router'
-export default createRoute({ component: () => <h1>Not found</h1> })`
-    },
-    watchFiles: ['docs'],
-  },
-})
-```
-
-Provider types:
-
-```ts
-interface RouteSourceEntry<TData = unknown> {
-  routeId?: string
-  routePath: string
-  sourcePath: string
-  data?: TData
-}
-
-interface RouteSourceLoadContext<TData = unknown> {
-  routeId: string
-  routePath: string
-  sourcePath: string
-  moduleId: string
-  data?: TData
-}
-
-interface RouteSourceProvider<TData = unknown> {
-  scan: string | ((glob, root: string) => Promisable<RouteSourceEntry<TData>[]>)
-  load: (
-    entry: RouteSourceLoadContext<TData>,
-  ) => Promisable<string | null | undefined | false | void>
-  watchFiles?: string[]
-}
-```
-
-| Field        | Controls                                                                 |
-| ------------ | ------------------------------------------------------------------------ |
-| `routeId`    | Optional public URL and route ID; derived from `routePath` when omitted  |
-| `routePath`  | File-router semantics such as `_app`, `_layout`, groups, and inheritance |
-| `sourcePath` | Source identity used for generated facade modules                        |
-| `data`       | Provider-private scan data passed unchanged to `load`                    |
-| `load`       | Full route module source                                                 |
-| `watchFiles` | Extra HMR paths; supports directories, include globs, and `!` exclusions |
-
-`watchFiles` entries are resolved from Vite's root. Literal paths match the
-path and its descendants. Glob patterns only react to matching files; route
-source files always react to their own exact `sourcePath`.
-
-### Typed scan data
-
-Use `defineRouteSource` to carry a complete scanned record from `scan` to
-`load`, without a separate cache or lookup:
-
-```ts
-import { defineRouteSource } from 'solid-file-router/plugin'
-
-interface DocsSourceData {
-  title: string
-  importPath: string
-}
-
-const routeSource = defineRouteSource<DocsSourceData>({
-  scan: async () => [
-    {
-      routePath: '(general)/button.tsx',
-      sourcePath: 'docs/pages/button.mdx',
-      data: { title: 'Button', importPath: './button.mdx' },
-    },
-  ],
-  load: ({ data }) => {
-    if (!data) {
-      return
-    }
-
-    const title = JSON.stringify(data.title)
-    const importPath = JSON.stringify(data.importPath)
-    return `import Page from ${importPath}
-import { createRoute } from 'solid-file-router'
-export default createRoute({ info: { title: ${title} }, component: Page })`
-  },
-  watchFiles: ['docs/pages/**/*.mdx', '!docs/pages/**/_*.mdx'],
-})
-
-fileRouter({ routeSource })
-```
-
-`data` exists only in the build process. It is not serialized, cloned, or
-available after a process restart; include any source text needed by `load` in
-the data returned by `scan`.
-
-## Plugin Options
-
-Pass options to `fileRouter(options)` in `vite.config.ts`.
-
-| Option           | Default                                                    | Use                                       |
-| ---------------- | ---------------------------------------------------------- | ----------------------------------------- |
-| `pagesDir`       | `'src/pages'`                                              | Route file directory                      |
-| `output`         | `'src/routes.d.ts'`                                        | Generated type declaration path           |
-| `ignore`         | `['**/components/**', '**/node_modules/**', '**/dist/**']` | Glob patterns to skip                     |
-| `reloadOnChange` | `false`                                                    | Full page reload on route file HMR        |
-| `lazy`           | client: `true`, SSR: `false`                               | Lazy route component imports              |
-| `infoDts`        | `undefined`                                                | Generated metadata type shape             |
-| `verboseLog`     | `false`                                                    | Extra plugin logging                      |
-| `inheritance`    | `{ enabled: true }`                                        | Global loading/error inheritance behavior |
-| `routeSource`    | `undefined`                                                | Custom route provider                     |
-| `ssg`            | `undefined`                                                | Static prerender config                   |
-
-## Runtime API
-
-### `createRoute(config)`
-
-Defines a route module. It must be the default export of route, layout, and app
-files.
-
-```ts
-function createRoute<T>(config: RouteConfig<T>): RouteConfig<T>
-```
-
-### `generatePath(path, params)`
-
-Builds a typed URL from a route pattern.
-
-```ts
-generatePath('/blog/:id', { $id: '42', ref: 'home' })
-```
-
-### `readRouteInfo(matches)`
-
-Returns metadata from the deepest route match.
-
-```ts
-const info = readRouteInfo(matches)
-```
-
-### `createClientEntry(component, mount)`
-
-Client render helper for SSG-aware hydration.
-
-```ts
 createClientEntry(() => <FileRouter />, document.getElementById('root')!)
 ```
 
-### `createServerEntry(component)`
+When `routes` is omitted, the internal renderer prerenders every concrete static
+route and skips dynamic patterns. The build writes browser assets and HTML to
+`dist/client` by default and always emits `404.html` for static-host fallback.
+Your `index.html` only needs a normal `<head>` and `<div id="root"></div>`;
+explicit outlet and head markers are available for custom templates.
 
-Creates the server renderer used by SSG from an explicit root component.
+See the [SSG guide](docs/guide.md#ssg) for custom server entries, HTML markers,
+route output rules, and failure cases.
 
-```tsx
-import { createServerEntry } from 'solid-file-router'
-import { FileRouter } from 'virtual:routes'
+## Custom Route Sources
 
-export default createServerEntry((props) => <FileRouter base={props.base} url={props.url} />)
-```
+Use `routeSource` when route modules come from outside `src/pages`. Providing a
+custom source disables built-in directory scanning. See the
+[custom route source guide](docs/guide.md#custom-route-sources).
 
 ## Development
 
-This repository uses Bun.
+This repository uses Bun:
 
 ```bash
 bun run build
 bun run test
 bun run lint
 bun run typecheck
-bun run qa
 ```
 
-Run the playground:
-
-```bash
-bun run play
-```
+Run the playground with `bun run play`. Repository-specific instructions are in
+[AGENTS.md](AGENTS.md).
 
 ## License
 
