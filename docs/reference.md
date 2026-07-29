@@ -204,8 +204,11 @@ For setup, output examples, custom entries, and troubleshooting, see the
 optional peer dependency, and MDX requires program output.
 
 `solid-file-router/mdx` exports `MDXProvider`, `useMDXComponents`,
-`MDXComponent`, and `MDXComponents`. See the [MDX guide](mdx.md) for setup and
-component override examples.
+`MDXComponent`, and `MDXComponents`. `MDXComponents` preserves Solid intrinsic
+HTML and SVG props while accepting arbitrary authored component names, including
+`wrapper` and `RouteOutlet`; this typing provides compile-time assistance and
+does not perform runtime prop validation. See the [MDX guide](mdx.md) for setup
+and component override examples.
 
 ## Custom Route Provider Reference
 

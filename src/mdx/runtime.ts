@@ -1,11 +1,18 @@
 import { createComponent, createContext, mergeProps, useContext } from 'solid-js'
-import type { JSX, ParentProps } from 'solid-js'
+import type { Component, JSX, ParentProps } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
 
 /** A component that can override an MDX element or component. */
-export type MDXComponent = (props: Record<string, unknown>) => JSX.Element
+export type MDXComponent<Props extends Record<string, any> = Record<string, unknown>> =
+  Component<Props>
 /** Component overrides supplied to `MDXProvider` or `useMDXComponents`. */
-export type MDXComponents = Record<string, MDXComponent>
+export type MDXComponents = {
+  [Name in keyof JSX.IntrinsicElements]?: MDXComponent<JSX.IntrinsicElements[Name]>
+} & {
+  [name: string]: MDXComponent<any> | undefined
+  RouteOutlet?: MDXComponent<ParentProps>
+  wrapper?: MDXComponent<ParentProps>
+}
 
 const intrinsicNames = [
   'a',

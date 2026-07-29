@@ -63,10 +63,14 @@ with `MDXProvider` to override elements for every descendant document:
 // src/pages/_app.tsx
 import { createRoute } from 'solid-file-router'
 import { MDXProvider } from 'solid-file-router/mdx'
+import type { MDXComponents } from 'solid-file-router/mdx'
 
-const components = {
+const components: MDXComponents = {
   h1: (props) => <h1 class="page-title" {...props} />,
   a: (props) => <a class="content-link" {...props} />,
+  Callout: (props: { tone: 'info' | 'warning' }) => (
+    <aside data-tone={props.tone}>{props.tone}</aside>
+  ),
 }
 
 export default createRoute({
@@ -76,8 +80,10 @@ export default createRoute({
 
 Nested providers merge with their parent. Locally supplied values take
 precedence. `useMDXComponents(localComponents)` exposes the same merged map for
-custom integrations. The package also exports the `MDXComponent` and
-`MDXComponents` types.
+custom integrations. `MDXComponents` gives intrinsic overrides their Solid HTML
+or SVG props and keeps authored component names open. This is compile-time
+assistance; runtime code does not validate component props. The package also
+exports the `MDXComponent` type for explicitly typed custom components.
 
 ## Configuration
 
