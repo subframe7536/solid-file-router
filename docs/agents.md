@@ -32,7 +32,8 @@ Do not duplicate those rules here.
 | Navigate dynamically | Call `generatePath` with `$`-prefixed path parameters               | Result contains no unresolved `:param`              |
 | Add metadata         | Define `info` and configure `infoDts`                               | `FileRouteInfo` and `routeInfo` are typed           |
 | Add SSG              | Enable Solid SSR, add `ssg`, and use `createClientEntry`            | Build emits `dist/client/index.html` and `404.html` |
-| Use MDX/CMS          | Provide `routeSource.scan` and `routeSource.load`                   | Every entry returns valid route module source       |
+| Use built-in MDX     | Install Satteri and set `mdx: true`                                | `.md`/`.mdx` routes are generated and render        |
+| Use a CMS/source     | Provide `routeSource.transformPath` and `routeSource.load`         | Every entry returns valid route module source       |
 
 Use [guide.md](guide.md) for workflows and [reference.md](reference.md) for exact
 options and types.
@@ -125,8 +126,8 @@ sites before changing an exported type or generated wire shape.
 
 ### Custom route sources
 
-- Normalized `routeId`, `routePath`, and `sourcePath` values are unique.
-- `routeId` derives from `routePath` when omitted.
+- Normalized `routeId`, logical `path`, and `sourcePath` values are unique.
+- `routeId` derives from logical `path` when omitted.
 - `data` passes through the current process without serialization.
 - `load` must return module source for every route entry.
 - HMR respects literal paths, include globs, exclusions, and exact source paths.
@@ -167,11 +168,13 @@ Before changing documentation, verify claims in this order:
 4. Runnable configuration in `playground`
 5. Existing prose
 
-Keep the four documents distinct:
+Keep the documentation surfaces distinct:
 
 - `README.md`: positioning, installation, shortest working setup, navigation
 - `docs/guide.md`: task-oriented consumer workflows
 - `docs/reference.md`: complete public behavior and exact defaults
+- `docs/ssg.md`: the end-to-end static generation workflow
+- `docs/mdx.md`: built-in Markdown/MDX setup and component customization
 - `docs/agents.md`: deterministic integration and maintenance instructions
 
 Do not copy a full reference section back into the README. Link to the owning

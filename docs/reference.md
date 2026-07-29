@@ -8,7 +8,8 @@ project is pre-1.0; minor releases may introduce breaking changes.
 | Import                     | Contents                                               |
 | -------------------------- | ------------------------------------------------------ |
 | `solid-file-router`        | Runtime functions and route types                      |
-| `solid-file-router/plugin` | Vite plugin, route source helpers, and plugin types    |
+| `solid-file-router/plugin` | Vite plugin, route source factories, and plugin types  |
+| `solid-file-router/mdx`    | MDX provider, component hook, and component types      |
 | `solid-file-router/client` | Declaration for `virtual:routes`                       |
 | `virtual:routes`           | Generated router components, definitions, and metadata |
 
@@ -16,8 +17,9 @@ The package is ESM only.
 
 ## File Route Reference
 
-The built-in scanner reads `**/*.{jsx,tsx}` below `pagesDir` and applies
-`ignore`. It does not scan `.mdx`; use `routeSource` for non-JSX sources.
+The always-on filesystem source reads `**/*.{jsx,tsx}` below `pagesDir` and
+applies `ignore`. Enable `mdx` to add `.md` and `.mdx` discovery; both sources
+use the same file-to-route conventions.
 
 | Input relative to `pagesDir` | Generated path          |
 | ---------------------------- | ----------------------- |
@@ -84,18 +86,19 @@ Import `fileRouter` from `solid-file-router/plugin`:
 import { fileRouter } from 'solid-file-router/plugin'
 ```
 
-| Option           | Type                         | Default                    | Behavior                                     |
-| ---------------- | ---------------------------- | -------------------------- | -------------------------------------------- |
-| `pagesDir`       | `string`                     | `'src/pages'`              | Built-in route directory                     |
-| `output`         | `string`                     | `'src/routes.d.ts'`        | Generated declaration path                   |
-| `routeSource`    | `RouteSourceProvider<TData>` | `undefined`                | Adds custom route sources                    |
-| `ignore`         | `string[]`                   | see below                  | Globs ignored by scanning and watcher events |
-| `reloadOnChange` | `boolean`                    | `false`                    | Full-reload escape hatch for nonstandard HMR |
-| `lazy`           | `boolean`                    | client `true`, SSR `false` | Lazy component imports                       |
-| `infoDts`        | `InfoTypeDefinition`         | `undefined`                | Metadata declaration shape                   |
-| `verboseLog`     | `boolean`                    | `false`                    | Additional plugin logging                    |
-| `inheritance`    | `InheritanceConfig`          | `{ enabled: true }`        | Global component inheritance                 |
-| `ssg`            | SSG config                   | `undefined`                | Enables build-time prerendering              |
+| Option | Type | Default | Behavior |
+| --- | --- | --- | --- |
+| `pagesDir` | `string` | `'src/pages'` | Built-in JSX/TSX directory; inherited by MDX |
+| `output` | `string` | `'src/routes.d.ts'` | Generated declaration path |
+| `routeSource` | provider or provider array | `undefined` | Appends custom sources after built-in sources |
+| `mdx` | `boolean \| MdxOptions` | `false` | Adds Satteri-backed Markdown/MDX routes |
+| `ignore` | `string[]` | see below | Globs ignored by discovery and watchers |
+| `reloadOnChange` | `boolean` | `false` | Full-reload escape hatch for nonstandard HMR |
+| `lazy` | `boolean` | client `true`, SSR `false` | Controls lazy component imports |
+| `infoDts` | `InfoTypeDefinition` | `undefined` | Metadata declaration shape |
+| `verboseLog` | `boolean` | `false` | Additional plugin logging |
+| `inheritance` | `InheritanceConfig` | `{ enabled: true }` | Global component inheritance |
+| `ssg` | `SsgConfig` | `undefined` | Enables build-time prerendering |
 
 Default ignores:
 
@@ -189,10 +192,30 @@ SSG behavior:
   hydration bootstrap immediately before `</head>`.
 - Rejects duplicate outlet markers and missing outlet/head insertion points.
 
+For setup, output examples, custom entries, and troubleshooting, see the
+[SSG guide](ssg.md).
+
+## MDX Options and Runtime
+
+`mdx: true` scans `<pagesDir>/**/*.{md,mdx}`. An options object accepts Satteri's
+`MdxCompileOptions` plus `filter?: string` and `pagesDir?: string`. The plugin's
+`pagesDir` is inherited unless the MDX object supplies its own. Satteri is an
+optional peer dependency, and MDX requires program output.
+
+`solid-file-router/mdx` exports `MDXProvider`, `useMDXComponents`,
+`MDXComponent`, and `MDXComponents`. See the [MDX guide](mdx.md) for setup and
+component override examples.
+
 ## Custom Route Source Reference
 
 ```ts
 type Promisable<T> = T | Promise<T>
+
+type RouteSourceGlob = (
+  glob: typeof import('tinyglobby').glob,
+  filter: string,
+  root: string,
+) => Promisable<string[]>
 
 interface RouteSourceEntry<TData = unknown> {
   path: string
@@ -201,8 +224,8 @@ interface RouteSourceEntry<TData = unknown> {
 }
 
 interface RouteSourceLoadContext<TData = unknown> {
-  routeId: string
   path: string
+  routeId: string
   sourcePath: string
   moduleId: string
   data?: TData
@@ -210,45 +233,44 @@ interface RouteSourceLoadContext<TData = unknown> {
 
 interface RouteSourceProvider<TData = unknown> {
   filter: string
-  glob?: (
-    glob: typeof import('tinyglobby').glob,
-    filter: string,
-    root: string,
-  ) => Promisable<string[]>
+  glob?: RouteSourceGlob
   transformPath?: (path: string) => RouteSourceEntry<TData>
-  load: (
-    entry: RouteSourceLoadContext<TData>,
-  ) => Promisable<string | null | undefined | false | void>
+  load: (entry: RouteSourceLoadContext<TData>) =>
+    Promisable<string | null | undefined | false | void>
   watch?: string[]
 }
 ```
 
-Use `defineRouteSource<TData>(provider)` to preserve generic inference between
-`scan` and `load`.
+`defineRouteSource<TData>(provider)` preserves generic inference and supplies
+the default glob and identity path transform. `FsRouter(options?)` creates a
+JSX/TSX filesystem provider; `MdxRouter(options?)` creates a Satteri-backed
+Markdown/MDX provider. Their option types are exported as `FsRouterOptions` and
+`MdxOptions`.
 
-| Field        | Behavior                                                       |
-| ------------ | -------------------------------------------------------------- |
-| `routeId`    | Public route ID and URL; derived from `routePath` when omitted |
-| `routePath`  | File-router semantics, layout ancestry, and default route ID   |
-| `sourcePath` | Source identity used for HMR and generated facade modules      |
-| `moduleId`   | Generated module identity passed only to `load`                |
-| `data`       | Build-process data passed unchanged from `scan` to `load`      |
-| `watchFiles` | Additional HMR paths relative to Vite root                     |
+| Field | Behavior |
+| --- | --- |
+| `filter` | Discovery glob relative to the Vite root |
+| `glob` | Optional discovery implementation; receives tinyglobby, filter, and root |
+| `transformPath` | Maps a discovered source path to its logical `path`, optional `routeId`, and `data` |
+| `path` | Logical file path controlling route conventions and layout ancestry |
+| `routeId` | Optional public ID; derived from the logical path when omitted |
+| `sourcePath` | Original discovered path used for source identity and HMR |
+| `moduleId` | Generated facade module identity passed to `load` |
+| `data` | In-process value passed unchanged from `transformPath` to `load` |
+| `watch` | Additional files/globs that cause the provider to rescan |
 
-`path` and source path must be unique after normalization. `load` must return module source for
-every entry or the plugin throws.
+Normalized route IDs, logical paths, and source paths must be unique across all
+sources. `load` must return non-empty route module source for every entry.
 
 Watcher behavior:
 
-- Literal `watchFiles` paths match that path and descendants.
-- Include globs react only to matching files.
-- Patterns prefixed with `!` exclude matches.
-- Route source files always react to their exact `sourcePath`.
-- A string `scan` value also becomes a watched glob.
+- Literal `watch` paths match that path and descendants.
+- Include globs react only to matching files; `!` patterns exclude matches.
+- Discovered files always react to their exact `sourcePath`.
+- Provider filter roots are registered with Vite's watcher.
 - Paths resolve from the Vite root.
 
 `data` is not serialized or cloned and does not survive a process restart.
-Return all data needed by `load` from the current `scan` call.
 
 ## Generated Virtual Module
 
@@ -338,5 +360,7 @@ SSR. The component receives the requested URL and `import.meta.env.BASE_URL`.
 ## Related Documentation
 
 - [Guide](guide.md)
+- [SSG Guide](ssg.md)
+- [MDX Guide](mdx.md)
 - [Agent Guide](agents.md)
 - [Project README](../README.md)

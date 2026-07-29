@@ -324,100 +324,21 @@ render(
 )
 ```
 
-## SSG
+## Static Generation and MDX
 
-SSG prerenders static HTML during `vite build`. It does not start or implement
-a runtime SSR server.
+These build workflows have dedicated guides:
 
-Requirements:
-
-- Configure `vite-plugin-solid` with `{ ssr: true }`.
-- Configure `fileRouter` with an `ssg` object.
-- Use `createClientEntry` so production builds hydrate prerendered HTML.
-- Keep a normal `</head>` and either the configured root element or the outlet
-  marker in `index.html`.
-
-Client entry:
-
-```tsx
-// src/index.tsx
-import { createClientEntry } from 'solid-file-router'
-import { FileRouter } from 'virtual:routes'
-
-createClientEntry(() => <FileRouter />, document.getElementById('root')!)
-```
-
-Vite config with the internal renderer:
-
-```ts
-// vite.config.ts
-import { fileRouter } from 'solid-file-router/plugin'
-import { defineConfig } from 'vite'
-import solidPlugin from 'vite-plugin-solid'
-
-export default defineConfig({
-  plugins: [
-    solidPlugin({ ssr: true }),
-    fileRouter({
-      ssg: {
-        routes: ['/', '/about'],
-        concurrency: 4,
-      },
-    }),
-  ],
-})
-```
-
-When `routes` is omitted, the plugin prerenders all concrete static routes. It
-excludes dynamic routes and `/404`, deduplicates configured routes, writes
-non-root routes as `<route>.html`, and always emits `404.html`.
-
-The simple HTML form is sufficient:
-
-```html
-<head></head>
-<body>
-  <div id="root"></div>
-  <script type="module" src="/src/index.tsx"></script>
-</body>
-```
-
-For an explicit insertion point, replace the root element with the outlet
-marker. The head marker is optional:
-
-```html
-<head>
-  <!--solid-file-router-head-->
-</head>
-<body>
-  <!--solid-file-router-outlet-->
-  <script type="module" src="/src/index.tsx"></script>
-</body>
-```
-
-Use only one outlet strategy. The outlet marker creates the configured root
-element, so a template must not also contain another element with the same ID.
-Duplicate outlet markers fail the build. Missing outlet/root or missing
-`</head>`/head marker also fail with descriptive errors.
-
-Provide `ssg.serverEntry` only when custom server rendering is required:
-
-```tsx
-// src/entry-server.tsx
-import { createServerEntry } from 'solid-file-router'
-import { FileRouter } from 'virtual:routes'
-
-export default createServerEntry((props) => <FileRouter base={props.base} url={props.url} />)
-```
-
-Then set `serverEntry: 'src/entry-server.tsx'` in `ssg`.
+- [Static Site Generation](ssg.md) covers route selection, output paths, HTML
+  insertion markers, hydration, and custom server entries.
+- [Markdown and MDX Routes](mdx.md) covers Satteri installation, built-in MDX
+  discovery, component overrides, compiler options, and HMR.
 
 ## Custom Route Sources
 
-Use `routeSource` for MDX, CMS, documentation, or generated modules. Providing
-it adds a source after the built-in filesystem and optional MDX sources. The provider
-scans logical entries and returns
-complete route module source from `load`:
+Use `routeSource` for a CMS, documentation index, or generated modules. It is
+appended after the built-in filesystem and optional MDX sources. A provider
+discovers source paths, maps logical route entries, and returns complete route
+module source from `load`:
 
 ```ts
 // vite.config.ts
@@ -425,14 +346,13 @@ import { defineRouteSource, fileRouter } from 'solid-file-router/plugin'
 
 interface DocsData {
   title: string
-  importPath: string
 }
 
 const routeSource = defineRouteSource<DocsData>({
   filter: 'docs/**/*.mdx',
   transformPath: (path) => ({
     path: path.replace(/^docs\//, '').replace(/\.mdx$/, '.tsx'),
-    data: { title: 'Button', importPath: './button.mdx' },
+    data: { title: path.split('/').at(-1)!.replace(/\.mdx$/, '') },
   }),
   load: ({ data }) => {
     if (!data) {
@@ -440,10 +360,11 @@ const routeSource = defineRouteSource<DocsData>({
     }
 
     const title = JSON.stringify(data.title)
-    const importPath = JSON.stringify(data.importPath)
-    return `import Page from ${importPath}
-import { createRoute } from 'solid-file-router'
-export default createRoute({ info: { title: ${title} }, component: Page })`
+    return `import { createRoute } from 'solid-file-router'
+export default createRoute({
+  info: { title: ${title} },
+  component: () => <h1>{${title}}</h1>,
+})`
   },
   watch: ['!docs/**/_*.mdx'],
 })
