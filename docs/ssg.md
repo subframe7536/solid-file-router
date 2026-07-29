@@ -61,12 +61,12 @@ Vite produces browser assets and pages under `<outDir>/client` and a
 server bundle under `<outDir>/server`. With Vite's default `outDir`, examples
 include:
 
-| Route | Output |
-| --- | --- |
-| `/` | `dist/client/index.html` |
-| `/about` | `dist/client/about.html` |
+| Route         | Output                        |
+| ------------- | ----------------------------- |
+| `/`           | `dist/client/index.html`      |
+| `/about`      | `dist/client/about.html`      |
 | `/docs/start` | `dist/client/docs/start.html` |
-| `/404` | `dist/client/404.html` |
+| `/404`        | `dist/client/404.html`        |
 
 `404.html` is always rendered for static-host fallback, independently of the
 normal route list. Set `concurrency` to limit simultaneous renders; it defaults

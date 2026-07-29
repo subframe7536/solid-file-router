@@ -70,9 +70,7 @@ const components = {
 }
 
 export default createRoute({
-  component: (props) => (
-    <MDXProvider components={components}>{props.children}</MDXProvider>
-  ),
+  component: (props) => <MDXProvider components={components}>{props.children}</MDXProvider>,
 })
 ```
 

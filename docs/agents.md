@@ -22,18 +22,18 @@ Do not duplicate those rules here.
 
 ## Consumer Task Map
 
-| Task                 | Required action                                                     | Verify                                              |
-| -------------------- | ------------------------------------------------------------------- | --------------------------------------------------- |
-| Install              | Add the package, Solid, Solid Router, Vite, and `vite-plugin-solid` | Dependency versions satisfy `package.json`          |
-| Configure routes     | Register `solidPlugin()` and `fileRouter()`                         | Vite starts and `src/routes.d.ts` is generated      |
-| Add a page           | Default-export `createRoute({ component })` from `.jsx` or `.tsx`   | Generated path appears in route types               |
-| Add a layout         | Add `_layout.tsx` in the ancestor directory                         | Descendants render through it                       |
-| Add an app root      | Add optional `src/pages/_app.tsx`                                   | `Root` resolves to its component                    |
-| Navigate dynamically | Call `generatePath` with `$`-prefixed path parameters               | Result contains no unresolved `:param`              |
-| Add metadata         | Define `info` and configure `infoDts`                               | `FileRouteInfo` and `routeInfo` are typed           |
-| Add SSG              | Enable Solid SSR, add `ssg`, and use `createClientEntry`            | Build emits `dist/client/index.html` and `404.html` |
-| Use built-in MDX     | Install Satteri and set `mdx: true`                                | `.md`/`.mdx` routes are generated and render        |
-| Use a CMS/provider   | Provide `routeSource.transformPath` and `routeSource.load`         | Every provider entry returns valid route module source |
+| Task                 | Required action                                                     | Verify                                                 |
+| -------------------- | ------------------------------------------------------------------- | ------------------------------------------------------ |
+| Install              | Add the package, Solid, Solid Router, Vite, and `vite-plugin-solid` | Dependency versions satisfy `package.json`             |
+| Configure routes     | Register `solidPlugin()` and `fileRouter()`                         | Vite starts and `src/routes.d.ts` is generated         |
+| Add a page           | Default-export `createRoute({ component })` from `.jsx` or `.tsx`   | Generated path appears in route types                  |
+| Add a layout         | Add `_layout.tsx` in the ancestor directory                         | Descendants render through it                          |
+| Add an app root      | Add optional `src/pages/_app.tsx`                                   | `Root` resolves to its component                       |
+| Navigate dynamically | Call `generatePath` with `$`-prefixed path parameters               | Result contains no unresolved `:param`                 |
+| Add metadata         | Define `info` and configure `infoDts`                               | `FileRouteInfo` and `routeInfo` are typed              |
+| Add SSG              | Enable Solid SSR, add `ssg`, and use `createClientEntry`            | Build emits `dist/client/index.html` and `404.html`    |
+| Use built-in MDX     | Install Satteri and set `mdx: true`                                 | `.md`/`.mdx` routes are generated and render           |
+| Use a CMS/provider   | Provide `routeSource.transformPath` and `routeSource.load`          | Every provider entry returns valid route module source |
 
 Use [guide.md](guide.md) for workflows and [reference.md](reference.md) for exact
 options and types.
@@ -139,15 +139,15 @@ sites before changing an exported type or generated wire shape.
 
 Run the narrow test first, then the full checks before handing off:
 
-| Change                           | Narrow verification                                                 |
-| -------------------------------- | ------------------------------------------------------------------- |
-| File naming or tree construction | `bun run test -- tests/definition.test.ts tests/route-type.test.ts` |
-| Route config extraction          | `bun run test -- tests/extract.test.ts`                             |
-| Runtime URL or metadata helper   | `bun run test -- tests/generatePath.test.ts tests/runtime.test.ts`  |
+| Change                            | Narrow verification                                                 |
+| --------------------------------- | ------------------------------------------------------------------- |
+| File naming or tree construction  | `bun run test -- tests/definition.test.ts tests/route-type.test.ts` |
+| Route config extraction           | `bun run test -- tests/extract.test.ts`                             |
+| Runtime URL or metadata helper    | `bun run test -- tests/generatePath.test.ts tests/runtime.test.ts`  |
 | HMR, scanning, or route providers | `bun run test -- tests/registry.test.ts tests/plugin.test.ts`       |
-| SSG or Vite integration          | `bun run test -- tests/plugin.test.ts`                              |
-| Public types or declarations     | `bun run typecheck` plus the owning tests                           |
-| Documentation only               | Link check, `git diff --check`, then full typecheck and tests       |
+| SSG or Vite integration           | `bun run test -- tests/plugin.test.ts`                              |
+| Public types or declarations      | `bun run typecheck` plus the owning tests                           |
+| Documentation only                | Link check, `git diff --check`, then full typecheck and tests       |
 
 Required full verification for production changes:
 

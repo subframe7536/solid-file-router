@@ -94,13 +94,13 @@ generates a pass-through root component.
 
 ## Documentation
 
-| Document | Use it for |
-| --- | --- |
-| [Guide](docs/guide.md) | Routes, layouts, data, navigation, metadata, and custom sources |
-| [SSG Guide](docs/ssg.md) | Prerender setup, route selection, output, templates, and server entries |
-| [MDX Guide](docs/mdx.md) | Satteri setup, Markdown routes, component overrides, and HMR |
-| [Reference](docs/reference.md) | Exact plugin options, generated modules, types, and runtime APIs |
-| [Agent Guide](docs/agents.md) | Repository map, invariants, and verification workflows |
+| Document                       | Use it for                                                              |
+| ------------------------------ | ----------------------------------------------------------------------- |
+| [Guide](docs/guide.md)         | Routes, layouts, data, navigation, metadata, and custom sources         |
+| [SSG Guide](docs/ssg.md)       | Prerender setup, route selection, output, templates, and server entries |
+| [MDX Guide](docs/mdx.md)       | Satteri setup, Markdown routes, component overrides, and HMR            |
+| [Reference](docs/reference.md) | Exact plugin options, generated modules, types, and runtime APIs        |
+| [Agent Guide](docs/agents.md)  | Repository map, invariants, and verification workflows                  |
 
 Enable the latest opt-in features with `fileRouter({ ssg: {} })` or
 `fileRouter({ mdx: true })`. SSG requires `solidPlugin({ ssr: true })`; MDX
@@ -109,7 +109,7 @@ for complete, copyable setup.
 
 Custom `routeSource` providers are additive: the built-in JSX/TSX source runs
 first, optional MDX runs next, and one or more custom providers follow. See the
-[custom route source guide](docs/guide.md#custom-route-sources).
+[custom route source guide](docs/guide.md#custom-route-providers).
 
 ## Development
 

@@ -362,7 +362,9 @@ export default createRoute({
       expectedPagesDir,
     )
 
-    await expect(registry.loadRouteSourceModule(expectedModuleId)).resolves.toBe('export default {}')
+    await expect(registry.loadRouteSourceModule(expectedModuleId)).resolves.toBe(
+      'export default {}',
+    )
     expect(loadedContexts).toStrictEqual([
       { sourcePath: expectedSourcePath, moduleId: expectedModuleId },
     ])

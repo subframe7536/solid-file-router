@@ -352,7 +352,12 @@ const routeSource = defineRouteSource<DocsData>({
   filter: 'docs/**/*.mdx',
   transformPath: (path) => ({
     path: path.replace(/^docs\//, '').replace(/\.mdx$/, '.tsx'),
-    data: { title: path.split('/').at(-1)!.replace(/\.mdx$/, '') },
+    data: {
+      title: path
+        .split('/')
+        .at(-1)!
+        .replace(/\.mdx$/, ''),
+    },
   }),
   load: ({ data }) => {
     if (!data) {

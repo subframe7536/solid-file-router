@@ -5,13 +5,13 @@ The project is pre-1.0; minor releases may introduce breaking changes.
 
 ## Package Entries
 
-| Import                     | Contents                                               |
-| -------------------------- | ------------------------------------------------------ |
-| `solid-file-router`        | Runtime functions and route types                      |
+| Import                     | Contents                                                     |
+| -------------------------- | ------------------------------------------------------------ |
+| `solid-file-router`        | Runtime functions and route types                            |
 | `solid-file-router/plugin` | Vite plugin, custom route-provider helpers, and plugin types |
-| `solid-file-router/mdx`    | MDX provider, component hook, and component types      |
-| `solid-file-router/client` | Declaration for `virtual:routes`                       |
-| `virtual:routes`           | Generated router components, definitions, and metadata |
+| `solid-file-router/mdx`    | MDX provider, component hook, and component types            |
+| `solid-file-router/client` | Declaration for `virtual:routes`                             |
+| `virtual:routes`           | Generated router components, definitions, and metadata       |
 
 The package is ESM only.
 
@@ -87,19 +87,19 @@ Import `fileRouter` from `solid-file-router/plugin`:
 import { fileRouter } from 'solid-file-router/plugin'
 ```
 
-| Option | Type | Default | Behavior |
-| --- | --- | --- | --- |
-| `pagesDir` | `string` | `'src/pages'` | Built-in JSX/TSX directory; inherited by MDX |
-| `output` | `string` | `'src/routes.d.ts'` | Generated declaration path |
-| `routeSource` | provider or provider array | `undefined` | Adds custom route providers alongside file and optional MDX routes |
-| `mdx` | `boolean \| MdxOptions` | `false` | Adds Satteri-backed Markdown/MDX routes |
-| `ignore` | `string[]` | see below | Globs ignored by discovery and watchers |
-| `reloadOnChange` | `boolean` | `false` | Full-reload escape hatch for nonstandard HMR |
-| `lazy` | `boolean` | client `true`, SSR `false` | Controls lazy component imports |
-| `infoDts` | `InfoTypeDefinition` | `undefined` | Metadata declaration shape |
-| `verboseLog` | `boolean` | `false` | Additional plugin logging |
-| `inheritance` | `InheritanceConfig` | `{ enabled: true }` | Global component inheritance |
-| `ssg` | `SsgConfig` | `undefined` | Enables build-time prerendering |
+| Option           | Type                       | Default                    | Behavior                                                           |
+| ---------------- | -------------------------- | -------------------------- | ------------------------------------------------------------------ |
+| `pagesDir`       | `string`                   | `'src/pages'`              | Built-in JSX/TSX directory; inherited by MDX                       |
+| `output`         | `string`                   | `'src/routes.d.ts'`        | Generated declaration path                                         |
+| `routeSource`    | provider or provider array | `undefined`                | Adds custom route providers alongside file and optional MDX routes |
+| `mdx`            | `boolean \| MdxOptions`    | `false`                    | Adds Satteri-backed Markdown/MDX routes                            |
+| `ignore`         | `string[]`                 | see below                  | Globs ignored by discovery and watchers                            |
+| `reloadOnChange` | `boolean`                  | `false`                    | Full-reload escape hatch for nonstandard HMR                       |
+| `lazy`           | `boolean`                  | client `true`, SSR `false` | Controls lazy component imports                                    |
+| `infoDts`        | `InfoTypeDefinition`       | `undefined`                | Metadata declaration shape                                         |
+| `verboseLog`     | `boolean`                  | `false`                    | Additional plugin logging                                          |
+| `inheritance`    | `InheritanceConfig`        | `{ enabled: true }`        | Global component inheritance                                       |
+| `ssg`            | `SsgConfig`                | `undefined`                | Enables build-time prerendering                                    |
 
 Default ignores:
 
@@ -236,8 +236,9 @@ interface RouteSourceProvider<TData = unknown> {
   filter: string
   glob?: RouteSourceGlob
   transformPath?: (path: string) => RouteSourceEntry<TData>
-  load: (entry: RouteSourceLoadContext<TData>) =>
-    Promisable<string | null | undefined | false | void>
+  load: (
+    entry: RouteSourceLoadContext<TData>,
+  ) => Promisable<string | null | undefined | false | void>
   watch?: string[]
 }
 ```
@@ -248,17 +249,17 @@ File and MDX route discovery are configured through `fileRouter` with
 `pagesDir`, `mdx`, and `MdxOptions`; they are built-in capabilities rather than
 factories exported from the plugin entry.
 
-| Field | Behavior |
-| --- | --- |
-| `filter` | Discovery glob relative to the Vite root |
-| `glob` | Optional discovery implementation; receives tinyglobby, filter, and root |
+| Field           | Behavior                                                                            |
+| --------------- | ----------------------------------------------------------------------------------- |
+| `filter`        | Discovery glob relative to the Vite root                                            |
+| `glob`          | Optional discovery implementation; receives tinyglobby, filter, and root            |
 | `transformPath` | Maps a discovered source path to its logical `path`, optional `routeId`, and `data` |
-| `path` | Logical file path controlling route conventions and layout ancestry |
-| `routeId` | Optional public ID; derived from the logical path when omitted |
-| `sourcePath` | Original discovered path used for source identity and HMR |
-| `moduleId` | Generated facade module identity passed to `load` |
-| `data` | In-process value passed unchanged from `transformPath` to `load` |
-| `watch` | Additional files/globs that cause the provider to rescan |
+| `path`          | Logical file path controlling route conventions and layout ancestry                 |
+| `routeId`       | Optional public ID; derived from the logical path when omitted                      |
+| `sourcePath`    | Original discovered path used for source identity and HMR                           |
+| `moduleId`      | Generated facade module identity passed to `load`                                   |
+| `data`          | In-process value passed unchanged from `transformPath` to `load`                    |
+| `watch`         | Additional files/globs that cause the provider to rescan                            |
 
 Normalized route IDs, logical paths, and source paths must be unique across all
 route inputs. This applies to every route, including the generated `/_app` route.

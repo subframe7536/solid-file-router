@@ -30,9 +30,7 @@ function isLayoutRoute(file: string) {
 }
 
 function isNotFoundRoute(file: string) {
-  return (
-    file === '404' || file.endsWith('/404') || REG_NOT_FOUND.test(getRouteBasename(file))
-  )
+  return file === '404' || file.endsWith('/404') || REG_NOT_FOUND.test(getRouteBasename(file))
 }
 
 function hasPrivateSegment(file: string) {
@@ -167,9 +165,7 @@ function getEntryRoutePath(entry: RouteInput | RouteEntry): string {
 
 function isGeneratedRouteFile(entry: RouteInput | RouteEntry): boolean {
   const routePath = getEntryRoutePath(entry)
-  return (
-    (!hasPrivateSegment(routePath) || isLayoutRoute(routePath)) && !isNotFoundRoute(routePath)
-  )
+  return (!hasPrivateSegment(routePath) || isLayoutRoute(routePath)) && !isNotFoundRoute(routePath)
 }
 
 function hashString(value: string): string {
