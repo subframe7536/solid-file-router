@@ -428,13 +428,11 @@ interface DocsData {
 }
 
 const routeSource = defineRouteSource<DocsData>({
-  scan: async () => [
-    {
-      routePath: '(docs)/button.tsx',
-      sourcePath: 'docs/button.mdx',
-      data: { title: 'Button', importPath: './button.mdx' },
-    },
-  ],
+  filter: 'docs/**/*.mdx',
+  transformPath: (path) => ({
+    path: path.replace(/^docs\//, '').replace(/\.mdx$/, '.tsx'),
+    data: { title: 'Button', importPath: './button.mdx' },
+  }),
   load: ({ data }) => {
     if (!data) {
       return
@@ -446,16 +444,15 @@ const routeSource = defineRouteSource<DocsData>({
 import { createRoute } from 'solid-file-router'
 export default createRoute({ info: { title: ${title} }, component: Page })`
   },
-  watchFiles: ['docs/**/*.mdx', '!docs/**/_*.mdx'],
+  watch: ['!docs/**/_*.mdx'],
 })
 
 fileRouter({ routeSource })
 ```
 
-`routeId` is optional and is derived from `routePath` when omitted.
-`routePath` controls file-router semantics and inheritance; `sourcePath`
-identifies the source for HMR; `data` is passed unchanged from `scan` to `load`
-within the current build process.
+`routeId` is optional and is derived from `path` when omitted. `path` controls
+file-router semantics and inheritance; the original glob path identifies the
+source for HMR; `data` is passed unchanged from `transformPath` to `load`.
 
 `load` must return non-empty module source for every entry. A missing value
 throws an error. For complete provider types and watcher matching rules, see

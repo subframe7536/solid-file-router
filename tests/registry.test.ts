@@ -323,11 +323,18 @@ export default createRoute({
         inheritLoading: true,
         inheritError: true,
       },
-      routeSource: {
-        scan: () => entries,
-        load: () => 'export default {}',
-        watchFiles: ['docs/pages'],
-      },
+      routeSources: [
+        {
+          filter: 'docs/pages/**/*',
+          glob: async () => entries.map((entry) => entry.sourcePath),
+          transformPath: (path) => {
+            const entry = entries.find((entry) => entry.sourcePath === path)!
+            return { path: entry.routePath, routeId: entry.routeId }
+          },
+          load: () => 'export default {}',
+          watch: ['docs/pages'],
+        },
+      ],
     })
 
     await registry.initialize(workspaceRoot)
@@ -344,9 +351,9 @@ export default createRoute({
       structureChanged: true,
     })
     expect(change.changedModuleIds).toStrictEqual([
-      normalizePath(join(workspaceRoot, 'docs/pages/_app.tsx.solid-file-router.tsx')),
-      normalizePath(join(workspaceRoot, 'docs/pages/button.mdx.solid-file-router.tsx')),
-      normalizePath(join(workspaceRoot, 'docs/pages/input.mdx.solid-file-router.tsx')),
+      normalizePath(join(workspaceRoot, 'docs/pages/_app.tsx-sfr.tsx')),
+      normalizePath(join(workspaceRoot, 'docs/pages/button.mdx-sfr.tsx')),
+      normalizePath(join(workspaceRoot, 'docs/pages/input.mdx-sfr.tsx')),
     ])
     await registry.getDefinition(true)
 
@@ -366,18 +373,25 @@ export default createRoute({
       ignore: [],
       output: 'src/routes.d.ts',
       inheritance: { enabled: true, inheritLoading: true, inheritError: true },
-      routeSource: {
-        scan: () => entries,
-        load: () => 'export default {}',
-        watchFiles: ['docs/pages'],
-      },
+      routeSources: [
+        {
+          filter: 'docs/pages/**/*',
+          glob: async () => entries.map((entry) => entry.sourcePath),
+          transformPath: (path) => {
+            const entry = entries.find((entry) => entry.sourcePath === path)!
+            return { path: entry.routePath, routeId: entry.routeId }
+          },
+          load: () => 'export default {}',
+          watch: ['docs/pages'],
+        },
+      ],
     })
 
     await registry.initialize(workspaceRoot)
     const changed = await registry.markChanged(join(workspaceRoot, 'docs/pages/button.mdx'))
 
     expect(changed.changedModuleIds).toStrictEqual([
-      normalizePath(join(workspaceRoot, 'docs/pages/button.mdx.solid-file-router.tsx')),
+      normalizePath(join(workspaceRoot, 'docs/pages/button.mdx-sfr.tsx')),
     ])
   })
 
@@ -393,21 +407,23 @@ export default createRoute({
       ignore: [],
       output: 'src/routes.d.ts',
       inheritance: { enabled: true, inheritLoading: true, inheritError: true },
-      routeSource: {
-        scan: () => [
-          { routeId: '/button', routePath: 'button.tsx', sourcePath: 'docs/button.mdx', data },
-        ],
-        load: (context) => {
-          loadedData = context.data
-          return 'export default {}'
+      routeSources: [
+        {
+          filter: 'docs/**/*.mdx',
+          glob: async () => ['docs/button.mdx'],
+          transformPath: () => ({ path: 'button.tsx', routeId: '/button', data }),
+          load: (context) => {
+            loadedData = context.data
+            return 'export default {}'
+          },
+          watch: ['docs'],
         },
-        watchFiles: ['docs'],
-      },
+      ],
     })
 
     await registry.initialize(workspaceRoot)
     await registry.loadRouteSourceModule(
-      normalizePath(join(workspaceRoot, 'docs/button.mdx.solid-file-router.tsx')),
+      normalizePath(join(workspaceRoot, 'docs/button.mdx-sfr.tsx')),
     )
     expect(loadedData).toBe(firstData)
 
@@ -415,7 +431,7 @@ export default createRoute({
     const change = await registry.markChanged(join(workspaceRoot, 'docs/button.mdx'))
     expect(change.structureChanged).toBe(false)
     await registry.loadRouteSourceModule(
-      normalizePath(join(workspaceRoot, 'docs/button.mdx.solid-file-router.tsx')),
+      normalizePath(join(workspaceRoot, 'docs/button.mdx-sfr.tsx')),
     )
     expect(loadedData).toBe(secondData)
   })
@@ -428,16 +444,16 @@ export default createRoute({
       ignore: [],
       output: 'src/routes.d.ts',
       inheritance: { enabled: true, inheritLoading: true, inheritError: true },
-      routeSource: {
-        scan: () => [
-          { routePath: 'index.tsx', sourcePath: 'docs/index.mdx' },
-          { routePath: '(general)/button.tsx', sourcePath: 'docs/button.mdx' },
-          { routePath: '[id].tsx', sourcePath: 'docs/id.mdx' },
-          { routePath: '404.tsx', sourcePath: 'docs/404.mdx' },
-          { routePath: '_app.tsx', sourcePath: 'docs/app.mdx' },
-        ],
-        load: () => 'export default {}',
-      },
+      routeSources: [
+        {
+          filter: 'docs/**/*.mdx',
+          glob: async () => ['docs/index.mdx', 'docs/button.mdx', 'docs/id.mdx', 'docs/404.mdx', 'docs/app.mdx'],
+          transformPath: (path) => ({
+            path: { 'docs/index.mdx': 'index.tsx', 'docs/button.mdx': '(general)/button.tsx', 'docs/id.mdx': '[id].tsx', 'docs/404.mdx': '404.tsx', 'docs/app.mdx': '_app.tsx' }[path]!,
+          }),
+          load: () => 'export default {}',
+        },
+      ],
     })
 
     await registry.initialize(workspaceRoot)
@@ -468,18 +484,15 @@ export default createRoute({
         inheritLoading: true,
         inheritError: true,
       },
-      routeSource: {
-        scan: () => [
-          { routeId: '/', routePath: '_app.tsx', sourcePath: 'docs/pages/_app.tsx' },
-          {
-            routeId: '/button',
-            routePath: '(general)/button.tsx',
-            sourcePath: 'docs/pages/button.mdx',
-          },
-        ],
-        load: () => 'export default {}',
-        watchFiles: ['docs/config'],
-      },
+      routeSources: [
+        {
+          filter: 'docs/pages/**/*',
+          glob: async () => ['docs/pages/_app.tsx', 'docs/pages/button.mdx'],
+          transformPath: (path) => ({ path: path.endsWith('_app.tsx') ? '_app.tsx' : '(general)/button.tsx', routeId: path.endsWith('_app.tsx') ? '/' : '/button' }),
+          load: () => 'export default {}',
+          watch: ['docs/config'],
+        },
+      ],
     })
 
     await registry.initialize(workspaceRoot)
@@ -491,8 +504,8 @@ export default createRoute({
       structureChanged: false,
     })
     expect(change.changedModuleIds).toStrictEqual([
-      normalizePath(join(workspaceRoot, 'docs/pages/_app.tsx.solid-file-router.tsx')),
-      normalizePath(join(workspaceRoot, 'docs/pages/button.mdx.solid-file-router.tsx')),
+      normalizePath(join(workspaceRoot, 'docs/pages/_app.tsx-sfr.tsx')),
+      normalizePath(join(workspaceRoot, 'docs/pages/button.mdx-sfr.tsx')),
     ])
   })
 
@@ -527,10 +540,13 @@ export default createRoute({ component: () => null })
         inheritLoading: true,
         inheritError: true,
       },
-      routeSource: {
-        scan: 'docs/**/*.mdx',
-        load: () => 'export default {}',
-      },
+      routeSources: [
+        {
+          filter: 'docs/**/*.mdx',
+          transformPath: (path) => ({ path: path.replace(/\.mdx$/, '.tsx') }),
+          load: () => 'export default {}',
+        },
+      ],
     })
 
     await registry.initialize(workspaceRoot)
@@ -540,7 +556,7 @@ export default createRoute({ component: () => null })
         {
           routeId: '/docs/button',
           routePath: 'docs/button.tsx',
-          moduleId: normalizePath(join(workspaceRoot, 'docs/button.mdx.solid-file-router.tsx')),
+          moduleId: normalizePath(join(workspaceRoot, 'docs/button.mdx-sfr.tsx')),
           sourcePath: normalizePath(join(workspaceRoot, 'docs/button.mdx')),
         },
       ],
@@ -565,10 +581,13 @@ export default createRoute({ component: () => null })
         inheritLoading: true,
         inheritError: true,
       },
-      routeSource: {
-        scan: 'docs/**/*.mdx',
-        load: () => 'export default {}',
-      },
+      routeSources: [
+        {
+          filter: 'docs/**/*.mdx',
+          transformPath: (path) => ({ path: path.replace(/\.mdx$/, '.tsx') }),
+          load: () => 'export default {}',
+        },
+      ],
     })
 
     await registry.initialize(workspaceRoot)
@@ -579,7 +598,7 @@ export default createRoute({ component: () => null })
         {
           routeId: '/docs/button',
           routePath: 'docs/button.tsx',
-          moduleId: normalizePath(join(workspaceRoot, 'docs/button.mdx.solid-file-router.tsx')),
+          moduleId: normalizePath(join(workspaceRoot, 'docs/button.mdx-sfr.tsx')),
           sourcePath: normalizePath(join(workspaceRoot, 'docs/button.mdx')),
         },
       ],
@@ -602,13 +621,14 @@ export default createRoute({ component: () => null })
       ignore: [],
       output: 'src/routes.d.ts',
       inheritance: { enabled: true, inheritLoading: true, inheritError: true },
-      routeSource: {
-        scan: () => [
-          { routeId: '/button', routePath: 'button.tsx', sourcePath: 'docs/button.mdx' },
-        ],
-        load: () => 'export default {}',
-        watchFiles: ['docs/**/*.mdx', '!docs/private/**'],
-      },
+      routeSources: [
+        {
+          filter: 'docs/**/*.mdx',
+          transformPath: () => ({ path: 'button.tsx', routeId: '/button' }),
+          load: () => 'export default {}',
+          watch: ['docs/**/*.mdx', '!docs/private/**'],
+        },
+      ],
     })
 
     await registry.initialize(workspaceRoot)
@@ -636,23 +656,21 @@ export default createRoute({ component: () => null })
         inheritLoading: true,
         inheritError: true,
       },
-      routeSource: {
-        scan: () => [
-          {
-            routeId: '/button',
-            routePath: '(general)/button.tsx',
-            sourcePath: 'docs/pages/button.mdx',
-          },
-        ],
-        load: () => undefined,
-      },
+      routeSources: [
+        {
+          filter: 'docs/pages/**/*',
+          glob: async () => ['docs/pages/button.mdx'],
+          transformPath: () => ({ path: '(general)/button.tsx', routeId: '/button' }),
+          load: () => undefined,
+        },
+      ],
     })
 
     await registry.initialize(workspaceRoot)
 
     await expect(
       registry.loadRouteSourceModule(
-        normalizePath(join(workspaceRoot, 'docs/pages/button.mdx.solid-file-router.tsx')),
+        normalizePath(join(workspaceRoot, 'docs/pages/button.mdx-sfr.tsx')),
       ),
     ).rejects.toThrow('routeSource.load returned no code for routeId: /button')
   })

@@ -291,12 +291,43 @@ describe('fileRouter', () => {
     expect(module).toContain(`${normalizePath(join(root, 'app/routes/index.tsx'))}?route`)
   })
 
+  it('does not scan Markdown when mdx is disabled', async () => {
+    const root = createTempProject()
+    writeFileSync(join(root, 'src/pages/content.md'), '# Content')
+    writeFileSync(join(root, 'src/pages/content.mdx'), '# Content')
+    const plugin = await createPlugin(root)
+
+    const module = await plugin.load.handler()
+
+    expect(module).not.toContain('content.md')
+    expect(module).not.toContain('content.mdx')
+  })
+
+  it('scans and compiles Markdown when mdx is enabled', async () => {
+    const root = createTempProject()
+    const mdxPath = join(root, 'src/pages/content.mdx')
+    const markdownPath = join(root, 'src/pages/markdown.md')
+    writeFileSync(mdxPath, '# Content')
+    writeFileSync(markdownPath, '# Markdown')
+    const [plugin] = fileRouter({ mdx: true, lazy: false })
+    await (plugin as any).configResolved({ build: { ssr: false }, root })
+
+    const module = await (plugin as any).load.handler()
+    const routeModuleId = normalizePath(`${mdxPath}-sfr.tsx`)
+    const routeModule = await (plugin as any).load.handler(routeModuleId)
+
+    expect(module).toContain(`${routeModuleId}?comp`)
+    expect(routeModule).toContain('export default createRoute')
+    expect(routeModule).toContain('MDXContent')
+    await expect(
+      (plugin as any).load.handler(normalizePath(`${markdownPath}-sfr.tsx`)),
+    ).resolves.toContain('MDXContent')
+  })
+
   it('supports custom route sources with generated route modules', async () => {
     const root = createTempProject()
     const buttonSourcePath = 'docs/pages/general/button.mdx'
-    const buttonModuleId = normalizePath(
-      join(root, 'docs/pages/general/button.mdx.solid-file-router.tsx'),
-    )
+    const buttonModuleId = normalizePath(join(root, 'docs/pages/general/button.mdx-sfr.tsx'))
     const modules = new Map([
       [
         '/',
@@ -320,11 +351,12 @@ export default createRoute({ component: () => <h1>missing</h1> })
     const [plugin] = fileRouter({
       lazy: false,
       routeSource: {
-        scan: () => [
-          { routeId: '/', routePath: '_app.tsx', sourcePath: 'docs/routes/_app.tsx' },
-          { routeId: '/button', routePath: '(general)/button.tsx', sourcePath: buttonSourcePath },
-          { routeId: '/404', routePath: '404.tsx', sourcePath: 'docs/routes/404.tsx' },
-        ],
+        filter: 'docs/pages/**/*',
+        glob: async () => ['docs/routes/_app.tsx', buttonSourcePath, 'docs/routes/404.tsx'],
+        transformPath: (sourcePath) => ({
+          path: sourcePath.includes('button') ? '(general)/button.tsx' : sourcePath.split('/').pop()!,
+          routeId: sourcePath.includes('button') ? '/button' : undefined,
+        }),
         load: (entry) => modules.get(entry.routeId),
       },
     })
@@ -354,13 +386,14 @@ export default createRoute({ component: () => <h1>missing</h1> })
 
     const [plugin] = fileRouter({
       routeSource: {
-        scan: () => [{ routePath: 'button.tsx', sourcePath: 'docs/button.mdx' }],
+        filter: 'docs/**/*.mdx',
+        transformPath: () => ({ path: 'button.tsx' }),
         load: () => 'export default {}',
       },
     })
     await (plugin as any).configResolved({ build: { ssr: false }, root })
 
-    const moduleId = normalizePath(`${sourcePath}.solid-file-router.tsx`)
+    const moduleId = normalizePath(`${sourcePath}-sfr.tsx`)
     const routeModule = { id: `${moduleId}?route` }
     const componentModule = { id: `${moduleId}?comp` }
     const send = vi.fn()
@@ -402,7 +435,8 @@ export default createRoute({ component: () => <h1>missing</h1> })
     const [plugin] = fileRouter({
       reloadOnChange: true,
       routeSource: {
-        scan: () => [{ routePath: 'button.tsx', sourcePath: 'docs/button.mdx' }],
+        filter: 'docs/**/*.mdx',
+        transformPath: () => ({ path: 'button.tsx' }),
         load: () => 'export default {}',
       },
     })
@@ -431,13 +465,9 @@ export default createRoute({ component: () => <h1>missing</h1> })
 
   it('infers typed custom source data in load', async () => {
     const source = defineRouteSource<{ title: string }>({
-      scan: () => [
-        {
-          routePath: 'button.tsx',
-          sourcePath: 'docs/button.mdx',
-          data: { title: 'Button' },
-        },
-      ],
+      filter: 'docs/**/*.mdx',
+      glob: async () => ['docs/button.mdx'],
+      transformPath: () => ({ path: 'button.tsx', data: { title: 'Button' } }),
       load: ({ data }) =>
         data ? `export default { title: '${data.title}' }` : 'export default {}',
     })
@@ -449,7 +479,7 @@ export default createRoute({ component: () => <h1>missing</h1> })
       root,
     })
 
-    const moduleId = normalizePath(join(root, 'docs/button.mdx.solid-file-router.tsx'))
+    const moduleId = normalizePath(join(root, 'docs/button.mdx-sfr.tsx'))
     await expect((plugin as any).load.handler(moduleId)).resolves.toContain("title: 'Button'")
   })
 

@@ -5,6 +5,7 @@ import { hydrate, render, renderToStringAsync } from 'solid-js/web'
 
 type AnyComp = Component<any>
 
+/** Wraps a route component with loading and error boundaries. */
 export function __loader__(Comp: AnyComp, Loading: AnyComp, Error: AnyComp) {
   return (props: RouteSectionProps) => {
     const Catch =
@@ -29,11 +30,14 @@ export function __loader__(Comp: AnyComp, Loading: AnyComp, Error: AnyComp) {
   }
 }
 
+/** Generated route path declarations augmented by the application. */
 export interface FileRoutePath {}
+/** Generated route metadata declarations augmented by the application. */
 export interface FileRouteInfo {}
 export type FileRouteInfoMap = Partial<
   Record<keyof FileRoutePath & string, FileRouteInfo | undefined>
 >
+/** A matched route entry returned by the Solid router. */
 export interface FileRouteMatch {
   info?: FileRouteInfo
   route?: {
@@ -143,6 +147,7 @@ export function createRoute<T>(config: RouteConfig<T>): RouteConfig<T> {
   return config
 }
 
+/** Reads route metadata from the deepest matched route. */
 export function readRouteInfo<T extends FileRouteInfo = FileRouteInfo>(
   matches: readonly FileRouteMatch[],
 ): T | undefined {
@@ -150,6 +155,7 @@ export function readRouteInfo<T extends FileRouteInfo = FileRouteInfo>(
   return (route?.route?.info ?? route?.info) as T | undefined
 }
 
+/** Generates a route URL from typed path and query parameters. */
 export function generatePath<T extends keyof FileRoutePath & string>(
   path: T,
   params: FileRoutePath[T] extends never
@@ -179,6 +185,7 @@ export function generatePath<T extends keyof FileRoutePath & string>(
   return result
 }
 
+/** Mounts or hydrates the client application at the supplied element. */
 export function createClientEntry(
   component: Parameters<typeof render>[0],
   mount: Parameters<typeof render>[1],
@@ -192,6 +199,7 @@ export function createClientEntry(
   }
 }
 
+/** Creates an SSR renderer for the supplied application component. */
 export async function createServerEntry(component: Component<{ url: string; base: string }>) {
   if (!import.meta.env.SSR) {
     throw new Error('[solid-file-router] createServerEntry can only run during SSR')

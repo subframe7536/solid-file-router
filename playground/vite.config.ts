@@ -6,13 +6,21 @@ import solidPlugin from 'vite-plugin-solid'
 
 export default defineConfig({
   resolve: {
-    alias: {
-      'solid-file-router': fileURLToPath(new URL('../src/runtime.ts', import.meta.url)),
-    },
+    alias: [
+      {
+        find: 'solid-file-router/mdx',
+        replacement: fileURLToPath(new URL('../src/mdx/index.ts', import.meta.url)),
+      },
+      {
+        find: 'solid-file-router',
+        replacement: fileURLToPath(new URL('../src/runtime.ts', import.meta.url)),
+      },
+    ],
   },
   plugins: [
     solidPlugin(),
     fileRouter({
+      mdx: true,
       infoDts: {
         name: 'string',
         role: 'string',

@@ -17,6 +17,25 @@ export default createRoute({
           <ul style={{ 'list-style': 'none', padding: 0 }}>
             <li style={{ 'margin-bottom': '15px' }}>
               <A
+                href="/mdx"
+                style={{
+                  display: 'block',
+                  padding: '15px',
+                  background: '#fff4e5',
+                  'border-radius': '8px',
+                  'text-decoration': 'none',
+                  color: '#9a4d00',
+                }}
+              >
+                <strong>MDX Custom Route</strong>
+                <div style={{ 'font-size': '14px', color: '#666', 'margin-top': '5px' }}>
+                  Compile MDX with Satteri through a custom route source
+                </div>
+              </A>
+            </li>
+
+            <li style={{ 'margin-bottom': '15px' }}>
+              <A
                 href="/data"
                 style={{
                   display: 'block',

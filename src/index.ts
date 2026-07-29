@@ -6,23 +6,31 @@ import type { Logger, Plugin, ResolvedConfig } from 'vite'
 import { normalizePath } from 'vite'
 
 import { PACKAGE_NAME, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
+import { MdxRouteSource } from './mdx/router'
+import type { MdxOptions } from './mdx/router'
 import type { InheritanceConfig } from './utils/definition'
 import { extract, getAstCacheKey } from './utils/extract'
 import { isRouteSourceModuleId, resolveRouteSourceModuleId, RouteRegistry } from './utils/registry'
 import type { RouteRegistryChange } from './utils/registry'
 import type { InfoTypeDefinition, InlineInfoTypeDefinition } from './utils/route-type'
 import type {
+  FsRouteSourceOptions,
   Promisable,
   RouteSourceEntry,
   RouteSourceLoadContext,
   RouteSourceProvider,
 } from './utils/source'
-import { defineRouteSource } from './utils/source'
+import { defineRouteSource, FsRouteSource } from './utils/source'
 
 type Awaitable<T> = T | Promise<T>
+/** A static route list or lazy route producer used by SSG. */
 export type PrerenderRoutesSource = readonly string[] | (() => Awaitable<readonly string[]>)
 export {
   defineRouteSource,
+  FsRouteSource as FsRouter,
+  MdxRouteSource as MdxRouter,
+  type FsRouteSourceOptions as FsRouterOptions,
+  type MdxOptions,
   type Promisable,
   type RouteSourceEntry,
   type RouteSourceLoadContext,
@@ -46,12 +54,19 @@ export interface FileRouterPluginOption<TData = unknown> {
   pagesDir?: string
   /**
    * Custom route source. When provided, pagesDir scanning is disabled.
+   * @default undefined
    */
-  routeSource?: RouteSourceProvider<TData>
+  routeSource?: RouteSourceProvider<TData> | readonly RouteSourceProvider<TData>[]
+  /**
+   * Enable built-in Markdown/MDX route discovery and Satteri compilation.
+   * @default false
+   */
+  mdx?: boolean | MdxOptions
   /**
    * A list of glob patterns to be ignored during processing.
    *
    * Default is {@link DEFAULT_IGNORES}: all files in `components/`, `node_modules/` and `dist/`
+   * @default DEFAULT_IGNORES
    */
   ignore?: string[]
   /**
@@ -64,6 +79,7 @@ export interface FileRouterPluginOption<TData = unknown> {
   /**
    * Whether to generate route modules with lazy imports.
    * When omitted, enabled in client builds and disabled in SSR builds.
+   * @default Client builds: true; SSR builds: false
    */
   lazy?: boolean
   /**
@@ -84,6 +100,7 @@ export interface FileRouterPluginOption<TData = unknown> {
   infoDts?: InfoTypeDefinition
   /**
    * Whether to enable verbose log
+   * @default false
    */
   verboseLog?: boolean
   /**
@@ -134,6 +151,7 @@ export interface FileRouterPluginOption<TData = unknown> {
   }
 }
 
+/** Default directories excluded from route discovery. */
 export const DEFAULT_IGNORES = ['**/components/**', '**/node_modules/**', '**/dist/**']
 
 type BundleAsset = {
@@ -154,7 +172,7 @@ const queryMap = new Map<string, string[]>([
   ['comp', ['component']],
 ])
 const REG_ROUTE_QUERY = /\?(route|comp)$/
-const REG_ROUTE_SOURCE_MODULE_ID = /\.solid-file-router\.tsx(?:\?.*)?$/
+const REG_ROUTE_SOURCE_MODULE_ID = /-sfr\.tsx(?:\?.*)?$/
 const ENVIRONMENT = {
   CLIENT: 'client',
   SERVER: 'ssr',
@@ -310,7 +328,7 @@ export function renderTemplate(template: string, id: string, app: string) {
 }
 
 /**
- * Vite plugin for page generation
+ * Vite plugin for page generation.
  */
 export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TData> = {}): Plugin[] {
   const {
@@ -323,6 +341,7 @@ export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TDat
     verboseLog,
     inheritance = { enabled: true },
     routeSource,
+    mdx = false,
     ssg,
   } = options
 
@@ -344,6 +363,22 @@ export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TDat
     inheritError: inheritance.inheritError ?? true,
   }
 
+  const extraRouteSources = routeSource
+    ? Array.isArray(routeSource)
+      ? routeSource
+      : [routeSource]
+    : []
+  const routeSources =
+    mdx || extraRouteSources.length > 0
+      ? [
+          FsRouteSource<TData>({ pagesDir }),
+          ...(mdx
+            ? [MdxRouteSource<TData>(mdx === true ? { pagesDir } : { ...mdx, pagesDir })]
+            : []),
+          ...extraRouteSources,
+        ]
+      : undefined
+
   const registry = new RouteRegistry<TData>({
     pagesDir,
     ignore,
@@ -351,7 +386,7 @@ export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TDat
     infoDts,
     verboseLog,
     inheritance: inheritanceConfig,
-    routeSource,
+    routeSources,
   })
 
   function getRouteChange(

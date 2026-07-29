@@ -193,31 +193,31 @@ SSG behavior:
 type Promisable<T> = T | Promise<T>
 
 interface RouteSourceEntry<TData = unknown> {
+  path: string
   routeId?: string
-  routePath: string
-  sourcePath: string
   data?: TData
 }
 
 interface RouteSourceLoadContext<TData = unknown> {
   routeId: string
-  routePath: string
+  path: string
   sourcePath: string
   moduleId: string
   data?: TData
 }
 
 interface RouteSourceProvider<TData = unknown> {
-  scan:
-    | string
-    | ((
-        glob: typeof import('tinyglobby').glob,
-        root: string,
-      ) => Promisable<RouteSourceEntry<TData>[]>)
+  filter: string
+  glob?: (
+    glob: typeof import('tinyglobby').glob,
+    filter: string,
+    root: string,
+  ) => Promisable<string[]>
+  transformPath?: (path: string) => RouteSourceEntry<TData>
   load: (
     entry: RouteSourceLoadContext<TData>,
   ) => Promisable<string | null | undefined | false | void>
-  watchFiles?: string[]
+  watch?: string[]
 }
 ```
 
@@ -233,8 +233,7 @@ Use `defineRouteSource<TData>(provider)` to preserve generic inference between
 | `data`       | Build-process data passed unchanged from `scan` to `load`      |
 | `watchFiles` | Additional HMR paths relative to Vite root                     |
 
-`routeId`, `routePath`, and `sourcePath` must be unique after normalization.
-`routePath` and `sourcePath` are required. `load` must return module source for
+`path` and source path must be unique after normalization. `load` must return module source for
 every entry or the plugin throws.
 
 Watcher behavior:

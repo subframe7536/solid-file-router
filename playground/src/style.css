@@ -61,6 +61,72 @@ button:focus-visible {
   padding: 2em;
 }
 
+.mdx-page {
+  box-sizing: border-box;
+  width: min(720px, calc(100vw - 40px));
+  margin: 0 auto;
+  padding: 48px 0 64px;
+  color: #263238;
+}
+
+.mdx-page h1 {
+  margin: 0 0 20px;
+  font-size: 2.5rem;
+}
+
+.mdx-page h2 {
+  margin-top: 36px;
+}
+
+.mdx-page p,
+.mdx-page li {
+  line-height: 1.7;
+}
+
+.mdx-page pre {
+  overflow-x: auto;
+  padding: 16px;
+  border: 1px solid #d8dee3;
+  border-radius: 8px;
+  background: #f5f7f8;
+}
+
+.mdx-counter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 32px 0;
+  padding: 18px 20px;
+  border: 1px solid #d8dee3;
+  border-radius: 8px;
+  background: #fbfcfc;
+}
+
+.mdx-counter span {
+  font-weight: 600;
+}
+
+.mdx-back-link {
+  display: inline-block;
+  margin-top: 12px;
+}
+
+@media (max-width: 520px) {
+  .mdx-page {
+    padding-top: 28px;
+  }
+
+  .mdx-page h1 {
+    font-size: 2rem;
+  }
+
+  .mdx-counter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
 #app {
   max-width: 1280px;
   margin: 0 auto;

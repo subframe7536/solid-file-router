@@ -1,0 +1,40 @@
+import { A } from '@solidjs/router'
+import { createSignal } from 'solid-js'
+
+export function Counter() {
+  const [count, setCount] = createSignal(0)
+
+  return (
+    <div class="mdx-counter">
+      <span>Count: {count()}</span>
+      <button type="button" onClick={() => setCount((value) => value + 1)}>
+        Increment
+      </button>
+    </div>
+  )
+}
+
+<main class="mdx-page">
+
+# MDX custom route
+
+This page is compiled by **Satteri** and exposed through a custom `routeSource`.
+
+## What this verifies
+
+- Markdown content renders as Solid components.
+- MDX can import packages and define JSX components.
+- Client-side state and event handlers remain interactive.
+- File changes are tracked by the router's custom source HMR.
+
+Read the [Satteri documentation](https://satteri.bruits.org/docs/) for the compiler API.
+
+```ts
+const result = await mdxToJs(source, { jsx: true })
+```
+
+<Counter />
+
+<A class="mdx-back-link" href="/">Back to playground</A>
+
+</main>

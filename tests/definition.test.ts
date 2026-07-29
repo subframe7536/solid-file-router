@@ -156,9 +156,9 @@ describe('generateDefinition', () => {
   })
 
   it('builds custom source route tree from routeId and imports module IDs', async () => {
-    const appModuleId = `${root}/docs/routes/_app.tsx.solid-file-router.tsx`
-    const moduleId = `${root}/docs/pages/button.mdx.solid-file-router.tsx`
-    const notFoundModuleId = `${root}/docs/routes/404.tsx.solid-file-router.tsx`
+    const appModuleId = `${root}/docs/routes/_app.tsx-sfr.tsx`
+    const moduleId = `${root}/docs/pages/button.mdx-sfr.tsx`
+    const notFoundModuleId = `${root}/docs/routes/404.tsx-sfr.tsx`
     const cache = generateDefinition(
       [
         { routeId: '/', routePath: '_app.tsx', moduleId: appModuleId },

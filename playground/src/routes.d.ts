@@ -16,6 +16,7 @@ declare module 'solid-file-router' {
     '/inheritance-test/default': never
     '/inheritance-test/no-inheritance': never
     '/inheritance-test/selective-inheritance': never
+    '/mdx': never
     '/nest': never
     '/nest/:id': { $id: string }
     '/nest/value': never
@@ -39,6 +40,7 @@ declare module '@solidjs/router' {
     | '/inheritance-test/default'
     | '/inheritance-test/no-inheritance'
     | '/inheritance-test/selective-inheritance'
+    | '/mdx'
     | '/nest'
     | '/nest/:id'
     | '/nest/value'

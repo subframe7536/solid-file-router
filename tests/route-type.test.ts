@@ -75,32 +75,32 @@ describe('generateRouteTypes', () => {
       {
         routeId: '/',
         routePath: 'index.tsx',
-        moduleId: '/root/docs/index.mdx.solid-file-router.tsx',
+        moduleId: '/root/docs/index.mdx-sfr.tsx',
       },
       {
         routeId: '/_app',
         routePath: '_app.tsx',
-        moduleId: '/root/docs/app.mdx.solid-file-router.tsx',
+        moduleId: '/root/docs/app.mdx-sfr.tsx',
       },
       {
         routeId: '/dashboard/_layout',
         routePath: 'dashboard/_layout.tsx',
-        moduleId: '/root/docs/dashboard-layout.mdx.solid-file-router.tsx',
+        moduleId: '/root/docs/dashboard-layout.mdx-sfr.tsx',
       },
       {
         routeId: '/button',
         routePath: '(general)/button.tsx',
-        moduleId: '/root/docs/button.mdx.solid-file-router.tsx',
+        moduleId: '/root/docs/button.mdx-sfr.tsx',
       },
       {
         routeId: '/docs/:slug',
         routePath: 'docs/[slug].tsx',
-        moduleId: '/root/docs/slug.mdx.solid-file-router.tsx',
+        moduleId: '/root/docs/slug.mdx-sfr.tsx',
       },
       {
         routeId: '/404',
         routePath: '404.tsx',
-        moduleId: '/root/docs/404.mdx.solid-file-router.tsx',
+        moduleId: '/root/docs/404.mdx-sfr.tsx',
       },
     ])
 

@@ -1,10 +1,15 @@
 import { createRoute } from 'solid-file-router'
+import { MDXProvider } from 'solid-file-router/mdx'
 
 export default createRoute({
   loadingComponent: () => <div>Loading...</div>,
   errorComponent: Catch,
   component: (props) => {
-    return <div>{props.children}</div>
+    return (
+      <MDXProvider>
+        <div>{props.children}</div>
+      </MDXProvider>
+    )
   },
 })
 
