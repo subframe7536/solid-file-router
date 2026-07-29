@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 import type { ConfigEnv, Plugin, UserConfig } from 'vite'
 import { createBuilder, normalizePath } from 'vite'
 import solidPlugin from 'vite-plugin-solid'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { defineRouteSource, fileRouter, renderTemplate } from '../src/index'
 
@@ -344,6 +344,89 @@ export default createRoute({ component: () => <h1>missing</h1> })
 
     const routeModule = await (plugin as any).load.handler(buttonModuleId)
     expect(routeModule).toContain('title')
+  })
+
+  it('returns generated custom route modules from the Vite hot update hook', async () => {
+    const root = createTempProject()
+    const sourcePath = join(root, 'docs/button.mdx')
+    mkdirSync(join(root, 'docs'), { recursive: true })
+    writeFileSync(sourcePath, '# Button')
+
+    const [plugin] = fileRouter({
+      routeSource: {
+        scan: () => [{ routePath: 'button.tsx', sourcePath: 'docs/button.mdx' }],
+        load: () => 'export default {}',
+      },
+    })
+    await (plugin as any).configResolved({ build: { ssr: false }, root })
+
+    const moduleId = normalizePath(`${sourcePath}.solid-file-router.tsx`)
+    const routeModule = { id: `${moduleId}?route` }
+    const componentModule = { id: `${moduleId}?comp` }
+    const send = vi.fn()
+    const environment = {
+      hot: { send },
+      moduleGraph: {
+        getModuleById: vi.fn((id: string) => {
+          if (id === routeModule.id) {
+            return routeModule
+          }
+          if (id === componentModule.id) {
+            return componentModule
+          }
+        }),
+      },
+    }
+
+    const modules = await (plugin as any).hotUpdate.handler.call(
+      { environment },
+      {
+        type: 'update',
+        file: sourcePath,
+        timestamp: 1,
+        modules: [],
+        server: {},
+      },
+    )
+
+    expect(modules).toStrictEqual([routeModule, componentModule])
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('uses the current Vite environment for explicit route reloads', async () => {
+    const root = createTempProject()
+    const sourcePath = join(root, 'docs/button.mdx')
+    mkdirSync(join(root, 'docs'), { recursive: true })
+    writeFileSync(sourcePath, '# Button')
+
+    const [plugin] = fileRouter({
+      reloadOnChange: true,
+      routeSource: {
+        scan: () => [{ routePath: 'button.tsx', sourcePath: 'docs/button.mdx' }],
+        load: () => 'export default {}',
+      },
+    })
+    await (plugin as any).configResolved({ build: { ssr: false }, root })
+
+    const send = vi.fn()
+    const modules = await (plugin as any).hotUpdate.handler.call(
+      {
+        environment: {
+          hot: { send },
+          moduleGraph: { getModuleById: vi.fn() },
+        },
+      },
+      {
+        type: 'update',
+        file: sourcePath,
+        timestamp: 1,
+        modules: [],
+        server: {},
+      },
+    )
+
+    expect(modules).toStrictEqual([])
+    expect(send).toHaveBeenCalledWith({ type: 'full-reload' })
   })
 
   it('infers typed custom source data in load', async () => {

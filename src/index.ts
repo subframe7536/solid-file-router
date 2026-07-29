@@ -336,6 +336,7 @@ export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TDat
   }
   let logger: Logger | undefined
   let serverEntryFileName: string
+  let lastRouteChange: { key: string; promise: Promise<RouteRegistryChange> } | undefined
 
   const inheritanceConfig = {
     enabled: inheritance.enabled ?? true,
@@ -352,6 +353,26 @@ export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TDat
     inheritance: inheritanceConfig,
     routeSource,
   })
+
+  function getRouteChange(
+    type: 'create' | 'update' | 'delete',
+    file: string,
+    timestamp: number,
+  ): Promise<RouteRegistryChange> {
+    const key = `${type}:${file}:${timestamp}`
+    if (lastRouteChange?.key === key) {
+      return lastRouteChange.promise
+    }
+
+    const promise =
+      type === 'create'
+        ? registry.addFile(file)
+        : type === 'delete'
+          ? registry.removeFile(file)
+          : registry.markChanged(file)
+    lastRouteChange = { key, promise }
+    return promise
+  }
 
   return [
     {
@@ -468,83 +489,44 @@ export default ({ url }) => renderToStringAsync(() => createComponent(StaticRout
         },
       },
       configureServer(server) {
-        const invalidateVirtualModule = (id: string) => {
-          const module = server.moduleGraph.getModuleById(id)
-          if (module) {
-            server.moduleGraph.invalidateModule(module)
-          }
-        }
-
-        const invalidateFileModules = (file: string) => {
-          const modules = server.moduleGraph.getModulesByFile(normalizePath(file))
-          if (!modules) {
-            return
-          }
-
-          for (const module of modules) {
-            server.moduleGraph.invalidateModule(module)
-          }
-        }
-
-        const invalidateModuleIds = (ids: string[]) => {
-          for (const id of ids) {
-            invalidateVirtualModule(id)
-            invalidateVirtualModule(`${id}?route`)
-            invalidateVirtualModule(`${id}?comp`)
-          }
-        }
-
-        const handleStructureEvent =
-          (handler: (file: string) => Promise<RouteRegistryChange>) => async (file: string) => {
-            const change = await handler(file)
-            if (!change.matched) {
-              return
-            }
-
-            for (const changedFile of change.changedFiles) {
-              invalidateFileModules(changedFile)
-            }
-            invalidateModuleIds(change.changedModuleIds)
-            invalidateVirtualModule(VID_EXTRACT_RESOLVED)
-            if (reloadOnChange || change.structureChanged) {
-              server.ws.send({
-                type: 'full-reload',
-              })
-            }
-          }
-
         const watchedFiles = registry.getWatchFiles()
         if (watchedFiles.length > 0) {
           server.watcher.add(watchedFiles)
         }
+      },
+      hotUpdate: {
+        order: 'pre',
+        async handler({ type, file, timestamp, modules }) {
+          const change = await getRouteChange(type, file, timestamp)
+          if (!change.matched) {
+            return
+          }
 
-        server.watcher
-          .on(
-            'add',
-            handleStructureEvent((file) => registry.addFile(file)),
-          )
-          .on(
-            'unlink',
-            handleStructureEvent((file) => registry.removeFile(file)),
-          )
-          .on('change', async (file) => {
-            const change = await registry.markChanged(file)
-            if (!change.matched) {
-              return
-            }
+          if (reloadOnChange || change.structureChanged) {
+            this.environment.hot.send({ type: 'full-reload' })
+            return []
+          }
 
-            for (const changedFile of change.changedFiles) {
-              invalidateFileModules(changedFile)
+          const affectedModules = new Set(modules)
+          for (const moduleId of change.changedModuleIds) {
+            for (const id of [moduleId, `${moduleId}?route`, `${moduleId}?comp`]) {
+              const module = this.environment.moduleGraph.getModuleById(id)
+              if (module) {
+                affectedModules.add(module)
+              }
             }
-            invalidateModuleIds(change.changedModuleIds)
-            invalidateVirtualModule(VID_EXTRACT_RESOLVED)
+          }
 
-            if (reloadOnChange || change.structureChanged) {
-              server.ws.send({
-                type: 'full-reload',
-              })
-            }
-          })
+          if (verboseLog) {
+            logger?.info(
+              `[solid-file-router] HMR modules: ${[...affectedModules]
+                .map((module) => module.id)
+                .join(', ')}`,
+            )
+          }
+
+          return [...affectedModules]
+        },
       },
       generateBundle: {
         order: 'post',
