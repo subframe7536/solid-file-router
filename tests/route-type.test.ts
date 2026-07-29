@@ -78,6 +78,16 @@ describe('generateRouteTypes', () => {
         moduleId: '/root/docs/index.mdx.solid-file-router.tsx',
       },
       {
+        routeId: '/_app',
+        routePath: '_app.tsx',
+        moduleId: '/root/docs/app.mdx.solid-file-router.tsx',
+      },
+      {
+        routeId: '/dashboard/_layout',
+        routePath: 'dashboard/_layout.tsx',
+        moduleId: '/root/docs/dashboard-layout.mdx.solid-file-router.tsx',
+      },
+      {
         routeId: '/button',
         routePath: '(general)/button.tsx',
         moduleId: '/root/docs/button.mdx.solid-file-router.tsx',

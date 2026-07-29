@@ -22,10 +22,22 @@ function getRouteInputPath(file: RouteInput): string {
   return typeof file === 'string' ? file : file.routeId
 }
 
+function isPrivateRouteInput(file: RouteInput): boolean {
+  if (typeof file === 'string') {
+    return false
+  }
+
+  return file.routePath.split('/').some((segment) => segment.startsWith('_'))
+}
+
 export function parseParams(files: RouteInput[], routeRoot = 'src/pages') {
   const params: string[] = []
 
   for (const key of files) {
+    if (isPrivateRouteInput(key)) {
+      continue
+    }
+
     const path = getRoutePath(getRouteInputPath(key), routeRoot)
     if (path && path !== '/404') {
       const param = path.split('/').filter((segment) => segment.startsWith(':'))
