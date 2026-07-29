@@ -324,6 +324,36 @@ describe('fileRouter', () => {
     ).resolves.toContain('MDXContent')
   })
 
+  it('uses the plugin pagesDir as the default MDX directory', async () => {
+    const root = createTempProject('app/routes')
+    const mdxPath = join(root, 'app/routes/content.mdx')
+    writeFileSync(mdxPath, '# Content')
+    const [plugin] = fileRouter({ pagesDir: 'app/routes', mdx: true, lazy: false })
+    await (plugin as any).configResolved({ build: { ssr: false }, root })
+
+    const module = await (plugin as any).load.handler()
+
+    expect(module).toContain(normalizePath(`${mdxPath}-sfr.tsx?comp`))
+  })
+
+  it('preserves an explicit MDX pagesDir override', async () => {
+    const root = createTempProject('app/routes')
+    const mdxDir = join(root, 'content')
+    const mdxPath = join(mdxDir, 'article.mdx')
+    mkdirSync(mdxDir, { recursive: true })
+    writeFileSync(mdxPath, '# Article')
+    const [plugin] = fileRouter({
+      pagesDir: 'app/routes',
+      mdx: { pagesDir: 'content' },
+      lazy: false,
+    })
+    await (plugin as any).configResolved({ build: { ssr: false }, root })
+
+    const module = await (plugin as any).load.handler()
+
+    expect(module).toContain(normalizePath(`${mdxPath}-sfr.tsx?comp`))
+  })
+
   it('supports custom route sources with generated route modules', async () => {
     const root = createTempProject()
     const buttonSourcePath = 'docs/pages/general/button.mdx'
@@ -354,7 +384,9 @@ export default createRoute({ component: () => <h1>missing</h1> })
         filter: 'docs/pages/**/*',
         glob: async () => ['docs/routes/_app.tsx', buttonSourcePath, 'docs/routes/404.tsx'],
         transformPath: (sourcePath) => ({
-          path: sourcePath.includes('button') ? '(general)/button.tsx' : sourcePath.split('/').pop()!,
+          path: sourcePath.includes('button')
+            ? '(general)/button.tsx'
+            : sourcePath.split('/').pop()!,
           routeId: sourcePath.includes('button') ? '/button' : undefined,
         }),
         load: (entry) => modules.get(entry.routeId),

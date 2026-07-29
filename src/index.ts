@@ -53,7 +53,7 @@ export interface FileRouterPluginOption<TData = unknown> {
    */
   pagesDir?: string
   /**
-   * Custom route source. When provided, pagesDir scanning is disabled.
+   * Additional custom route sources appended after the built-in sources.
    * @default undefined
    */
   routeSource?: RouteSourceProvider<TData> | readonly RouteSourceProvider<TData>[]
@@ -71,9 +71,9 @@ export interface FileRouterPluginOption<TData = unknown> {
   ignore?: string[]
   /**
    * Escape hatch that reloads the page for route content updates. Structural
-   * changes may still reload automatically.
+   * changes may still reload automatically. Useful when route modules depend
+   * on state that Vite cannot update through the normal HMR module graph.
    * @default false
-   * @deprecated Prefer Vite's normal HMR behavior.
    */
   reloadOnChange?: boolean
   /**
@@ -373,7 +373,7 @@ export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TDat
       ? [
           FsRouteSource<TData>({ pagesDir }),
           ...(mdx
-            ? [MdxRouteSource<TData>(mdx === true ? { pagesDir } : { ...mdx, pagesDir })]
+            ? [MdxRouteSource<TData>(mdx === true ? { pagesDir } : { pagesDir, ...mdx })]
             : []),
           ...extraRouteSources,
         ]
