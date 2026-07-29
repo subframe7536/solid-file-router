@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { relative as relativePath, resolve } from 'node:path'
 
 import { glob } from 'tinyglobby'
 import { createFilter, normalizePath } from 'vite'
@@ -286,7 +287,7 @@ export class RouteRegistry<TData = unknown> {
     this.root = normalizePath(root)
 
     this.pagesDir = resolveFromRoot(this.root, this.options.pagesDir)
-    this.outputPath = normalizePath(`${this.root}/${this.options.output}`)
+    this.outputPath = resolveFromRoot(this.root, this.options.output)
     if (this.getRouteSources().length > 0) {
       this.routeSourceStates = this.getRouteSources().map((provider) => ({
         provider,
@@ -328,7 +329,7 @@ export class RouteRegistry<TData = unknown> {
     const files = await source.glob!(glob, source.filter, this.root)
     return files
       .map(normalizePath)
-      .filter((file) => this.routeSourceFileFilter(file))
+      .filter((file) => this.routeSourceFileFilter(getRouteSourceFilterPath(this.root, file)))
       .map((sourcePath) => {
         const entry = source.transformPath!(sourcePath)
         return normalizeRouteSourceEntry(this.root, sourcePath, entry)
@@ -462,10 +463,11 @@ export class RouteRegistry<TData = unknown> {
 }
 
 function resolveFromRoot(root: string, dir: string): string {
-  if (!dir) {
-    return root
-  }
-  return `${root}/${normalizePath(dir).replace(/^(?:\.\/|\/+)|\/+$/g, '')}`
+  return normalizePath(resolve(root, dir || '.'))
+}
+
+function getRouteSourceFilterPath(root: string, file: string): string {
+  return relativePath(root, resolveFromRoot(root, file)).replace(/^(?:\.\.\/)+/, '')
 }
 
 function log(message: string, timestamp = true) {

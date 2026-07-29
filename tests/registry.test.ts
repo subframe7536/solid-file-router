@@ -1,6 +1,6 @@
 import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 import { normalizePath } from 'vite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -299,6 +299,79 @@ export default createRoute({
     expect(await registry.getDefinition(true)).toBe(
       `mode:lazy:${normalizePath(join(pagesDir, '_app.tsx'))}|${normalizePath(routeFile)}`,
     )
+  })
+
+  it('canonicalizes parent-relative and absolute filesystem paths', async () => {
+    const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
+    const contentRoot = resolve(workspaceRoot, '../content')
+    const outputPath = join(workspaceRoot, 'generated/routes.d.ts')
+    tempDirs.push(workspaceRoot, contentRoot)
+    mkdirSync(contentRoot, { recursive: true })
+
+    const loadedContexts: Array<{ sourcePath: string; moduleId: string }> = []
+    const registry = new RouteRegistry({
+      pagesDir: '../content',
+      ignore: [],
+      output: outputPath,
+      inheritance: { enabled: true, inheritLoading: true, inheritError: true },
+      routeSources: [
+        {
+          filter: '../content/**/*',
+          glob: async () => ['../content/page.mdx'],
+          transformPath: () => ({ path: 'page.tsx', routeId: '/page' }),
+          load: (context) => {
+            loadedContexts.push({ sourcePath: context.sourcePath, moduleId: context.moduleId })
+            return 'export default {}'
+          },
+          watch: ['../content'],
+        },
+      ],
+    })
+
+    await registry.initialize(workspaceRoot)
+    const expectedSourcePath = normalizePath(join(contentRoot, 'page.mdx'))
+    const expectedModuleId = `${expectedSourcePath}-sfr.tsx`
+    const expectedPagesDir = normalizePath(contentRoot)
+
+    expect(registry.getWatchFiles()).toStrictEqual([expectedPagesDir])
+    expect(generateDefinition).toHaveBeenLastCalledWith(
+      [
+        {
+          routeId: '/page',
+          routePath: 'page.tsx',
+          moduleId: expectedModuleId,
+          sourcePath: expectedSourcePath,
+        },
+      ],
+      expect.any(Map),
+      expectedPagesDir,
+    )
+
+    await registry.getDefinition(true)
+    expect(generateRouteTypes).toHaveBeenLastCalledWith(
+      [
+        {
+          routeId: '/page',
+          routePath: 'page.tsx',
+          moduleId: expectedModuleId,
+          sourcePath: expectedSourcePath,
+        },
+      ],
+      normalizePath(outputPath),
+      undefined,
+      expectedPagesDir,
+    )
+
+    await expect(registry.loadRouteSourceModule(expectedModuleId)).resolves.toBe('export default {}')
+    expect(loadedContexts).toStrictEqual([
+      { sourcePath: expectedSourcePath, moduleId: expectedModuleId },
+    ])
+
+    await expect(registry.markChanged(expectedSourcePath)).resolves.toMatchObject({
+      matched: true,
+      changedFiles: [expectedSourcePath],
+      changedModuleIds: [expectedModuleId],
+    })
   })
 
   it('rescans custom route sources when watched files change', async () => {
