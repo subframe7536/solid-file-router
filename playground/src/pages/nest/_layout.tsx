@@ -5,9 +5,9 @@ export default createRoute({
   component: (props) => {
     return (
       <>
-        <div>{useLocation().pathname}</div>
-        <div>{props.location.pathname}</div>
-        <div>{props.children}</div>
+        <div>nest layout useLocation() 's pathname: {useLocation().pathname}</div>
+        <div>nest layout props.location.pathname: {props.location.pathname}</div>
+        <div>nest layout props.children: {props.children}</div>
       </>
     )
   },

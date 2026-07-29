@@ -82,7 +82,11 @@ export default createRoute({
   if (serverEntry) {
     writeFileSync(
       join(root, serverEntry),
-      `export default ({ url }: { url: string }) => Promise.resolve('<p>custom:' + url + '</p>')
+      `import { createServerEntry } from 'solid-file-router'
+
+export default createServerEntry((props) => (
+  <p data-custom-url={props.url}>custom-server-entry</p>
+))
 `,
     )
   }
@@ -232,9 +236,8 @@ describe('fileRouter', () => {
     const plugin = await createPlugin(root, false)
     const module = await plugin.load.handler()
 
-    expect(module).toContain("import { createComponent } from 'solid-js'")
+    expect(module).toContain("import { createComponent, mergeProps } from 'solid-js'")
     expect(module).toContain("import { Router } from '@solidjs/router'")
-    expect(module).toContain('get url()')
     expect(module).not.toContain('lazy(() => import(')
   })
 
@@ -249,9 +252,8 @@ describe('fileRouter', () => {
 
     const module = await plugin.load.handler()
 
-    expect(module).toContain("import { createComponent, lazy } from 'solid-js'")
+    expect(module).toContain("import { createComponent, lazy, mergeProps } from 'solid-js'")
     expect(module).toContain("import { Router } from '@solidjs/router'")
-    expect(module).toContain('get url()')
     expect(module).toContain('lazy(() => import(')
   })
 
@@ -261,10 +263,10 @@ describe('fileRouter', () => {
     const clientModule = await plugin.load.handler(undefined, { ssr: false })
     const ssrModule = await plugin.load.handler(undefined, { ssr: true })
 
-    expect(clientModule).toContain("import { createComponent, lazy } from 'solid-js'")
+    expect(clientModule).toContain("import { createComponent, lazy, mergeProps } from 'solid-js'")
     expect(clientModule).toContain("import { __loader__ } from 'solid-file-router'")
     expect(clientModule).toContain('__loader__(lazy(() => import(')
-    expect(ssrModule).toContain("import { createComponent } from 'solid-js'")
+    expect(ssrModule).toContain("import { createComponent, mergeProps } from 'solid-js'")
     expect(ssrModule).toContain("import { __loader__ } from 'solid-file-router'")
     expect(ssrModule).toContain('__loader__(')
     expect(ssrModule).not.toContain('__loader__(lazy(() => import(')
@@ -407,9 +409,10 @@ export default createRoute({ component: () => <h1>missing</h1> })
   })
 
   it('uses a custom SSG server entry when configured', async () => {
-    const output = await buildTempSsgProject('src/custom-server.ts')
-    expect(output.indexHtml).toContain('custom:/')
-    expect(output.fallbackHtml).toContain('custom:/404')
+    const output = await buildTempSsgProject('src/custom-server.tsx')
+    expect(output.indexHtml).toContain('data-custom-url="/"')
+    expect(output.indexHtml).toContain('custom-server-entry')
+    expect(output.fallbackHtml).toContain('data-custom-url="/404"')
   })
 
   it('renders the fallback when /404 is explicitly listed or no routes are listed', async () => {

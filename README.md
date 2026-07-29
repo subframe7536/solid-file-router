@@ -480,9 +480,10 @@ Optional custom server entry:
 
 ```tsx
 // src/entry-server.tsx
+import { FileRouter } from 'virtual:routes'
 import { createServerEntry } from 'solid-file-router'
 
-export default createServerEntry()
+export default createServerEntry((props) => <FileRouter {...props} />)
 ```
 
 Vite config:
@@ -700,12 +701,15 @@ Client render helper for SSG-aware hydration.
 createClientEntry(() => <FileRouter />, document.getElementById('root')!)
 ```
 
-### `createServerEntry(component?)`
+### `createServerEntry(component)`
 
-Creates the server renderer used by SSG.
+Creates the server renderer used by SSG from an explicit root component.
 
-```ts
-export default createServerEntry()
+```tsx
+import { createServerEntry } from 'solid-file-router'
+import { FileRouter } from 'virtual:routes'
+
+export default createServerEntry((props) => <FileRouter base={props.base} url={props.url} />)
 ```
 
 ## Development

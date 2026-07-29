@@ -55,7 +55,7 @@ export default createRoute({
 
             <li style={{ 'margin-bottom': '15px' }}>
               <A
-                href="/nest"
+                href="/nest/value?date=1#1"
                 style={{
                   display: 'block',
                   padding: '15px',

@@ -3,10 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createServerEntry, readRouteInfo } from '../src/runtime'
 
-const mocks = vi.hoisted(() => ({
-  fileRouter: vi.fn(() => null),
-}))
-
 vi.mock('solid-js', async (importOriginal) => {
   const original = await importOriginal<typeof import('solid-js')>()
   return {
@@ -15,13 +11,8 @@ vi.mock('solid-js', async (importOriginal) => {
   }
 })
 
-vi.mock('virtual:routes', () => ({
-  FileRouter: mocks.fileRouter,
-}))
-
 beforeEach(() => {
   vi.mocked(createComponent).mockClear()
-  mocks.fileRouter.mockClear()
 })
 
 describe('readRouteInfo', () => {
@@ -54,18 +45,5 @@ describe('createServerEntry', () => {
 
     expect(customRender).toHaveBeenCalledOnce()
     expect(vi.mocked(createComponent)).not.toHaveBeenCalledWith(customRender, expect.anything())
-  })
-
-  it('mounts the default file router with one component boundary', async () => {
-    const renderServer = await createServerEntry()
-
-    await renderServer({ url: '/docs' })
-
-    const fileRouterCall = vi
-      .mocked(createComponent)
-      .mock.calls.find(([component]) => component === mocks.fileRouter)
-    expect(fileRouterCall).toBeDefined()
-    expect(fileRouterCall?.[1].url).toBe('/docs')
-    expect(fileRouterCall?.[1].base).toBe('/')
   })
 })
