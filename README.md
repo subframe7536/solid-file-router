@@ -20,7 +20,8 @@ inheritance, route metadata, custom route sources, and build-time SSG (Static Si
 - `_app.tsx`, nested `_layout.tsx`, and `404.tsx` conventions
 - Route `preload`, `matchFilters`, metadata, and lazy components
 - Inherited loading and error components
-- Custom route providers for MDX, CMS, or generated modules
+- Built-in Markdown/MDX routes compiled with Satteri
+- Composable custom route providers for CMS or generated modules
 - Build-time static HTML generation
 
 ## Install
@@ -30,6 +31,8 @@ Install the router and the Solid/Vite dependencies:
 ```bash
 bun add solid-file-router @solidjs/router solid-js
 bun add -d vite vite-plugin-solid
+# Optional: required only for Markdown/MDX routes
+bun add -d satteri
 ```
 
 `@babel/core` and `tinyglobby` are already provided through
@@ -91,70 +94,21 @@ generates a pass-through root component.
 
 ## Documentation
 
-| Document                       | Use it for                                                            |
-| ------------------------------ | --------------------------------------------------------------------- |
-| [Guide](docs/guide.md)         | Installation, routing workflows, layouts, SSG, and custom sources     |
-| [Reference](docs/reference.md) | File conventions, plugin options, generated modules, and runtime APIs |
-| [Agent Guide](docs/agents.md)  | Integration recipes, repository map, invariants, and verification     |
+| Document | Use it for |
+| --- | --- |
+| [Guide](docs/guide.md) | Routes, layouts, data, navigation, metadata, and custom sources |
+| [SSG Guide](docs/ssg.md) | Prerender setup, route selection, output, templates, and server entries |
+| [MDX Guide](docs/mdx.md) | Satteri setup, Markdown routes, component overrides, and HMR |
+| [Reference](docs/reference.md) | Exact plugin options, generated modules, types, and runtime APIs |
+| [Agent Guide](docs/agents.md) | Repository map, invariants, and verification workflows |
 
-Common tasks:
+Enable the latest opt-in features with `fileRouter({ ssg: {} })` or
+`fileRouter({ mdx: true })`. SSG requires `solidPlugin({ ssr: true })`; MDX
+requires the optional `satteri` peer dependency. Follow the dedicated guides
+for complete, copyable setup.
 
-| Task                              | Start here                                                                   |
-| --------------------------------- | ---------------------------------------------------------------------------- |
-| Add or rename a route             | [File conventions](docs/guide.md#file-conventions)                           |
-| Load route data                   | [Data preloading](docs/guide.md#data-preloading)                             |
-| Add loading or error UI           | [Loading and error inheritance](docs/guide.md#loading-and-error-inheritance) |
-| Generate static HTML              | [SSG](docs/guide.md#ssg)                                                     |
-| Generate routes from MDX or a CMS | [Custom route sources](docs/guide.md#custom-route-sources)                   |
-| Look up an option or API          | [Reference](docs/reference.md)                                               |
-
-## SSG
-
-SSG renders static HTML during `vite build`; it does not provide a runtime SSR
-server. Enable Solid's SSR transform and pass an `ssg` object to the router:
-
-```ts
-// vite.config.ts
-import { fileRouter } from 'solid-file-router/plugin'
-import { defineConfig } from 'vite'
-import solidPlugin from 'vite-plugin-solid'
-
-export default defineConfig({
-  plugins: [
-    solidPlugin({ ssr: true }),
-    fileRouter({
-      ssg: {
-        routes: ['/', '/about'],
-        concurrency: 4,
-      },
-    }),
-  ],
-})
-```
-
-Use `createClientEntry` so production builds hydrate prerendered HTML:
-
-```tsx
-// src/index.tsx
-import { createClientEntry } from 'solid-file-router'
-import { FileRouter } from 'virtual:routes'
-
-createClientEntry(() => <FileRouter />, document.getElementById('root')!)
-```
-
-When `routes` is omitted, the internal renderer prerenders every concrete static
-route and skips dynamic patterns. The build writes browser assets and HTML to
-`dist/client` by default and always emits `404.html` for static-host fallback.
-Your `index.html` only needs a normal `<head>` and `<div id="root"></div>`;
-explicit outlet and head markers are available for custom templates.
-
-See the [SSG guide](docs/guide.md#ssg) for custom server entries, HTML markers,
-route output rules, and failure cases.
-
-## Custom Route Sources
-
-Use `routeSource` when route modules come from outside `src/pages`. Providing a
-custom source adds it after the built-in filesystem and optional MDX sources. See the
+Custom `routeSource` providers are additive: the built-in JSX/TSX source runs
+first, optional MDX runs next, and one or more custom providers follow. See the
 [custom route source guide](docs/guide.md#custom-route-sources).
 
 ## Development
