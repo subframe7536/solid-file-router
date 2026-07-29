@@ -1,5 +1,5 @@
 import { subfFmt } from '@subf/config/oxfmt'
 
 export default subfFmt({
-  ignorePatterns: ['*.d.ts'],
+  ignorePatterns: ['*.d.ts', '*.mdx'],
 })

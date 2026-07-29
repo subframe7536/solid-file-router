@@ -18,14 +18,14 @@ export function Counter() {
 
 # MDX custom route
 
-This page is compiled by **Satteri** and exposed through a custom `routeSource`.
+This page is compiled by **Satteri** through the built-in `mdx: true` route source.
 
 ## What this verifies
 
 - Markdown content renders as Solid components.
 - MDX can import packages and define JSX components.
 - Client-side state and event handlers remain interactive.
-- File changes are tracked by the router's custom source HMR.
+- File changes are tracked by the router's native MDX HMR integration.
 
 Read the [Satteri documentation](https://satteri.bruits.org/docs/) for the compiler API.
 
@@ -35,6 +35,8 @@ const result = await mdxToJs(source, { jsx: true })
 
 <Counter />
 
-<A class="mdx-back-link" href="/">Back to playground</A>
+<A class="mdx-back-link" href="/">
+  Back to playground
+</A>
 
 </main>

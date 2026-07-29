@@ -198,10 +198,22 @@ For setup, output examples, custom entries, and troubleshooting, see the
 
 ## MDX Options and Runtime
 
-`mdx: true` scans `<pagesDir>/**/*.{md,mdx}`. An options object accepts Satteri's
-`MdxCompileOptions` plus `filter?: string` and `pagesDir?: string`. The plugin's
-`pagesDir` is inherited unless the MDX object supplies its own. Satteri is an
-optional peer dependency, and MDX requires program output.
+`mdx: true` adds `<pagesDir>/**/*.{md,mdx}` routes alongside the built-in
+JSX/TSX routes. An options object accepts Satteri's `MdxCompileOptions` plus
+`filter?: string` and `pagesDir?: string`. The plugin's `pagesDir` is inherited
+unless the MDX object supplies its own. Satteri is an optional peer dependency,
+and MDX requires program output.
+
+Native MDX route modules may export `export const route = { ... }` with
+`info`, `preload`, `matchFilters`, `inherit`, `loadingComponent`, and
+`errorComponent`. The `component` field is ignored because the compiled MDX
+document is always the route component. This is executable MDX ESM, not YAML or
+TOML frontmatter configuration.
+
+`_app.mdx` and `_layout.mdx` expose a reserved `<RouteOutlet />` component for
+rendering descendants at the chosen position. `404.mdx` is a leaf fallback and
+does not receive an outlet. Duplicate normalized routes across JSX/TSX and MDX
+remain errors.
 
 `solid-file-router/mdx` exports `MDXProvider`, `useMDXComponents`,
 `MDXComponent`, and `MDXComponents`. `MDXComponents` preserves Solid intrinsic

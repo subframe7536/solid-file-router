@@ -56,8 +56,26 @@ export default createRoute({
   return root
 }
 
-async function buildTempSsgProject(serverEntry?: string, routes: readonly string[] = ['/']) {
+async function buildTempSsgProject(
+  serverEntry?: string,
+  routes: readonly string[] = ['/'],
+  mdx = false,
+) {
   const root = createTempProject()
+  if (mdx) {
+    rmSync(join(root, 'src/pages/_app.tsx'))
+    writeFileSync(join(root, 'src/pages/_app.mdx'), '# MDX layout\n\n<RouteOutlet />')
+    writeFileSync(
+      join(root, 'src/pages/docs.mdx'),
+      `export const route = {
+  info: { title: 'MDX docs' },
+  preload: () => Promise.resolve(),
+  loadingComponent: () => <span>mdx-loading</span>,
+}
+
+# MDX descendant`,
+    )
+  }
   writeFileSync(
     join(root, 'index.html'),
     '<!doctype html><html><head></head><body><div id="root"></div></body></html>',
@@ -91,32 +109,57 @@ export default createServerEntry((props) => (
     )
   }
 
+  const [fileRouterPlugin] = fileRouter({
+    ...(mdx ? { mdx: true } : {}),
+    ssg: {
+      ...(serverEntry ? { serverEntry } : {}),
+      routes,
+    },
+  })
+
   const builder = await createBuilder({
     configFile: false,
     root,
     resolve: {
-      alias: {
-        'solid-file-router': fileURLToPath(new URL('../src/runtime.ts', import.meta.url)),
-        'solid-js': fileURLToPath(new URL('../node_modules/solid-js', import.meta.url)),
-        '@solidjs/router': fileURLToPath(
-          new URL('../node_modules/@solidjs/router', import.meta.url),
-        ),
-      },
-    },
-    plugins: [
-      solidPlugin({ ssr: true }),
-      fileRouter({
-        ssg: {
-          ...(serverEntry ? { serverEntry } : {}),
-          routes,
+      alias: [
+        {
+          find: 'solid-file-router/mdx',
+          replacement: fileURLToPath(new URL('../src/mdx/index.ts', import.meta.url)),
         },
-      }),
-    ],
+        {
+          find: 'solid-file-router',
+          replacement: fileURLToPath(new URL('../src/runtime.ts', import.meta.url)),
+        },
+        {
+          find: 'solid-js',
+          replacement: fileURLToPath(new URL('../node_modules/solid-js', import.meta.url)),
+        },
+        {
+          find: '@solidjs/router',
+          replacement: fileURLToPath(new URL('../node_modules/@solidjs/router', import.meta.url)),
+        },
+      ],
+    },
+    plugins: [solidPlugin({ ssr: true }), fileRouterPlugin],
   })
   await builder.buildApp()
+  const mdxRouteModuleId = normalizePath(`${join(root, 'src/pages/docs.mdx')}-sfr.tsx`)
+  const mdxRouteModule = mdx
+    ? await (fileRouterPlugin as any).load.handler(mdxRouteModuleId)
+    : undefined
+  const mdxRouteQuery = mdx
+    ? (
+        await (fileRouterPlugin as any).transform.handler(
+          mdxRouteModule,
+          `${mdxRouteModuleId}?route`,
+        )
+      ).code
+    : undefined
   return {
     indexHtml: readFileSync(join(root, 'dist/client/index.html'), 'utf8'),
     fallbackHtml: readFileSync(join(root, 'dist/client/404.html'), 'utf8'),
+    docsHtml: mdx ? readFileSync(join(root, 'dist/client/docs.html'), 'utf8') : undefined,
+    mdxRouteQuery,
   }
 }
 
@@ -307,7 +350,19 @@ describe('fileRouter', () => {
     const root = createTempProject()
     const mdxPath = join(root, 'src/pages/content.mdx')
     const markdownPath = join(root, 'src/pages/markdown.md')
-    writeFileSync(mdxPath, '# Content')
+    writeFileSync(
+      mdxPath,
+      `export const route = {
+  info: { title: 'Content' },
+  preload: () => Promise.resolve(),
+  matchFilters: () => true,
+  inherit: false,
+  loadingComponent: () => null,
+  errorComponent: () => null,
+}
+
+# Content`,
+    )
     writeFileSync(markdownPath, '# Markdown')
     const [plugin] = fileRouter({ mdx: true, lazy: false })
     await (plugin as any).configResolved({ build: { ssr: false }, root })
@@ -319,9 +374,88 @@ describe('fileRouter', () => {
     expect(module).toContain(`${routeModuleId}?comp`)
     expect(routeModule).toContain('export default createRoute')
     expect(routeModule).toContain('MDXContent')
+    expect(routeModule).toContain('info: __sfr_mdx_route.info')
+    expect(routeModule).toContain('preload: __sfr_mdx_route.preload')
+    expect(routeModule).toContain('matchFilters: __sfr_mdx_route.matchFilters')
+    expect(routeModule).toContain('inherit: __sfr_mdx_route.inherit')
+    expect(routeModule).toContain('loadingComponent: __sfr_mdx_route.loadingComponent')
+    expect(routeModule).toContain('errorComponent: __sfr_mdx_route.errorComponent')
+    expect(routeModule).not.toContain('...__sfr_mdx_route')
     await expect(
       (plugin as any).load.handler(normalizePath(`${markdownPath}-sfr.tsx`)),
     ).resolves.toContain('MDXContent')
+  })
+
+  it('extracts native MDX route configuration through route queries', async () => {
+    const root = createTempProject()
+    const mdxPath = join(root, 'src/pages/content.mdx')
+    writeFileSync(
+      mdxPath,
+      `export const route = {
+  info: { title: 'Content' },
+  preload: () => Promise.resolve(),
+  matchFilters: () => true,
+  inherit: false,
+  loadingComponent: () => <span>loading</span>,
+  errorComponent: (props) => <span>{props.error.message}</span>,
+  component: () => <h1>this component must be ignored</h1>,
+}
+
+# Content`,
+    )
+    const [plugin] = fileRouter({ mdx: true, lazy: false })
+    await (plugin as any).configResolved({ build: { ssr: false }, root })
+    const moduleId = normalizePath(`${mdxPath}-sfr.tsx`)
+    const routeModule = await (plugin as any).load.handler(moduleId)
+
+    const route = (await (plugin as any).transform.handler(routeModule, `${moduleId}?route`)).code
+    const component = (await (plugin as any).transform.handler(routeModule, `${moduleId}?comp`))
+      .code
+
+    expect(route).toContain('info: __sfr_mdx_route.info')
+    expect(route).toContain('preload: __sfr_mdx_route.preload')
+    expect(route).toContain('matchFilters: __sfr_mdx_route.matchFilters')
+    expect(route).toContain('inherit: __sfr_mdx_route.inherit')
+    expect(route).toContain('loadingComponent: __sfr_mdx_route.loadingComponent')
+    expect(route).toContain('errorComponent: __sfr_mdx_route.errorComponent')
+    expect(component).toContain('component: MDXContent')
+    expect(component).not.toContain('component: __sfr_mdx_route.component')
+    expect(component).not.toContain('info: __sfr_mdx_route.info')
+  })
+
+  it('uses a collision-safe fallback when an MDX module uses the reserved name', async () => {
+    const root = createTempProject()
+    const mdxPath = join(root, 'src/pages/content.mdx')
+    writeFileSync(mdxPath, 'export const __sfr_mdx_route = {}\n\n# Content')
+    const [plugin] = fileRouter({ mdx: true, lazy: false })
+    await (plugin as any).configResolved({ build: { ssr: false }, root })
+
+    const routeModule = await (plugin as any).load.handler(normalizePath(`${mdxPath}-sfr.tsx`))
+
+    expect(routeModule).toContain("const __sfr_mdx_route_1 = typeof route === 'undefined'")
+    expect(routeModule).not.toContain("const __sfr_mdx_route = typeof route === 'undefined'")
+  })
+
+  it('generates an MDX layout with an explicit RouteOutlet', async () => {
+    const root = createTempProject()
+    const appPath = join(root, 'src/pages/_app.tsx')
+    const appMdxPath = join(root, 'src/pages/_app.mdx')
+    const leafMdxPath = join(root, 'src/pages/content.mdx')
+    rmSync(appPath)
+    writeFileSync(appMdxPath, '# Layout\n\n<RouteOutlet />')
+    writeFileSync(leafMdxPath, '# Content')
+    const [plugin] = fileRouter({ mdx: true, lazy: false })
+    await (plugin as any).configResolved({ build: { ssr: false }, root })
+
+    const routeModule = await (plugin as any).load.handler(normalizePath(`${appMdxPath}-sfr.tsx`))
+    const leafModule = await (plugin as any).load.handler(normalizePath(`${leafMdxPath}-sfr.tsx`))
+
+    expect(routeModule).toContain('createComponent(MDXContent, mergeProps(props, {')
+    expect(routeModule).toContain('get components()')
+    expect(routeModule).toContain('RouteOutlet: () => props.children')
+    expect(routeModule).toContain('component: (props) =>')
+    expect(leafModule).toContain('component: MDXContent')
+    expect(leafModule).not.toContain('createComponent(MDXContent, mergeProps(props, {')
   })
 
   it('uses the plugin pagesDir as the default MDX directory', async () => {
@@ -551,6 +685,19 @@ export default createRoute({ component: () => <h1>missing</h1> })
     expect(output.indexHtml).toContain('>home</h1>')
     expect(output.fallbackHtml).toContain('>not-found-fallback</h1>')
     expect(output.fallbackHtml).toContain('_$HY')
+  })
+
+  it('builds mixed TSX and MDX routes with an MDX layout outlet', async () => {
+    const output = await buildTempSsgProject(undefined, ['/', '/docs'], true)
+
+    expect(output.indexHtml).toContain('MDX layout')
+    expect(output.indexHtml).toContain('>home</h1>')
+    expect(output.docsHtml).toContain('MDX layout')
+    expect(output.docsHtml).toContain('MDX descendant')
+    expect(output.mdxRouteQuery).toContain('MDX docs')
+    expect(output.mdxRouteQuery).toContain('info: __sfr_mdx_route.info')
+    expect(output.mdxRouteQuery).toContain('preload: __sfr_mdx_route.preload')
+    expect(output.mdxRouteQuery).toContain('loadingComponent: __sfr_mdx_route.loadingComponent')
   })
 
   it('uses a custom SSG server entry when configured', async () => {

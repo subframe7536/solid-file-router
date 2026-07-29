@@ -49,10 +49,41 @@ export function Counter() {
 <A href="/">Home</A>
 ```
 
-The router compiles the document to a Solid component and wraps it in
-`createRoute({ component: MDXContent })`. Route configuration such as `info`,
-`preload`, or custom boundaries is therefore not extracted from the document;
-use JSX/TSX routes or a custom route provider when those fields are required.
+The router compiles the document to a Solid component and wraps it in a route.
+Export the reserved `route` object to configure supported route behavior:
+For a dynamic page such as `src/pages/guide/[slug].mdx`, filters are keyed by
+the route parameter name:
+
+```mdx
+export const route = {
+  info: { title: 'Getting started' },
+  preload: () => loadGuide(),
+  matchFilters: { slug: /^[a-z0-9-]+$/ },
+  inherit: true,
+  loadingComponent: () => <p>Loading guide...</p>,
+  errorComponent: (props) => <p>{props.error.message}</p>,
+}
+
+# Getting started
+```
+
+The supported fields are `info`, `preload`, `matchFilters`, `inherit`,
+`loadingComponent`, and `errorComponent`. The `component` field is ignored so
+the compiled MDX document remains the route component. Route configuration is
+executable MDX ESM; it is not read from YAML or TOML frontmatter.
+
+MDX `_app.mdx` and `_layout.mdx` files receive a reserved `RouteOutlet`
+component. Place `<RouteOutlet />` where descendant routes should render:
+
+```mdx
+# Documentation
+
+<RouteOutlet />
+```
+
+The outlet is provided only for these special layout routes. `404.mdx` remains
+a normal leaf fallback and does not receive an outlet. JSX/TSX and MDX routes
+are additive, and duplicate normalized routes across them remain errors.
 
 ## Component Overrides
 
