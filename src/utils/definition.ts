@@ -9,15 +9,29 @@ export const patterns = {
   splat: [/\[\.{3}\w+\]/g, '*'],
 } as const
 
-const REG_LAYOUT = /_layout\.(jsx|tsx)$/
+const REG_APP = /^_app\.(jsx|tsx)$/
+const REG_LAYOUT = /^_layout\.(jsx|tsx)$/
+const REG_NOT_FOUND = /^404\.(jsx|tsx)$/
 const REG_GROUP = /\([\w-]+\)/
 const REG_INSERT = /^\w|\//
 const REG_ROUTE_EXT = /\.(jsx|tsx)$/
 const REG_UNSUPPORTED_ROUTE_EXT = /\.mdx$/
 
+function getRouteBasename(file: string) {
+  return file.slice(file.lastIndexOf('/') + 1)
+}
+
+function isAppRoute(file: string) {
+  return REG_APP.test(getRouteBasename(file))
+}
+
+function isLayoutRoute(file: string) {
+  return REG_LAYOUT.test(getRouteBasename(file))
+}
+
 function isNotFoundRoute(file: string) {
   return (
-    file === '404' || file.endsWith('/404') || file.endsWith('404.tsx') || file.endsWith('404.jsx')
+    file === '404' || file.endsWith('/404') || REG_NOT_FOUND.test(getRouteBasename(file))
   )
 }
 
@@ -38,7 +52,7 @@ export function getRoutePath(key: string, routeRoot = 'src/pages'): string | und
     return key
   }
 
-  if (key.includes('/_') && !key.endsWith('/404.tsx') && !key.endsWith('/404.jsx')) {
+  if (key.includes('/_') && !isNotFoundRoute(key)) {
     return undefined
   }
 
@@ -49,7 +63,8 @@ export function getRoutePath(key: string, routeRoot = 'src/pages'): string | und
   const path = getRouteKey(key, routeRoot)
     .replace(...patterns.splat)
     .replace(...patterns.param)
-    .replace(/\([\w-]+\)\/|\/?_layout/g, '')
+    .replace(/(^|\/)_layout(?=\/|$)/g, '')
+    .replace(/\([\w-]+\)\//g, '')
     .replace(/\/?index|\./g, '/')
     .replace(/(\w)\/$/g, '$1')
     .split('/')
@@ -153,7 +168,7 @@ function getEntryRoutePath(entry: RouteInput | RouteEntry): string {
 function isGeneratedRouteFile(entry: RouteInput | RouteEntry): boolean {
   const routePath = getEntryRoutePath(entry)
   return (
-    (!hasPrivateSegment(routePath) || REG_LAYOUT.test(routePath)) && !isNotFoundRoute(routePath)
+    (!hasPrivateSegment(routePath) || isLayoutRoute(routePath)) && !isNotFoundRoute(routePath)
   )
 }
 
@@ -280,7 +295,7 @@ function buildRouteLayoutMap(routeFiles: RouteEntry[], layouts: LayoutInfo[]): R
       // Check if layout is an ancestor of this route
       if (
         layout.path !== route.routePath &&
-        (layout.path.includes('_app.') || route.routePath.startsWith(`${layoutDir}/`))
+        (isAppRoute(layout.path) || route.routePath.startsWith(`${layoutDir}/`))
       ) {
         // Layout is in an ancestor directory
         ancestorLayouts.push(layout)
@@ -289,10 +304,10 @@ function buildRouteLayoutMap(routeFiles: RouteEntry[], layouts: LayoutInfo[]): R
 
     // Sort by path depth (nearest first, app last)
     ancestorLayouts.sort((a, b) => {
-      if (a.path.includes('_app.')) {
+      if (isAppRoute(a.path)) {
         return 1
       }
-      if (b.path.includes('_app.')) {
+      if (isAppRoute(b.path)) {
         return -1
       }
       return b.path.length - a.path.length
@@ -370,9 +385,7 @@ function computeGlobalContext(entries: RouteEntry[], lazy: boolean) {
   const globalImports: string[] = [`import { __loader__ } from '${PACKAGE_NAME}'`]
   const layouts: LayoutInfo[] = []
 
-  const appEntry = entries.find(
-    (entry) => entry.routePath.endsWith('_app.tsx') || entry.routePath.endsWith('_app.jsx'),
-  )
+  const appEntry = entries.find((entry) => isAppRoute(entry.routePath))
   if (appEntry) {
     globalImports.push(`import __app_comp from '${appEntry.moduleId}?comp'`)
     globalImports.push(`import __app_route from '${appEntry.moduleId}?route'`)
@@ -396,7 +409,7 @@ function computeGlobalContext(entries: RouteEntry[], lazy: boolean) {
     }
   }
 
-  const layoutEntries = entries.filter((entry) => REG_LAYOUT.test(entry.routePath))
+  const layoutEntries = entries.filter((entry) => isLayoutRoute(entry.routePath))
   layoutEntries.forEach((layoutEntry) => {
     const layoutImportName = getRouteImportName(layoutEntry.moduleId)
     globalImports.push(`import ${layoutImportName} from '${layoutEntry.moduleId}?route'`)
@@ -459,7 +472,7 @@ function generateSingleRouteDefinition(
       const errorChain: string[] = ['route']
 
       for (const layout of ancestorLayouts) {
-        const layoutName = layout.path.includes('_app.')
+        const layoutName = isAppRoute(layout.path)
           ? '_app'
           : getRouteKey(layout.path, routeRoot).replace('/_layout', '')
 
@@ -562,7 +575,7 @@ export function assembleDefinition(
       routeRoot,
     )
     // Layout route imports are already emitted by computeGlobalContext.
-    const importsToAdd = REG_LAYOUT.test(entry.routePath) ? imports.slice(1) : imports
+    const importsToAdd = isLayoutRoute(entry.routePath) ? imports.slice(1) : imports
     routeImports.push(...importsToAdd)
 
     if (verbose && inheritanceLogRow) {

@@ -99,6 +99,70 @@ describe('generateDefinition', () => {
     expect(module).toContain('"/404": __404_route.info')
   })
 
+  it('only treats exact special basenames as conventions', async () => {
+    const myAppFile = `${root}/src/pages/my_app.tsx`
+    const fooLayoutFile = `${root}/src/pages/foo_layout.tsx`
+    const about404File = `${root}/src/pages/about404.tsx`
+    const collisionFiles = [
+      myAppFile,
+      fooLayoutFile,
+      about404File,
+      `${root}/src/pages/dashboard.tsx`,
+      `${root}/src/pages/_app.tsx`,
+      `${root}/src/pages/_layout.tsx`,
+      `${root}/src/pages/404.tsx`,
+    ]
+    const module = await buildDefinition(collisionFiles)
+    const appFile = `${root}/src/pages/_app.tsx`
+    const layoutFile = `${root}/src/pages/_layout.tsx`
+    const dashboardFile = `${root}/src/pages/dashboard.tsx`
+
+    expect(module).toContain(`import __app_route from '${appFile}?route'`)
+    expect(module).not.toContain(`import __app_route from '${myAppFile}?route'`)
+    expect(module).toContain(
+      inheritedExpression(
+        dashboardFile,
+        'loading',
+        `${getRouteImportName(layoutFile)}.loadingComponent || __app_route.loadingComponent`,
+      ),
+    )
+    expect(module).not.toContain(
+      inheritedExpression(
+        dashboardFile,
+        'loading',
+        `${getRouteImportName(fooLayoutFile)}.loadingComponent || ${getRouteImportName(layoutFile)}.loadingComponent || __app_route.loadingComponent`,
+      ),
+    )
+    expect(module).toContain(`import __404_route from '${root}/src/pages/404.tsx?route'`)
+    expect(module).not.toContain(`import __404_route from '${about404File}?route'`)
+    expect(module).toContain(`"/my_app": ${getRouteImportName(myAppFile)}.info`)
+    expect(module).toContain(`"/foo_layout": ${getRouteImportName(fooLayoutFile)}.info`)
+    expect(module).toContain(`"/about404": ${getRouteImportName(about404File)}.info`)
+  })
+
+  it('recognizes JSX special basenames', async () => {
+    const myAppFile = `${root}/src/pages/my_app.jsx`
+    const fooLayoutFile = `${root}/src/pages/foo_layout.jsx`
+    const about404File = `${root}/src/pages/about404.jsx`
+    const jsxFiles = [
+      myAppFile,
+      fooLayoutFile,
+      about404File,
+      `${root}/src/pages/_app.jsx`,
+      `${root}/src/pages/_layout.jsx`,
+      `${root}/src/pages/404.jsx`,
+    ]
+    const module = await buildDefinition(jsxFiles)
+
+    expect(module).toContain(`import __app_route from '${root}/src/pages/_app.jsx?route'`)
+    expect(module).not.toContain(`import __app_route from '${myAppFile}?route'`)
+    expect(module).toContain(`import __404_route from '${root}/src/pages/404.jsx?route'`)
+    expect(module).not.toContain(`import __404_route from '${about404File}?route'`)
+    expect(module).toContain(`"/my_app": ${getRouteImportName(myAppFile)}.info`)
+    expect(module).toContain(`"/foo_layout": ${getRouteImportName(fooLayoutFile)}.info`)
+    expect(module).toContain(`"/about404": ${getRouteImportName(about404File)}.info`)
+  })
+
   it('generates client routes with lazy route components', async () => {
     const module = await buildDefinition(files, false, undefined, true)
     expect(module).toContain("import { createComponent, lazy, mergeProps } from 'solid-js'")
