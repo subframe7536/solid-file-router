@@ -1,6 +1,10 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { describe, it, expect } from 'vitest'
 
-import { parseParams } from '../src/utils/route-type'
+import { generateRouteTypes, parseParams } from '../src/utils/route-type'
 
 const root = '/root/project'
 const files = [
@@ -95,5 +99,26 @@ describe('generateRouteTypes', () => {
       "'/button': never",
       "'/docs/:slug': { $slug: string }",
     ])
+  })
+
+  it('imports an external route-info interface', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'solid-file-router-route-type-'))
+    const output = join(tempRoot, 'routes.d.ts')
+
+    try {
+      generateRouteTypes([`${root}/src/pages/index.tsx`], output, {
+        type: 'import',
+        from: './docs/build/routes',
+        name: 'DocsRouteInfo',
+      })
+      const generated = readFileSync(output, 'utf8')
+
+      expect(generated).toContain(
+        "import type { DocsRouteInfo as FileRouteInfoDefinition } from './docs/build/routes'",
+      )
+      expect(generated).toContain('interface FileRouteInfo extends FileRouteInfoDefinition {}')
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true })
+    }
   })
 })

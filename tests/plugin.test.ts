@@ -16,7 +16,7 @@ import { createBuilder, normalizePath } from 'vite'
 import solidPlugin from 'vite-plugin-solid'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { fileRouter, renderTemplate } from '../src/index'
+import { defineRouteSource, fileRouter, renderTemplate } from '../src/index'
 
 const tempDirs: string[] = []
 
@@ -56,7 +56,7 @@ export default createRoute({
   return root
 }
 
-async function buildTempSsgProject(serverEntry?: string) {
+async function buildTempSsgProject(serverEntry?: string, routes: readonly string[] = ['/']) {
   const root = createTempProject()
   writeFileSync(
     join(root, 'index.html'),
@@ -68,6 +68,15 @@ async function buildTempSsgProject(serverEntry?: string) {
 import { createClientEntry } from 'solid-file-router'
 
 createClientEntry(() => <FileRouter />, document.getElementById('root')!)
+`,
+  )
+  writeFileSync(
+    join(root, 'src/pages/404.tsx'),
+    `import { createRoute } from 'solid-file-router'
+
+export default createRoute({
+  component: () => <h1>not-found-fallback</h1>,
+})
 `,
   )
   if (serverEntry) {
@@ -95,13 +104,16 @@ createClientEntry(() => <FileRouter />, document.getElementById('root')!)
       fileRouter({
         ssg: {
           ...(serverEntry ? { serverEntry } : {}),
-          routes: ['/'],
+          routes,
         },
       }),
     ],
   })
   await builder.buildApp()
-  return readFileSync(join(root, 'dist/client/index.html'), 'utf8')
+  return {
+    indexHtml: readFileSync(join(root, 'dist/client/index.html'), 'utf8'),
+    fallbackHtml: readFileSync(join(root, 'dist/client/404.html'), 'utf8'),
+  }
 }
 
 function createTempProjectWithCustomRoot(customRoot: string, routeRoot = 'src/pages') {
@@ -332,6 +344,30 @@ export default createRoute({ component: () => <h1>missing</h1> })
     expect(routeModule).toContain('title')
   })
 
+  it('infers typed custom source data in load', async () => {
+    const source = defineRouteSource<{ title: string }>({
+      scan: () => [
+        {
+          routePath: 'button.tsx',
+          sourcePath: 'docs/button.mdx',
+          data: { title: 'Button' },
+        },
+      ],
+      load: ({ data }) =>
+        data ? `export default { title: '${data.title}' }` : 'export default {}',
+    })
+    const root = createTempProject()
+    const [plugin] = fileRouter({ routeSource: source })
+
+    await (plugin as any).configResolved({
+      build: { ssr: false },
+      root,
+    })
+
+    const moduleId = normalizePath(join(root, 'docs/button.mdx.solid-file-router.tsx'))
+    await expect((plugin as any).load.handler(moduleId)).resolves.toContain("title: 'Button'")
+  })
+
   it('does not inject ssg config unless explicitly enabled', () => {
     const [plugin] = fileRouter()
     const config = getBuildConfig(plugin!)
@@ -364,11 +400,24 @@ export default createRoute({ component: () => <h1>missing</h1> })
   })
 
   it('builds SSG with the internal renderer by default', async () => {
-    await expect(buildTempSsgProject()).resolves.toContain('>home</h1>')
+    const output = await buildTempSsgProject()
+    expect(output.indexHtml).toContain('>home</h1>')
+    expect(output.fallbackHtml).toContain('>not-found-fallback</h1>')
+    expect(output.fallbackHtml).toContain('_$HY')
   })
 
   it('uses a custom SSG server entry when configured', async () => {
-    await expect(buildTempSsgProject('src/custom-server.ts')).resolves.toContain('custom:/')
+    const output = await buildTempSsgProject('src/custom-server.ts')
+    expect(output.indexHtml).toContain('custom:/')
+    expect(output.fallbackHtml).toContain('custom:/404')
+  })
+
+  it('renders the fallback when /404 is explicitly listed or no routes are listed', async () => {
+    const duplicateRouteOutput = await buildTempSsgProject(undefined, ['/404', '/'])
+    expect(duplicateRouteOutput.fallbackHtml).toContain('>not-found-fallback</h1>')
+
+    const emptyRouteOutput = await buildTempSsgProject(undefined, [])
+    expect(emptyRouteOutput.fallbackHtml).toContain('>not-found-fallback</h1>')
   })
 
   it('respects custom ssg server entry and outDir', () => {

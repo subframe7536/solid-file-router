@@ -1,6 +1,6 @@
 # Optimize docs-consumer workflows
 
-Status: Proposed
+Status: Completed
 Priority: P1
 Effort: L
 Risk: Medium

@@ -9,19 +9,28 @@ import { PACKAGE_NAME, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
 import type { InheritanceConfig } from './utils/definition'
 import { extract, getAstCacheKey } from './utils/extract'
 import { isRouteSourceModuleId, resolveRouteSourceModuleId, RouteRegistry } from './utils/registry'
-import type { InfoTypeDefinition } from './utils/route-type'
+import type { RouteRegistryChange } from './utils/registry'
+import type { InfoTypeDefinition, InlineInfoTypeDefinition } from './utils/route-type'
 import type {
   Promisable,
   RouteSourceEntry,
   RouteSourceLoadContext,
   RouteSourceProvider,
 } from './utils/source'
+import { defineRouteSource } from './utils/source'
 
 type Awaitable<T> = T | Promise<T>
 export type PrerenderRoutesSource = readonly string[] | (() => Awaitable<readonly string[]>)
-export type { Promisable, RouteSourceEntry, RouteSourceLoadContext, RouteSourceProvider }
+export {
+  defineRouteSource,
+  type Promisable,
+  type RouteSourceEntry,
+  type RouteSourceLoadContext,
+  type RouteSourceProvider,
+}
+export type { InfoTypeDefinition, InlineInfoTypeDefinition }
 
-export interface FileRouterPluginOption {
+export interface FileRouterPluginOption<TData = unknown> {
   /**
    * The output file path where the page types will be saved.
    * @default 'src/routes.d.ts'
@@ -38,7 +47,7 @@ export interface FileRouterPluginOption {
   /**
    * Custom route source. When provided, pagesDir scanning is disabled.
    */
-  routeSource?: RouteSourceProvider
+  routeSource?: RouteSourceProvider<TData>
   /**
    * A list of glob patterns to be ignored during processing.
    *
@@ -303,7 +312,7 @@ export function renderTemplate(template: string, id: string, app: string) {
 /**
  * Vite plugin for page generation
  */
-export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
+export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TData> = {}): Plugin[] {
   const {
     output = 'src/routes.d.ts',
     pagesDir = 'src/pages',
@@ -334,7 +343,7 @@ export function fileRouter(options: FileRouterPluginOption = {}): Plugin[] {
     inheritError: inheritance.inheritError ?? true,
   }
 
-  const registry = new RouteRegistry({
+  const registry = new RouteRegistry<TData>({
     pagesDir,
     ignore,
     output,
@@ -486,15 +495,22 @@ export default ({ url }) => renderToStringAsync(() => createComponent(StaticRout
         }
 
         const handleStructureEvent =
-          (handler: (file: string) => Promise<boolean>) => async (file: string) => {
-            if (!(await handler(file))) {
+          (handler: (file: string) => Promise<RouteRegistryChange>) => async (file: string) => {
+            const change = await handler(file)
+            if (!change.matched) {
               return
             }
 
+            for (const changedFile of change.changedFiles) {
+              invalidateFileModules(changedFile)
+            }
+            invalidateModuleIds(change.changedModuleIds)
             invalidateVirtualModule(VID_EXTRACT_RESOLVED)
-            server.ws.send({
-              type: 'full-reload',
-            })
+            if (reloadOnChange || change.structureChanged) {
+              server.ws.send({
+                type: 'full-reload',
+              })
+            }
           }
 
         const watchedFiles = registry.getWatchFiles()
@@ -570,17 +586,23 @@ export default ({ url }) => renderToStringAsync(() => createComponent(StaticRout
             : registry.getStaticRoutes()
           const prerenderRoutes = Array.from(
             new Set(resolvedRoutes.map((route) => normalizeRoutePath(route))),
-          )
+          ).filter((route) => route !== '/404')
           const serverRenderer = await loadServerRenderer(
             this.environment.config,
             serverEntryFileName,
+          )
+
+          const fallbackHtml = renderTemplate(
+            htmlTemplate,
+            ssgConfig.id,
+            await serverRenderer({ url: '/404' }),
           )
 
           // Keep static-host fallback for client-side routing.
           this.emitFile({
             type: 'asset',
             fileName: '404.html',
-            source: htmlTemplate,
+            source: fallbackHtml,
           })
 
           if (!prerenderRoutes.length) {
