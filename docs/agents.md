@@ -84,7 +84,7 @@ sites before changing an exported type or generated wire shape.
 ### Route generation
 
 - Built-in discovery scans only `.jsx` and `.tsx` under `pagesDir`.
-- Custom `routeSource` disables built-in scanning.
+- Custom `routeSource` is appended after built-in filesystem and optional MDX scanning.
 - Route import names remain stable when unrelated files are added.
 - `_app` and `404` have generated fallbacks when files are absent.
 - Private `_` segments do not generate pages; layouts remain structural inputs.

@@ -53,7 +53,7 @@ export interface FileRouterPluginOption<TData = unknown> {
    */
   pagesDir?: string
   /**
-   * Custom route source. When provided, pagesDir scanning is disabled.
+   * Additional custom route sources appended after the built-in sources.
    * @default undefined
    */
   routeSource?: RouteSourceProvider<TData> | readonly RouteSourceProvider<TData>[]
@@ -369,14 +369,15 @@ export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TDat
       : [routeSource]
     : []
   const routeSources =
-    extraRouteSources.length > 0
-      ? extraRouteSources
-      : mdx
-        ? [
-            FsRouteSource<TData>({ pagesDir }),
-            MdxRouteSource<TData>(mdx === true ? { pagesDir } : { pagesDir, ...mdx }),
-          ]
-        : undefined
+    mdx || extraRouteSources.length > 0
+      ? [
+          FsRouteSource<TData>({ pagesDir }),
+          ...(mdx
+            ? [MdxRouteSource<TData>(mdx === true ? { pagesDir } : { pagesDir, ...mdx })]
+            : []),
+          ...extraRouteSources,
+        ]
+      : undefined
 
   const registry = new RouteRegistry<TData>({
     pagesDir,

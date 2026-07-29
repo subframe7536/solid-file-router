@@ -88,7 +88,7 @@ import { fileRouter } from 'solid-file-router/plugin'
 | ---------------- | ---------------------------- | -------------------------- | -------------------------------------------- |
 | `pagesDir`       | `string`                     | `'src/pages'`              | Built-in route directory                     |
 | `output`         | `string`                     | `'src/routes.d.ts'`        | Generated declaration path                   |
-| `routeSource`    | `RouteSourceProvider<TData>` | `undefined`                | Replaces built-in directory scanning         |
+| `routeSource`    | `RouteSourceProvider<TData>` | `undefined`                | Adds custom route sources                    |
 | `ignore`         | `string[]`                   | see below                  | Globs ignored by scanning and watcher events |
 | `reloadOnChange` | `boolean`                    | `false`                    | Full-reload escape hatch for nonstandard HMR |
 | `lazy`           | `boolean`                    | client `true`, SSR `false` | Lazy component imports                       |

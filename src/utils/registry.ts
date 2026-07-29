@@ -615,7 +615,7 @@ function getRouteSourceWatchFiles<TData>(source: RouteSourceProvider<TData>): st
 }
 
 function getGlobWatchRoot(pattern: string): string {
-  const normalized = normalizePath(pattern).replace(/^(?:\.\/|\/+)/g, '')
+  const normalized = normalizePath(pattern).replace(/^\.\//, '')
   const globIndex = normalized.search(REG_GLOB_CHAR)
   if (globIndex < 0) {
     return normalized

@@ -154,7 +154,7 @@ route output rules, and failure cases.
 ## Custom Route Sources
 
 Use `routeSource` when route modules come from outside `src/pages`. Providing a
-custom source disables built-in directory scanning. See the
+custom source adds it after the built-in filesystem and optional MDX sources. See the
 [custom route source guide](docs/guide.md#custom-route-sources).
 
 ## Development

@@ -46,7 +46,7 @@
     "format": "oxfmt",
     "typecheck": "tsc --noEmit",
     "oxc": "oxlint --fix && oxfmt",
-    "qa": "bun run --parallel oxc typecheck",
+    "qa": "bun run oxc && bun run typecheck",
     "release": "bun run build && bun run qa && bun run test && bumpp --all"
   },
   "devDependencies": {

@@ -415,7 +415,8 @@ Then set `serverEntry: 'src/entry-server.tsx'` in `ssg`.
 ## Custom Route Sources
 
 Use `routeSource` for MDX, CMS, documentation, or generated modules. Providing
-it disables `pagesDir` scanning. The provider scans logical entries and returns
+it adds a source after the built-in filesystem and optional MDX sources. The provider
+scans logical entries and returns
 complete route module source from `load`:
 
 ```ts
