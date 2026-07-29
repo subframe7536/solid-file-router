@@ -59,6 +59,24 @@ export default createRoute({
       expect(result?.code).not.toContain('other')
     })
 
+    it('preserves quoted static keys from a direct export', async () => {
+      const code = `
+export default createRoute({
+  'component': HomePage,
+  "info": { title: 'Home' },
+  'loadingComponent': Loading
+})
+`
+      const result = await extract(code, 'quoted.tsx', {
+        entryFn: 'createRoute',
+        pick: ['component', 'info', 'loadingComponent'],
+      })
+
+      expect(result?.code).toContain('component')
+      expect(result?.code).toContain('info')
+      expect(result?.code).toContain('loadingComponent')
+    })
+
     it('wraps with targetFn when provided', async () => {
       const code = `
 export default createRoute({
@@ -170,6 +188,25 @@ export default routeConfig
       expect(result?.code).toContain('info')
       expect(result?.code).toContain('component')
       expect(result?.code).not.toContain('unused')
+    })
+
+    it('preserves quoted static keys from a named route export', async () => {
+      const code = `
+const routeConfig = createRoute({
+  "component": HomePage,
+  'info': { title: 'Home' },
+  "loadingComponent": Loading
+})
+export { routeConfig as default }
+`
+      const result = await extract(code, 'quoted-alias.tsx', {
+        entryFn: 'createRoute',
+        pick: ['component', 'info', 'loadingComponent'],
+      })
+
+      expect(result?.code).toContain('component')
+      expect(result?.code).toContain('info')
+      expect(result?.code).toContain('loadingComponent')
     })
 
     it('throws error when identifier is not a createRoute call', async () => {
@@ -328,9 +365,9 @@ export default createRoute({
         entryFn: 'createRoute',
         pick: ['info', 'component'],
       }
-      // Computed properties won't match by identifier check
       const result = await extract(code, 'test.tsx', config)
       expect(result?.code).toContain('component')
+      expect(result?.code).not.toContain('title')
     })
   })
 

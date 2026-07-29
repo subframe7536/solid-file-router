@@ -66,6 +66,9 @@ function extractFilteredProperties(objExpr: any, ctx: TransformContext): any[] {
       if (t.isIdentifier(key)) {
         return pick.includes(key.name)
       }
+      if (t.isStringLiteral(key) && prop.computed === false) {
+        return pick.includes(key.value)
+      }
     }
     return false
   })
