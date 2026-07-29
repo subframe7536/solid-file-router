@@ -38,7 +38,7 @@ async function getSatteri() {
 /**
  * Creates the Satteri-backed Markdown/MDX route source.
  */
-export const MdxRouteSource = <TData = unknown>(
+export const mdxRouteSource = <TData = unknown>(
   options: MdxOptions = {},
 ): RouteSourceProvider<TData> => {
   const pagesDir = options.pagesDir ?? 'src/pages'

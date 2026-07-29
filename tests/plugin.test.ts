@@ -288,7 +288,7 @@ describe('fileRouter', () => {
 
     const module = await plugin.load.handler()
 
-    expect(module).toContain(`${normalizePath(join(root, 'app/routes/index.tsx'))}?route`)
+    expect(module).toContain(`${normalizePath(join(root, 'app/routes/index.tsx-sfr.tsx'))}?route`)
   })
 
   it('does not scan Markdown when mdx is disabled', async () => {

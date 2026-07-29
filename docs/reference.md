@@ -8,7 +8,7 @@ The project is pre-1.0; minor releases may introduce breaking changes.
 | Import                     | Contents                                               |
 | -------------------------- | ------------------------------------------------------ |
 | `solid-file-router`        | Runtime functions and route types                      |
-| `solid-file-router/plugin` | Vite plugin, route source factories, and plugin types  |
+| `solid-file-router/plugin` | Vite plugin, custom route-provider helpers, and plugin types |
 | `solid-file-router/mdx`    | MDX provider, component hook, and component types      |
 | `solid-file-router/client` | Declaration for `virtual:routes`                       |
 | `virtual:routes`           | Generated router components, definitions, and metadata |
@@ -17,9 +17,10 @@ The package is ESM only.
 
 ## File Route Reference
 
-The always-on filesystem source reads `**/*.{jsx,tsx}` below `pagesDir` and
-applies `ignore`. Enable `mdx` to add `.md` and `.mdx` discovery; both sources
-use the same file-to-route conventions.
+File routing is built in. It reads `**/*.{jsx,tsx}` below `pagesDir` and applies
+`ignore`. Enable `mdx` to add `.md` and `.mdx` discovery, then use `routeSource`
+to add custom providers. All route inputs use the same file-to-route
+conventions and uniqueness rules.
 
 | Input relative to `pagesDir` | Generated path          |
 | ---------------------------- | ----------------------- |
@@ -90,7 +91,7 @@ import { fileRouter } from 'solid-file-router/plugin'
 | --- | --- | --- | --- |
 | `pagesDir` | `string` | `'src/pages'` | Built-in JSX/TSX directory; inherited by MDX |
 | `output` | `string` | `'src/routes.d.ts'` | Generated declaration path |
-| `routeSource` | provider or provider array | `undefined` | Appends custom sources after built-in sources |
+| `routeSource` | provider or provider array | `undefined` | Adds custom route providers alongside file and optional MDX routes |
 | `mdx` | `boolean \| MdxOptions` | `false` | Adds Satteri-backed Markdown/MDX routes |
 | `ignore` | `string[]` | see below | Globs ignored by discovery and watchers |
 | `reloadOnChange` | `boolean` | `false` | Full-reload escape hatch for nonstandard HMR |
@@ -206,7 +207,7 @@ optional peer dependency, and MDX requires program output.
 `MDXComponent`, and `MDXComponents`. See the [MDX guide](mdx.md) for setup and
 component override examples.
 
-## Custom Route Source Reference
+## Custom Route Provider Reference
 
 ```ts
 type Promisable<T> = T | Promise<T>
@@ -241,11 +242,11 @@ interface RouteSourceProvider<TData = unknown> {
 }
 ```
 
-`defineRouteSource<TData>(provider)` preserves generic inference and supplies
-the default glob and identity path transform. `FsRouter(options?)` creates a
-JSX/TSX filesystem provider; `MdxRouter(options?)` creates a Satteri-backed
-Markdown/MDX provider. Their option types are exported as `FsRouterOptions` and
-`MdxOptions`.
+`defineRouteSource<TData>(provider)` defines a custom route provider, preserves
+generic inference, and supplies the default glob and identity path transform.
+File and MDX route discovery are configured through `fileRouter` with
+`pagesDir`, `mdx`, and `MdxOptions`; they are built-in capabilities rather than
+factories exported from the plugin entry.
 
 | Field | Behavior |
 | --- | --- |
@@ -260,7 +261,10 @@ Markdown/MDX provider. Their option types are exported as `FsRouterOptions` and
 | `watch` | Additional files/globs that cause the provider to rescan |
 
 Normalized route IDs, logical paths, and source paths must be unique across all
-sources. `load` must return non-empty route module source for every entry.
+route inputs. This applies to every route, including the generated `/_app` route.
+Collisions are rejected instead of allowing a later provider to replace an
+earlier one. `load` must return non-empty route module source for every provider
+entry.
 
 Watcher behavior:
 

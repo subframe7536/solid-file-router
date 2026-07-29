@@ -12,7 +12,7 @@ Satteri is an optional peer dependency. Install it only when using MDX:
 bun add -d satteri
 ```
 
-Then enable the source:
+Then enable Markdown and MDX route discovery:
 
 ```ts
 // vite.config.ts
@@ -52,7 +52,7 @@ export function Counter() {
 The router compiles the document to a Solid component and wraps it in
 `createRoute({ component: MDXContent })`. Route configuration such as `info`,
 `preload`, or custom boundaries is therefore not extracted from the document;
-use JSX/TSX routes or a custom route source when those fields are required.
+use JSX/TSX routes or a custom route provider when those fields are required.
 
 ## Component Overrides
 
@@ -103,22 +103,18 @@ module. Router defaults set Solid-compatible JSX output, provider imports,
 attribute casing, style casing, and the source file URL; explicit supported
 Satteri options can override those defaults.
 
-## Direct Source Factory
+## Combining Route Inputs
 
-For source composition outside the `mdx` shorthand, import `MdxRouter` from the
-plugin entry:
+File routing is built in and scans JSX/TSX files below `pagesDir`. Set `mdx: true`
+or pass MDX options to add Markdown and MDX route discovery. Use `routeSource`
+to add a CMS, generated route, or other custom provider; the option also accepts
+an array of providers.
 
-```ts
-import { MdxRouter, fileRouter } from 'solid-file-router/plugin'
-
-fileRouter({
-  routeSource: MdxRouter({ filter: 'content/**/*.mdx' }),
-})
-```
-
-`FsRouter` similarly creates the built-in JSX/TSX filesystem provider. A
-custom `routeSource` is appended after built-in JSX/TSX and optional MDX
-providers. `routeSource` also accepts an array.
+All route inputs share the same route tree. Normalized route IDs, logical paths,
+and source paths must be unique across built-in, MDX, and custom inputs, so a
+custom provider cannot define a route with an existing route ID or replace an
+existing route by ordering. Use `defineRouteSource` for custom providers; file
+and MDX discovery are configured through `fileRouter`.
 
 ## HMR and Errors
 
@@ -131,5 +127,5 @@ If Satteri is not installed, route loading reports the install command. Compile
 errors retain the source file URL. Duplicate route IDs/paths and empty custom
 source output fail with descriptive errors.
 
-See [Custom Route Sources](guide.md#custom-route-sources) to generate richer
+See [Custom Route Providers](guide.md#custom-route-providers) to generate richer
 route modules and the [reference](reference.md) for exact public types.

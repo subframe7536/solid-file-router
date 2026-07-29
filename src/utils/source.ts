@@ -88,7 +88,7 @@ export const defineRouteSource = <TData>(
  * Creates the built-in JSX/TSX filesystem route source.
  * @default `{}`.
  */
-export const FsRouteSource = <TData = unknown>(
+export const fsRouteSource = <TData = unknown>(
   options: FsRouteSourceOptions = {},
 ): RouteSourceProvider<TData> => {
   const pagesDir = options.pagesDir ?? 'src/pages'

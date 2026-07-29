@@ -6,7 +6,7 @@ import type { Logger, Plugin, ResolvedConfig } from 'vite'
 import { normalizePath } from 'vite'
 
 import { PACKAGE_NAME, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
-import { MdxRouteSource } from './mdx/router'
+import { mdxRouteSource } from './mdx/router'
 import type { MdxOptions } from './mdx/router'
 import type { InheritanceConfig } from './utils/definition'
 import { extract, getAstCacheKey } from './utils/extract'
@@ -14,22 +14,18 @@ import { isRouteSourceModuleId, resolveRouteSourceModuleId, RouteRegistry } from
 import type { RouteRegistryChange } from './utils/registry'
 import type { InfoTypeDefinition, InlineInfoTypeDefinition } from './utils/route-type'
 import type {
-  FsRouteSourceOptions,
   Promisable,
   RouteSourceEntry,
   RouteSourceLoadContext,
   RouteSourceProvider,
 } from './utils/source'
-import { defineRouteSource, FsRouteSource } from './utils/source'
+import { defineRouteSource, fsRouteSource } from './utils/source'
 
 type Awaitable<T> = T | Promise<T>
 /** A static route list or lazy route producer used by SSG. */
 export type PrerenderRoutesSource = readonly string[] | (() => Awaitable<readonly string[]>)
 export {
   defineRouteSource,
-  FsRouteSource as FsRouter,
-  MdxRouteSource as MdxRouter,
-  type FsRouteSourceOptions as FsRouterOptions,
   type MdxOptions,
   type Promisable,
   type RouteSourceEntry,
@@ -368,16 +364,6 @@ export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TDat
       ? routeSource
       : [routeSource]
     : []
-  const routeSources =
-    mdx || extraRouteSources.length > 0
-      ? [
-          FsRouteSource<TData>({ pagesDir }),
-          ...(mdx
-            ? [MdxRouteSource<TData>(mdx === true ? { pagesDir } : { pagesDir, ...mdx })]
-            : []),
-          ...extraRouteSources,
-        ]
-      : undefined
 
   const registry = new RouteRegistry<TData>({
     pagesDir,
@@ -386,7 +372,11 @@ export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TDat
     infoDts,
     verboseLog,
     inheritance: inheritanceConfig,
-    routeSources,
+    routeSources: [
+      fsRouteSource<TData>({ pagesDir }),
+      ...(mdx ? [mdxRouteSource<TData>(mdx === true ? { pagesDir } : { pagesDir, ...mdx })] : []),
+      ...extraRouteSources,
+    ],
   })
 
   function getRouteChange(

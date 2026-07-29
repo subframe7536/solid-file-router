@@ -1,7 +1,7 @@
 # solid-file-router Guide
 
-This guide follows the normal integration path from installation to advanced
-route sources. Use the [reference](reference.md) for complete option tables and
+This guide follows the normal integration path from installation to custom
+route providers. Use the [reference](reference.md) for complete option tables and
 API signatures.
 
 ## Installation
@@ -75,8 +75,8 @@ render(() => <FileRouter />, document.getElementById('root')!)
 
 ## File Conventions
 
-The built-in source scans only `.jsx` and `.tsx` files. Route paths are derived
-from paths relative to `pagesDir`:
+File routing is built in and scans `.jsx` and `.tsx` files below `pagesDir`.
+Route paths are derived from paths relative to `pagesDir`:
 
 ```text
 src/pages/
@@ -333,12 +333,12 @@ These build workflows have dedicated guides:
 - [Markdown and MDX Routes](mdx.md) covers Satteri installation, built-in MDX
   discovery, component overrides, compiler options, and HMR.
 
-## Custom Route Sources
+## Custom Route Providers
 
-Use `routeSource` for a CMS, documentation index, or generated modules. It is
-appended after the built-in filesystem and optional MDX sources. A provider
-discovers source paths, maps logical route entries, and returns complete route
-module source from `load`:
+Use `routeSource` for a CMS, documentation index, or generated modules. File
+routes remain available automatically, and `mdx` can add Markdown routes. A
+custom provider discovers source paths, maps logical route entries, and returns
+complete route module source from `load`:
 
 ```ts
 // vite.config.ts
@@ -378,7 +378,7 @@ source for HMR; `data` is passed unchanged from `transformPath` to `load`.
 
 `load` must return non-empty module source for every entry. A missing value
 throws an error. For complete provider types and watcher matching rules, see
-[Custom Route Source Reference](reference.md#custom-route-source-reference).
+[Custom Route Provider Reference](reference.md#custom-route-provider-reference).
 
 ## Next Steps
 

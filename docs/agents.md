@@ -33,7 +33,7 @@ Do not duplicate those rules here.
 | Add metadata         | Define `info` and configure `infoDts`                               | `FileRouteInfo` and `routeInfo` are typed           |
 | Add SSG              | Enable Solid SSR, add `ssg`, and use `createClientEntry`            | Build emits `dist/client/index.html` and `404.html` |
 | Use built-in MDX     | Install Satteri and set `mdx: true`                                | `.md`/`.mdx` routes are generated and render        |
-| Use a CMS/source     | Provide `routeSource.transformPath` and `routeSource.load`         | Every entry returns valid route module source       |
+| Use a CMS/provider   | Provide `routeSource.transformPath` and `routeSource.load`         | Every provider entry returns valid route module source |
 
 Use [guide.md](guide.md) for workflows and [reference.md](reference.md) for exact
 options and types.
@@ -84,8 +84,9 @@ sites before changing an exported type or generated wire shape.
 
 ### Route generation
 
-- Built-in discovery scans only `.jsx` and `.tsx` under `pagesDir`.
-- Custom `routeSource` is appended after built-in filesystem and optional MDX scanning.
+- File routing is built in and scans only `.jsx` and `.tsx` under `pagesDir`.
+- Optional MDX discovery and custom `routeSource` providers add more route inputs;
+  all inputs participate in the same route tree and HMR rules.
 - Route import names remain stable when unrelated files are added.
 - `_app` and `404` have generated fallbacks when files are absent.
 - Private `_` segments do not generate pages; layouts remain structural inputs.
@@ -124,9 +125,11 @@ sites before changing an exported type or generated wire shape.
 - Route rendering is deduplicated and concurrency is never below one.
 - HTML accepts exactly one outlet strategy and requires a head insertion point.
 
-### Custom route sources
+### Custom route providers
 
-- Normalized `routeId`, logical `path`, and `sourcePath` values are unique.
+- Normalized `routeId`, logical `path`, and `sourcePath` values are unique across
+  built-in and custom route inputs.
+- Every route ID is unique; later providers never override an earlier route.
 - `routeId` derives from logical `path` when omitted.
 - `data` passes through the current process without serialization.
 - `load` must return module source for every route entry.
@@ -141,7 +144,7 @@ Run the narrow test first, then the full checks before handing off:
 | File naming or tree construction | `bun run test -- tests/definition.test.ts tests/route-type.test.ts` |
 | Route config extraction          | `bun run test -- tests/extract.test.ts`                             |
 | Runtime URL or metadata helper   | `bun run test -- tests/generatePath.test.ts tests/runtime.test.ts`  |
-| HMR, scanning, or route sources  | `bun run test -- tests/registry.test.ts tests/plugin.test.ts`       |
+| HMR, scanning, or route providers | `bun run test -- tests/registry.test.ts tests/plugin.test.ts`       |
 | SSG or Vite integration          | `bun run test -- tests/plugin.test.ts`                              |
 | Public types or declarations     | `bun run typecheck` plus the owning tests                           |
 | Documentation only               | Link check, `git diff --check`, then full typecheck and tests       |
