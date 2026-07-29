@@ -655,8 +655,8 @@ export function assembleDefinition(
   // browser-capable; build-time prerendering has its own private virtual entry.
   const routerImport = `import { Router } from '@solidjs/router'`
   const solidImports = lazy
-    ? `import { createComponent, lazy } from 'solid-js'`
-    : `import { createComponent } from 'solid-js'`
+    ? `import { createComponent, lazy, mergeProps } from 'solid-js'`
+    : `import { createComponent, mergeProps } from 'solid-js'`
   const rootExpr = `export const Root = __app_comp.component`
 
   return `${solidImports}
@@ -668,19 +668,19 @@ ${rootExpr}
 
 export const fileRoutes = ${unwrapInline(regularRoutes)}
 export const routeInfo = ${routeInfo}
-export const FileRouter = (props) => createComponent(Router, {
-  get base() {
-    return props.base
-  },
-  get url() {
-    return props.url
-  },
-  get root() {
-    return Root
-  },
-  get children() {
-    return fileRoutes
-  }
-})
+export const FileRouter = (props) => createComponent(
+  Router,
+  mergeProps(
+    {
+      get root() {
+        return Root
+      },
+      get children() {
+        return fileRoutes
+      }
+    },
+    props
+  )
+)
 `
 }

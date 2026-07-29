@@ -258,6 +258,20 @@ fileRouter({
 })
 ```
 
+Or reuse an existing interface. `from` is emitted relative to the generated
+declaration file, and the imported type must be compatible with an object
+interface:
+
+```ts
+fileRouter({
+  infoDts: {
+    type: 'import',
+    from: '../docs/build/routes',
+    name: 'DocsRouteInfo',
+  },
+})
+```
+
 Read metadata from router matches:
 
 ```tsx
@@ -466,9 +480,10 @@ Optional custom server entry:
 
 ```tsx
 // src/entry-server.tsx
+import { FileRouter } from 'virtual:routes'
 import { createServerEntry } from 'solid-file-router'
 
-export default createServerEntry()
+export default createServerEntry((props) => <FileRouter {...props} />)
 ```
 
 Vite config:
@@ -555,33 +570,84 @@ export default createRoute({ component: () => <h1>Not found</h1> })`
 Provider types:
 
 ```ts
-interface RouteSourceEntry {
-  routeId: string
+interface RouteSourceEntry<TData = unknown> {
+  routeId?: string
   routePath: string
   sourcePath: string
+  data?: TData
 }
 
-interface RouteSourceLoadContext {
+interface RouteSourceLoadContext<TData = unknown> {
   routeId: string
   routePath: string
   sourcePath: string
   moduleId: string
+  data?: TData
 }
 
-interface RouteSourceProvider {
-  scan: string | ((glob, root: string) => Promisable<RouteSourceEntry[]>)
-  load: (entry: RouteSourceLoadContext) => Promisable<string | null | undefined | false | void>
+interface RouteSourceProvider<TData = unknown> {
+  scan: string | ((glob, root: string) => Promisable<RouteSourceEntry<TData>[]>)
+  load: (
+    entry: RouteSourceLoadContext<TData>,
+  ) => Promisable<string | null | undefined | false | void>
   watchFiles?: string[]
 }
 ```
 
 | Field        | Controls                                                                 |
 | ------------ | ------------------------------------------------------------------------ |
-| `routeId`    | Public URL, route types, `routeInfo`, and route ID                       |
+| `routeId`    | Optional public URL and route ID; derived from `routePath` when omitted  |
 | `routePath`  | File-router semantics such as `_app`, `_layout`, groups, and inheritance |
 | `sourcePath` | Source identity used for generated facade modules                        |
+| `data`       | Provider-private scan data passed unchanged to `load`                    |
 | `load`       | Full route module source                                                 |
-| `watchFiles` | Extra HMR invalidation paths relative to Vite root                       |
+| `watchFiles` | Extra HMR paths; supports directories, include globs, and `!` exclusions |
+
+`watchFiles` entries are resolved from Vite's root. Literal paths match the
+path and its descendants. Glob patterns only react to matching files; route
+source files always react to their own exact `sourcePath`.
+
+### Typed scan data
+
+Use `defineRouteSource` to carry a complete scanned record from `scan` to
+`load`, without a separate cache or lookup:
+
+```ts
+import { defineRouteSource } from 'solid-file-router/plugin'
+
+interface DocsSourceData {
+  title: string
+  importPath: string
+}
+
+const routeSource = defineRouteSource<DocsSourceData>({
+  scan: async () => [
+    {
+      routePath: '(general)/button.tsx',
+      sourcePath: 'docs/pages/button.mdx',
+      data: { title: 'Button', importPath: './button.mdx' },
+    },
+  ],
+  load: ({ data }) => {
+    if (!data) {
+      return
+    }
+
+    const title = JSON.stringify(data.title)
+    const importPath = JSON.stringify(data.importPath)
+    return `import Page from ${importPath}
+import { createRoute } from 'solid-file-router'
+export default createRoute({ info: { title: ${title} }, component: Page })`
+  },
+  watchFiles: ['docs/pages/**/*.mdx', '!docs/pages/**/_*.mdx'],
+})
+
+fileRouter({ routeSource })
+```
+
+`data` exists only in the build process. It is not serialized, cloned, or
+available after a process restart; include any source text needed by `load` in
+the data returned by `scan`.
 
 ## Plugin Options
 
@@ -635,12 +701,15 @@ Client render helper for SSG-aware hydration.
 createClientEntry(() => <FileRouter />, document.getElementById('root')!)
 ```
 
-### `createServerEntry(component?)`
+### `createServerEntry(component)`
 
-Creates the server renderer used by SSG.
+Creates the server renderer used by SSG from an explicit root component.
 
-```ts
-export default createServerEntry()
+```tsx
+import { createServerEntry } from 'solid-file-router'
+import { FileRouter } from 'virtual:routes'
+
+export default createServerEntry((props) => <FileRouter base={props.base} url={props.url} />)
 ```
 
 ## Development

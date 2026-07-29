@@ -192,16 +192,14 @@ export function createClientEntry(
   }
 }
 
-export async function createServerEntry(component?: Component<{ url: string; base: string }>) {
-  const renderRoot: Component<{ url: string; base: string }> =
-    component ??
-    (await import('virtual:routes').then(
-      (mod) => (props: { url: string; base: string }) => createComponent(mod.FileRouter, props),
-    ))
+export async function createServerEntry(component: Component<{ url: string; base: string }>) {
+  if (!import.meta.env.SSR) {
+    throw new Error('[solid-file-router] createServerEntry can only run during SSR')
+  }
 
   return (props: { url: string }) => {
     return renderToStringAsync(() =>
-      renderRoot({
+      component({
         get base() {
           return import.meta.env.BASE_URL
         },

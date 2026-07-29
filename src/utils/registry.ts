@@ -12,14 +12,14 @@ import type { InfoTypeDefinition } from './route-type'
 import { generateRouteTypes } from './route-type'
 import type { RouteSourceEntry, RouteSourceLoadContext, RouteSourceProvider } from './source'
 
-interface RouteRegistryOption {
+interface RouteRegistryOption<TData> {
   pagesDir: string
   ignore: string[]
   output: string
   infoDts?: InfoTypeDefinition
   verboseLog?: boolean
   inheritance: InheritanceConfig
-  routeSource?: RouteSourceProvider
+  routeSource?: RouteSourceProvider<TData>
 }
 
 const REG_QUERY = /\?.*$/
@@ -27,26 +27,36 @@ const REG_ROUTE_SOURCE_EXT = /\.(jsx|tsx|mdx)$/i
 const REG_GLOB_CHAR = /[*?[{]/
 const ROUTE_SOURCE_MODULE_SUFFIX = '.solid-file-router.tsx'
 
-interface RouteRegistryChange {
+export interface RouteRegistryChange {
   matched: boolean
   structureChanged: boolean
   changedModuleIds: string[]
   changedFiles: string[]
 }
 
-export class RouteRegistry {
+interface NormalizedRouteSourceEntry<TData> extends NormalizedRouteEntry {
+  data?: TData
+}
+
+interface RouteSourceWatchConfig {
+  roots: string[]
+  filter: (file: string) => boolean
+}
+
+export class RouteRegistry<TData = unknown> {
   private root = ''
   private pagesDir = ''
   private outputPath = ''
   private readonly entries = new Map<string, NormalizedRouteEntry>()
-  private readonly routeSourceModuleMap = new Map<string, RouteSourceLoadContext>()
+  private readonly routeSourceModuleMap = new Map<string, RouteSourceLoadContext<TData>>()
   private readonly sourcePathMap = new Map<string, string>()
   private watchFiles: string[] = []
+  private customWatchFilter: ((file: string) => boolean) | undefined
   private typesDirty = true
   private readonly definitionCache = new Map<string, RouteEntry>()
   private readonly routeFileFilter: ReturnType<typeof createFilter>
 
-  constructor(private readonly options: RouteRegistryOption) {
+  constructor(private readonly options: RouteRegistryOption<TData>) {
     this.routeFileFilter = createFilter(['**/*.{jsx,tsx}'], options.ignore)
   }
 
@@ -58,12 +68,18 @@ export class RouteRegistry {
       }
 
       const before = this.getSnapshot()
-      const changedModuleIds = this.getCustomModuleIds()
+      const previousModuleIds = this.getCustomModuleIds()
+      const previousModuleId = this.sourcePathMap.get(normalized)
+      const structureChanged = await this.refreshCustomEntries(before)
+      const changedModuleIds = this.getCustomChangedModuleIds(
+        structureChanged,
+        previousModuleIds,
+        previousModuleId,
+        this.sourcePathMap.get(normalized),
+      )
       for (const moduleId of changedModuleIds) {
         invalidateCache(moduleId)
       }
-
-      const structureChanged = await this.refreshCustomEntries(before)
       log(`Route source changed: ${normalized}`)
       return {
         matched: true,
@@ -87,22 +103,32 @@ export class RouteRegistry {
     }
   }
 
-  async addFile(file: string): Promise<boolean> {
+  async addFile(file: string): Promise<RouteRegistryChange> {
     const normalized = normalizePath(file)
     if (this.options.routeSource) {
       if (!this.isCustomWatchedFile(normalized)) {
-        return false
+        return noChange()
       }
 
-      const changed = await this.refreshCustomEntries(this.getSnapshot())
-      if (changed) {
+      const previousModuleIds = this.getCustomModuleIds()
+      const structureChanged = await this.refreshCustomEntries(this.getSnapshot())
+      const changedModuleIds = this.getCustomChangedModuleIds(structureChanged, previousModuleIds)
+      for (const moduleId of changedModuleIds) {
+        invalidateCache(moduleId)
+      }
+      if (structureChanged) {
         log(`Route source added: ${normalized}`)
       }
-      return changed
+      return {
+        matched: true,
+        structureChanged,
+        changedModuleIds,
+        changedFiles: [normalized],
+      }
     }
 
     if (!this.isRouteFileNormalized(normalized) || this.entries.has(normalized)) {
-      return false
+      return noChange()
     }
 
     const entry = createFileEntry(normalized)
@@ -110,32 +136,52 @@ export class RouteRegistry {
     generateDefinition([normalized], this.definitionCache, this.pagesDir)
     this.typesDirty = true
     log(`Route added: ${normalized}`)
-    return true
+    return {
+      matched: true,
+      structureChanged: true,
+      changedModuleIds: [normalized],
+      changedFiles: [normalized],
+    }
   }
 
-  async removeFile(file: string): Promise<boolean> {
+  async removeFile(file: string): Promise<RouteRegistryChange> {
     const normalized = normalizePath(file)
     if (this.options.routeSource) {
       if (!this.isCustomWatchedFile(normalized)) {
-        return false
+        return noChange()
       }
 
-      const changed = await this.refreshCustomEntries(this.getSnapshot())
-      if (changed) {
+      const previousModuleIds = this.getCustomModuleIds()
+      const structureChanged = await this.refreshCustomEntries(this.getSnapshot())
+      const changedModuleIds = this.getCustomChangedModuleIds(structureChanged, previousModuleIds)
+      for (const moduleId of changedModuleIds) {
+        invalidateCache(moduleId)
+      }
+      if (structureChanged) {
         log(`Route source removed: ${normalized}`)
       }
-      return changed
+      return {
+        matched: true,
+        structureChanged,
+        changedModuleIds,
+        changedFiles: [normalized],
+      }
     }
 
     if (!this.entries.delete(normalized)) {
-      return false
+      return noChange()
     }
 
     invalidateCache(normalized)
     this.definitionCache.delete(normalized)
     this.typesDirty = true
     log(`Route removed: ${normalized}`)
-    return true
+    return {
+      matched: true,
+      structureChanged: true,
+      changedModuleIds: [normalized],
+      changedFiles: [normalized],
+    }
   }
 
   async getDefinition(lazy: boolean): Promise<string> {
@@ -160,7 +206,13 @@ export class RouteRegistry {
   }
 
   getWatchFiles(): string[] {
-    return this.watchFiles
+    const uncoveredSources = [...this.sourcePathMap.keys()].filter(
+      (sourcePath) =>
+        !this.watchFiles.some(
+          (watchFile) => sourcePath === watchFile || sourcePath.startsWith(`${watchFile}/`),
+        ),
+    )
+    return [...this.watchFiles, ...uncoveredSources]
   }
 
   getStaticRoutes(): string[] {
@@ -199,10 +251,12 @@ export class RouteRegistry {
     this.pagesDir = resolveFromRoot(this.root, this.options.pagesDir)
     this.outputPath = normalizePath(`${this.root}/${this.options.output}`)
     if (this.options.routeSource) {
-      this.watchFiles = resolveWatchFiles(
+      const watchConfig = createRouteSourceWatchConfig(
         this.root,
         getRouteSourceWatchFiles(this.options.routeSource),
       )
+      this.watchFiles = watchConfig.roots
+      this.customWatchFilter = watchConfig.filter
       await this.refreshCustomEntries('')
       return
     }
@@ -232,7 +286,7 @@ export class RouteRegistry {
     return this.routeFileFilter(relative)
   }
 
-  private async scanCustomRouteSource(): Promise<RouteSourceEntry[]> {
+  private async scanCustomRouteSource(): Promise<RouteSourceEntry<TData>[]> {
     const source = this.options.routeSource
     if (!source) {
       return []
@@ -277,6 +331,7 @@ export class RouteRegistry {
         routePath: entry.routePath,
         sourcePath,
         moduleId: entry.moduleId,
+        data: entry.data,
       })
       this.sourcePathMap.set(sourcePath, entry.moduleId)
     }
@@ -310,14 +365,28 @@ export class RouteRegistry {
   }
 
   private isCustomWatchedFile(file: string): boolean {
-    return (
-      this.sourcePathMap.has(file) ||
-      this.watchFiles.some((watchFile) => file === watchFile || file.startsWith(`${watchFile}/`))
-    )
+    return this.sourcePathMap.has(file) || this.customWatchFilter?.(file) === true
   }
 
   private getCustomModuleIds(): string[] {
     return [...this.routeSourceModuleMap.keys()]
+  }
+
+  private getCustomChangedModuleIds(
+    structureChanged: boolean,
+    previousModuleIds: string[],
+    previousModuleId?: string,
+    nextModuleId?: string,
+  ): string[] {
+    if (structureChanged) {
+      return uniqueModuleIds(previousModuleIds, this.getCustomModuleIds())
+    }
+
+    if (previousModuleId || nextModuleId) {
+      return uniqueModuleIds([previousModuleId, nextModuleId])
+    }
+
+    return this.getCustomModuleIds()
   }
 }
 
@@ -349,40 +418,38 @@ function createFileEntry(file: string): NormalizedRouteEntry {
   }
 }
 
-function normalizeRouteSourceEntries(
+function normalizeRouteSourceEntries<TData>(
   root: string,
-  entries: RouteSourceEntry[],
-): NormalizedRouteEntry[] {
-  const result: NormalizedRouteEntry[] = []
+  entries: RouteSourceEntry<TData>[],
+): NormalizedRouteSourceEntry<TData>[] {
+  const result: NormalizedRouteSourceEntry<TData>[] = []
   const seenIds = new Set<string>()
   const seenRoutePaths = new Set<string>()
   const seenSourcePaths = new Set<string>()
 
   for (const entry of entries) {
-    if (!entry.routeId) {
-      throw new Error('[solid-file-router] routeSource entry routeId is required')
-    }
     if (!entry.sourcePath) {
-      throw new Error(
-        `[solid-file-router] routeSource entry sourcePath is required for routeId: ${entry.routeId}`,
-      )
+      throw new Error('[solid-file-router] routeSource entry sourcePath is required')
     }
     if (!entry.routePath) {
       throw new Error(
-        `[solid-file-router] routeSource entry routePath is required for routeId: ${entry.routeId}`,
+        `[solid-file-router] routeSource entry routePath is required for sourcePath: ${entry.sourcePath}`,
       )
-    }
-    const routeId = normalizeRouteId(entry.routeId)
-    if (seenIds.has(routeId)) {
-      throw new Error(`[solid-file-router] duplicate routeSource routeId: ${routeId}`)
     }
 
     const routePath = normalizeRoutePath(entry.routePath)
-    if (seenRoutePaths.has(routePath)) {
-      throw new Error(`[solid-file-router] duplicate routeSource routePath: ${routePath}`)
-    }
-
+    const routeId = normalizeRouteId(entry.routeId ?? getDerivedRouteId(routePath))
     const sourcePath = resolveFromRoot(root, entry.sourcePath)
+    if (seenIds.has(routeId)) {
+      throw new Error(
+        `[solid-file-router] duplicate routeSource routeId: ${routeId} for sourcePath: ${sourcePath}`,
+      )
+    }
+    if (seenRoutePaths.has(routePath)) {
+      throw new Error(
+        `[solid-file-router] duplicate routeSource routePath: ${routePath} for sourcePath: ${sourcePath}`,
+      )
+    }
     if (seenSourcePaths.has(sourcePath)) {
       throw new Error(`[solid-file-router] duplicate routeSource sourcePath: ${sourcePath}`)
     }
@@ -395,10 +462,15 @@ function normalizeRouteSourceEntries(
       routePath,
       moduleId: getRouteSourceModuleId(sourcePath),
       sourcePath,
+      data: entry.data,
     })
   }
 
   return result
+}
+
+function getDerivedRouteId(routePath: string): string {
+  return getRoutePath(routePath, '') ?? `/${routePath.replace(REG_ROUTE_SOURCE_EXT, '')}`
 }
 
 function normalizeRouteId(routeId: string): string {
@@ -425,20 +497,44 @@ function stripQuery(id: string): string {
   return id.replace(REG_QUERY, '')
 }
 
-function resolveWatchFiles(root: string, files: string[]): string[] {
-  return files.map((file) => resolveFromRoot(root, file))
+function createRouteSourceWatchConfig(root: string, patterns: string[]): RouteSourceWatchConfig {
+  const includes: string[] = []
+  const excludes: string[] = []
+  const roots: string[] = []
+
+  for (const pattern of patterns) {
+    const isExclude = pattern.startsWith('!')
+    const value = pattern.slice(isExclude ? 1 : 0)
+    if (!value) {
+      continue
+    }
+
+    const resolved = resolveFromRoot(root, value)
+    if (isExclude) {
+      excludes.push(resolved, `${resolved}/**`)
+      continue
+    }
+
+    if (REG_GLOB_CHAR.test(resolved)) {
+      includes.push(resolved)
+    } else {
+      includes.push(resolved, `${resolved}/**`)
+    }
+    roots.push(getGlobWatchRoot(resolved))
+  }
+
+  return {
+    roots: [...new Set(roots)],
+    filter: includes.length > 0 ? createFilter(includes, excludes) : () => false,
+  }
 }
 
-function getRouteSourceWatchFiles(source: RouteSourceProvider): string[] {
+function getRouteSourceWatchFiles<TData>(source: RouteSourceProvider<TData>): string[] {
   if (source.watchFiles) {
     return source.watchFiles
   }
 
-  if (typeof source.scan !== 'string') {
-    return []
-  }
-
-  return [getGlobWatchRoot(source.scan)]
+  return typeof source.scan === 'string' ? [source.scan] : []
 }
 
 function getGlobWatchRoot(pattern: string): string {
@@ -455,6 +551,10 @@ function getGlobWatchRoot(pattern: string): string {
   }
 
   return prefix.slice(0, lastSlashIndex)
+}
+
+function uniqueModuleIds(...groups: Array<Array<string | undefined>>): string[] {
+  return [...new Set(groups.flat().filter((id): id is string => !!id))]
 }
 
 function getSnapshot(entries: NormalizedRouteEntry[]): string {

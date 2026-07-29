@@ -18,7 +18,7 @@ export default defineConfig({
         role: 'string',
       },
       ssg: {
-        // serverEntry: 'src/entry-server.tsx',
+        serverEntry: 'src/entry-server.tsx',
         routes: ['/', '/about'],
         concurrency: 4,
       },

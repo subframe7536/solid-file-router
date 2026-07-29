@@ -101,7 +101,7 @@ describe('generateDefinition', () => {
 
   it('generates client routes with lazy route components', async () => {
     const module = await buildDefinition(files, false, undefined, true)
-    expect(module).toContain("import { createComponent, lazy } from 'solid-js'")
+    expect(module).toContain("import { createComponent, lazy, mergeProps } from 'solid-js'")
     expect(module).toContain("import { Router } from '@solidjs/router'")
     expect(module).not.toContain("import { renderToStringAsync } from 'solid-js/web'")
     expect(module).toContain("import { __loader__ } from 'solid-file-router'")
@@ -111,7 +111,6 @@ describe('generateDefinition', () => {
     )
     expect(module).toContain("lazy(() => import('/root/project/src/pages/index.tsx?comp')")
     expect(module).toContain('"component": __404_comp.component')
-    expect(module).toContain('get base()')
     expect(module).not.toContain('createServerEntry')
   })
 
@@ -334,7 +333,7 @@ describe('generateDefinition', () => {
     const module = await buildDefinition(inheritanceFiles, false, undefined, false)
     const usersFile = `${root}/src/pages/dashboard/admin/users.tsx`
 
-    expect(module).toContain("import { createComponent } from 'solid-js'")
+    expect(module).toContain("import { createComponent, mergeProps } from 'solid-js'")
     expect(module).toContain("import { Router } from '@solidjs/router'")
     expect(module).not.toContain('StaticRouter')
     expect(module).toContain("import { __loader__ } from 'solid-file-router'")
@@ -359,7 +358,6 @@ describe('generateDefinition', () => {
       ),
     )
     expect(module).toContain('"component": __404_comp.component')
-    expect(module).toContain('get base()')
     expect(module).not.toContain('createServerEntry')
     expect(module).not.toContain('lazy(() => import(')
   })
@@ -431,8 +429,8 @@ describe('generateDefinition', () => {
     const lazyModule = assembleDefinition(inheritanceFiles, cache, true)
     const eagerModule = assembleDefinition(inheritanceFiles, cache, false)
 
-    expect(lazyModule).toContain("import { createComponent, lazy } from 'solid-js'")
-    expect(eagerModule).toContain("import { createComponent } from 'solid-js'")
+    expect(lazyModule).toContain("import { createComponent, lazy, mergeProps } from 'solid-js'")
+    expect(eagerModule).toContain("import { createComponent, mergeProps } from 'solid-js'")
     expect(eagerModule).toContain(
       `import ${getComponentImportName(`${root}/src/pages/dashboard/admin/users.tsx`)} from '/root/project/src/pages/dashboard/admin/users.tsx?comp'`,
     )
