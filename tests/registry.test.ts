@@ -447,9 +447,21 @@ export default createRoute({
       routeSources: [
         {
           filter: 'docs/**/*.mdx',
-          glob: async () => ['docs/index.mdx', 'docs/button.mdx', 'docs/id.mdx', 'docs/404.mdx', 'docs/app.mdx'],
+          glob: async () => [
+            'docs/index.mdx',
+            'docs/button.mdx',
+            'docs/id.mdx',
+            'docs/404.mdx',
+            'docs/app.mdx',
+          ],
           transformPath: (path) => ({
-            path: { 'docs/index.mdx': 'index.tsx', 'docs/button.mdx': '(general)/button.tsx', 'docs/id.mdx': '[id].tsx', 'docs/404.mdx': '404.tsx', 'docs/app.mdx': '_app.tsx' }[path]!,
+            path: {
+              'docs/index.mdx': 'index.tsx',
+              'docs/button.mdx': '(general)/button.tsx',
+              'docs/id.mdx': '[id].tsx',
+              'docs/404.mdx': '404.tsx',
+              'docs/app.mdx': '_app.tsx',
+            }[path]!,
           }),
           load: () => 'export default {}',
         },
@@ -467,6 +479,126 @@ export default createRoute({
       ]),
       expect.any(Map),
       expect.any(String),
+    )
+  })
+
+  it('rejects duplicate normalized route IDs within one provider', async () => {
+    const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
+    tempDirs.push(workspaceRoot)
+    const registry = new RouteRegistry({
+      pagesDir: 'src/pages',
+      ignore: [],
+      output: 'src/routes.d.ts',
+      inheritance: { enabled: true, inheritLoading: true, inheritError: true },
+      routeSources: [
+        {
+          filter: 'docs/**/*.mdx',
+          glob: async () => ['docs/first.mdx', 'docs/second.mdx'],
+          transformPath: (sourcePath) => ({
+            path: `${sourcePath}.tsx`,
+            routeId: './same',
+          }),
+          load: () => 'export default {}',
+        },
+      ],
+    })
+
+    await expect(registry.initialize(workspaceRoot)).rejects.toThrow(
+      new RegExp(
+        `duplicate routeSource.routeId: /same.*${workspaceRoot}/docs/first\\.mdx.*${workspaceRoot}/docs/second\\.mdx`,
+      ),
+    )
+  })
+
+  it('rejects duplicate normalized route IDs across providers', async () => {
+    const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
+    tempDirs.push(workspaceRoot)
+    const registry = new RouteRegistry({
+      pagesDir: 'src/pages',
+      ignore: [],
+      output: 'src/routes.d.ts',
+      inheritance: { enabled: true, inheritLoading: true, inheritError: true },
+      routeSources: [
+        {
+          filter: 'docs/**/*.mdx',
+          glob: async () => ['docs/first.mdx'],
+          transformPath: () => ({ path: 'first.tsx', routeId: './same' }),
+          load: () => 'export default {}',
+        },
+        {
+          filter: 'content/**/*.md',
+          glob: async () => ['content/second.md'],
+          transformPath: () => ({ path: 'second.tsx', routeId: '/same/' }),
+          load: () => 'export default {}',
+        },
+      ],
+    })
+
+    await expect(registry.initialize(workspaceRoot)).rejects.toThrow(
+      new RegExp(
+        `duplicate routeSource.routeId: /same.*${workspaceRoot}/docs/first\\.mdx.*${workspaceRoot}/content/second\\.md`,
+      ),
+    )
+  })
+
+  it('rejects duplicate normalized route paths across providers', async () => {
+    const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
+    tempDirs.push(workspaceRoot)
+    const registry = new RouteRegistry({
+      pagesDir: 'src/pages',
+      ignore: [],
+      output: 'src/routes.d.ts',
+      inheritance: { enabled: true, inheritLoading: true, inheritError: true },
+      routeSources: [
+        {
+          filter: 'docs/**/*.mdx',
+          glob: async () => ['docs/first.mdx'],
+          transformPath: () => ({ path: './same.tsx', routeId: '/first' }),
+          load: () => 'export default {}',
+        },
+        {
+          filter: 'content/**/*.md',
+          glob: async () => ['content/second.md'],
+          transformPath: () => ({ path: 'same.tsx', routeId: '/second' }),
+          load: () => 'export default {}',
+        },
+      ],
+    })
+
+    await expect(registry.initialize(workspaceRoot)).rejects.toThrow(
+      new RegExp(
+        `duplicate routeSource.routePath: same.tsx.*${workspaceRoot}/docs/first\\.mdx.*${workspaceRoot}/content/second\\.md`,
+      ),
+    )
+  })
+
+  it('rejects duplicate normalized source paths across providers', async () => {
+    const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
+    tempDirs.push(workspaceRoot)
+    const registry = new RouteRegistry({
+      pagesDir: 'src/pages',
+      ignore: [],
+      output: 'src/routes.d.ts',
+      inheritance: { enabled: true, inheritLoading: true, inheritError: true },
+      routeSources: [
+        {
+          filter: 'docs/**/*.mdx',
+          glob: async () => ['docs/shared.mdx'],
+          transformPath: () => ({ path: 'first.tsx', routeId: '/first' }),
+          load: () => 'export default {}',
+        },
+        {
+          filter: 'content/**/*.md',
+          glob: async () => ['docs/shared.mdx'],
+          transformPath: () => ({ path: 'second.tsx', routeId: '/second' }),
+          load: () => 'export default {}',
+        },
+      ],
+    })
+
+    const sourcePath = `${workspaceRoot}/docs/shared.mdx`
+    await expect(registry.initialize(workspaceRoot)).rejects.toThrow(
+      new RegExp(`duplicate routeSource.sourcePath: ${sourcePath}.*${sourcePath}`),
     )
   })
 
@@ -488,7 +620,10 @@ export default createRoute({
         {
           filter: 'docs/pages/**/*',
           glob: async () => ['docs/pages/_app.tsx', 'docs/pages/button.mdx'],
-          transformPath: (path) => ({ path: path.endsWith('_app.tsx') ? '_app.tsx' : '(general)/button.tsx', routeId: path.endsWith('_app.tsx') ? '/' : '/button' }),
+          transformPath: (path) => ({
+            path: path.endsWith('_app.tsx') ? '_app.tsx' : '(general)/button.tsx',
+            routeId: path.endsWith('_app.tsx') ? '/' : '/button',
+          }),
           load: () => 'export default {}',
           watch: ['docs/config'],
         },

@@ -382,7 +382,7 @@ export default createRoute({ component: () => <h1>missing</h1> })
       lazy: false,
       routeSource: {
         filter: 'docs/pages/**/*',
-        glob: async () => ['docs/routes/_app.tsx', buttonSourcePath, 'docs/routes/404.tsx'],
+        glob: async () => [buttonSourcePath, 'docs/routes/404.tsx'],
         transformPath: (sourcePath) => ({
           path: sourcePath.includes('button')
             ? '(general)/button.tsx'

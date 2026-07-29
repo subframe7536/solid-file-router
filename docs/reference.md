@@ -1,7 +1,7 @@
 # solid-file-router Reference
 
-This document describes the public behavior of `solid-file-router` 0.6.1. The
-project is pre-1.0; minor releases may introduce breaking changes.
+This document describes the current public behavior of `solid-file-router`.
+The project is pre-1.0; minor releases may introduce breaking changes.
 
 ## Package Entries
 

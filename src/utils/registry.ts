@@ -494,60 +494,60 @@ function normalizeRouteSourceEntry<TData>(
   sourcePath: string,
   entry: RouteSourceEntry<TData>,
 ): NormalizedRouteSourceEntry<TData> {
-  const seenIds = new Set<string>()
-  const seenRoutePaths = new Set<string>()
-  const seenSourcePaths = new Set<string>()
-
-    const routePath = normalizeRoutePath(entry.path)
-    const routeId = normalizeRouteId(entry.routeId ?? getDerivedRouteId(routePath))
-    const resolvedSourcePath = resolveFromRoot(root, sourcePath)
-    if (seenIds.has(routeId)) {
-      throw new Error(
-        `[solid-file-router] duplicate routeSource routeId: ${routeId} for sourcePath: ${sourcePath}`,
-      )
-    }
-    if (seenRoutePaths.has(routePath)) {
-      throw new Error(
-        `[solid-file-router] duplicate routeSource routePath: ${routePath} for sourcePath: ${sourcePath}`,
-      )
-    }
-    if (seenSourcePaths.has(resolvedSourcePath)) {
-      throw new Error(`[solid-file-router] duplicate routeSource sourcePath: ${resolvedSourcePath}`)
-    }
-
-    seenIds.add(routeId)
-    seenRoutePaths.add(routePath)
-    seenSourcePaths.add(resolvedSourcePath)
-    return {
-      routeId,
-      routePath,
-      moduleId: getRouteSourceModuleId(resolvedSourcePath),
-      sourcePath: resolvedSourcePath,
-      data: entry.data,
-    }
+  const routePath = normalizeRoutePath(entry.path)
+  const routeId = normalizeRouteId(entry.routeId ?? getDerivedRouteId(routePath))
+  const resolvedSourcePath = resolveFromRoot(root, sourcePath)
+  return {
+    routeId,
+    routePath,
+    moduleId: getRouteSourceModuleId(resolvedSourcePath),
+    sourcePath: resolvedSourcePath,
+    data: entry.data,
+  }
 }
 
 function mergeRouteSourceEntries<TData>(
   sourceEntries: NormalizedRouteSourceEntry<TData>[][],
 ): NormalizedRouteSourceEntry<TData>[] {
-  const merged = new Map<string, NormalizedRouteSourceEntry<TData>>()
+  const merged: NormalizedRouteSourceEntry<TData>[] = []
+  const firstByRouteId = new Map<string, NormalizedRouteSourceEntry<TData>>()
+  const firstByRoutePath = new Map<string, NormalizedRouteSourceEntry<TData>>()
+  const firstBySourcePath = new Map<string, NormalizedRouteSourceEntry<TData>>()
 
   for (const entries of sourceEntries) {
     for (const entry of entries) {
-      for (const [key, current] of merged) {
-        if (
-          current.routeId === entry.routeId ||
-          current.routePath === entry.routePath ||
-          current.sourcePath === entry.sourcePath
-        ) {
-          merged.delete(key)
-        }
+      const firstRouteId = firstByRouteId.get(entry.routeId)
+      if (firstRouteId) {
+        throwRouteSourceCollision('routeId', entry.routeId, firstRouteId, entry)
       }
-      merged.set(entry.moduleId, entry)
+      const firstRoutePath = firstByRoutePath.get(entry.routePath)
+      if (firstRoutePath) {
+        throwRouteSourceCollision('routePath', entry.routePath, firstRoutePath, entry)
+      }
+      const firstSourcePath = firstBySourcePath.get(entry.sourcePath!)
+      if (firstSourcePath) {
+        throwRouteSourceCollision('sourcePath', entry.sourcePath!, firstSourcePath, entry)
+      }
+
+      firstByRouteId.set(entry.routeId, entry)
+      firstByRoutePath.set(entry.routePath, entry)
+      firstBySourcePath.set(entry.sourcePath!, entry)
+      merged.push(entry)
     }
   }
 
-  return [...merged.values()]
+  return merged
+}
+
+function throwRouteSourceCollision<TData>(
+  field: 'routeId' | 'routePath' | 'sourcePath',
+  value: string,
+  first: NormalizedRouteSourceEntry<TData>,
+  current: NormalizedRouteSourceEntry<TData>,
+): never {
+  throw new Error(
+    `[solid-file-router] duplicate routeSource.${field}: ${value}; source paths: ${first.sourcePath} and ${current.sourcePath}`,
+  )
 }
 
 function getDerivedRouteId(routePath: string): string {
