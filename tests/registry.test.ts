@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { generateDefinition } from '../src/route/definition'
 import { invalidateCache } from '../src/route/extract'
 import { RouteRegistry } from '../src/route/registry'
-import { generateRouteTypes } from '../src/route/route-type'
+import { generateRouteTypes } from '../src/route/type-gen'
 
 vi.mock('../src/route/definition', async () => {
   const actual =
@@ -39,9 +39,9 @@ vi.mock('../src/route/definition', async () => {
   }
 })
 
-vi.mock('../src/route/route-type', async () => {
+vi.mock('../src/route/type-gen', async () => {
   const actual =
-    await vi.importActual<typeof import('../src/route/route-type')>('../src/route/route-type')
+    await vi.importActual<typeof import('../src/route/type-gen')>('../src/route/type-gen')
   return {
     ...actual,
     generateRouteTypes: vi.fn((_files, output: string) => {

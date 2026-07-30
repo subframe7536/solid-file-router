@@ -1,4 +1,4 @@
-import { logger, PACKAGE_NAME } from '../const'
+import { hashString, logger, PACKAGE_NAME } from '../const'
 
 import {
   getRouteKey,
@@ -105,17 +105,6 @@ function getEntryRoutePath(entry: RouteInput | RouteEntry): string {
 function isGeneratedRouteFile(entry: RouteInput | RouteEntry): boolean {
   const routePath = getEntryRoutePath(entry)
   return (!hasPrivateSegment(routePath) || isLayoutRoute(routePath)) && !isNotFoundRoute(routePath)
-}
-
-function hashString(value: string): string {
-  let hash = 2166136261
-
-  for (let index = 0; index < value.length; index++) {
-    hash ^= value.codePointAt(index) ?? 0
-    hash = Math.imul(hash, 16777619)
-  }
-
-  return (hash >>> 0).toString(36)
 }
 
 export function getRouteImportName(file: string): string {

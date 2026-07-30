@@ -133,3 +133,5 @@ export function createRouteSourceWatchConfig(
           },
   }
 }
+
+export { ROUTE_SOURCE_MODULE_SUFFIX }

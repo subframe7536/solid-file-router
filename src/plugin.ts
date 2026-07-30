@@ -8,7 +8,6 @@ import { fsRouteSource } from './route/fs-source'
 import { createRouterPlugin } from './route/plugin'
 import type { RoutePluginContext } from './route/plugin'
 import { RouteRegistry } from './route/registry'
-import type { InfoTypeDefinition } from './route/route-type'
 import type {
   Promisable,
   RouteSourceEntry,
@@ -16,11 +15,12 @@ import type {
   RouteSourceProvider,
 } from './route/source'
 import { defineRouteSource } from './route/source'
+import type { InfoTypeDefinition } from './route/type-gen'
 import { createSsgPlugin } from './ssg'
 import type { SsgOptions } from './ssg'
 
 export type { MdxOptions } from './mdx/router'
-export type { InfoTypeDefinition, InlineInfoTypeDefinition } from './route/route-type'
+export type { InfoTypeDefinition, InlineInfoTypeDefinition } from './route/type-gen'
 export {
   defineRouteSource,
   type Promisable,
