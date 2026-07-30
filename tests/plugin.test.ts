@@ -386,6 +386,31 @@ describe('fileRouter', () => {
     ).resolves.toContain('MDXContent')
   })
 
+  it.each(['md', 'mdx'])(
+    'compiles directly imported .%s files when mdx is enabled',
+    async (ext) => {
+      const root = createTempProject()
+      const markdownPath = join(root, `src/content.${ext}`)
+      writeFileSync(markdownPath, "export const frontmatter = { title: 'Content' }\n\n# Content")
+      const [, mdxPlugin] = fileRouter({ mdx: true })
+
+      const result = await (mdxPlugin as any).transform.handler(
+        readFileSync(markdownPath, 'utf8'),
+        normalizePath(markdownPath),
+      )
+
+      expect(result.code).toContain('function MDXContent')
+      expect(result.code).toContain('export const frontmatter')
+      expect(result.code).toContain('export default MDXContent')
+    },
+  )
+
+  it('disables the direct Markdown import plugin when mdx is disabled', () => {
+    const [, mdxPlugin] = fileRouter()
+
+    expect((mdxPlugin as any).apply()).toBe(false)
+  })
+
   it('extracts native MDX route configuration through route queries', async () => {
     const root = createTempProject()
     const mdxPath = join(root, 'src/pages/content.mdx')

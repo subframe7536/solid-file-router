@@ -29,6 +29,19 @@ With the default `pagesDir`, `src/pages/about.md` becomes `/about` and
 `src/pages/docs/[slug].mdx` becomes `/docs/:slug`. JSX/TSX and MDX discovery
 run together, so route IDs and logical paths must remain unique across them.
 
+Enabling MDX also lets application code import `.md` and `.mdx` documents directly. Add
+`solid-file-router/client` to the consumer's TypeScript types (as required for
+`virtual:routes`) to type the default Solid component and its `frontmatter`
+export:
+
+```tsx
+import Article, { frontmatter } from './article.mdx'
+
+const title = frontmatter.title
+
+export const Preview = () => <Article components={{ h1: (props) => <h2 {...props} /> }} />
+```
+
 ## Authoring MDX
 
 MDX files can import components and contain Solid JSX:
