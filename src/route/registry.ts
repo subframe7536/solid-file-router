@@ -1,5 +1,4 @@
 import { existsSync } from 'node:fs'
-import { relative as relativePath, resolve } from 'node:path'
 
 import { glob } from 'tinyglobby'
 import { createFilter, normalizePath } from 'vite'
@@ -10,10 +9,22 @@ import { generateDefinition, assembleDefinition } from './definition'
 import type { InheritanceConfig, NormalizedRouteEntry, RouteEntry, RouteInput } from './definition'
 import { invalidateCache } from './extract'
 import { getRoutePath } from './path'
+import {
+  createRouteSourceWatchConfig,
+  getRouteSourceFilterPath,
+  mergeRouteSourceEntries,
+  normalizeRouteSourceEntry,
+  resolveFromRoot,
+} from './registry-source'
+import type {
+  NormalizedRouteSourceEntry,
+  RouteSourceModule,
+  RouteSourceState,
+} from './registry-source'
 import type { InfoTypeDefinition } from './route-type'
 import { generateRouteTypes } from './route-type'
 import { defineRouteSource } from './source'
-import type { RouteSourceEntry, RouteSourceLoadContext, RouteSourceProvider } from './source'
+import type { RouteSourceProvider } from './source'
 
 interface RouteRegistryOption<TData> {
   pagesDir: string
@@ -25,12 +36,6 @@ interface RouteRegistryOption<TData> {
   routeSources?: readonly RouteSourceProvider<TData>[]
 }
 
-const REG_QUERY = /\?.*$/
-const REG_ROUTE_SOURCE_EXT = /\.(jsx|tsx|md|mdx)$/i
-const REG_GLOB_CHAR = /[*?[{]/
-// Generated route-source modules must be recognized by this plugin and transformed as TSX.
-const ROUTE_SOURCE_MODULE_SUFFIX = '-sfr.tsx'
-
 export interface RouteRegistryChange {
   /** Whether the changed file belongs to a route source. */
   matched: boolean
@@ -40,26 +45,6 @@ export interface RouteRegistryChange {
   changedModuleIds: string[]
   /** Normalized source files associated with the change. */
   changedFiles: string[]
-}
-
-interface NormalizedRouteSourceEntry<TData> extends NormalizedRouteEntry {
-  data?: TData
-}
-
-interface RouteSourceWatchConfig {
-  roots: string[]
-  filter: (file: string) => boolean
-}
-
-interface RouteSourceState<TData> {
-  provider: RouteSourceProvider<TData>
-  watch: RouteSourceWatchConfig
-  entries: NormalizedRouteSourceEntry<TData>[]
-}
-
-interface RouteSourceModule<TData> {
-  provider: RouteSourceProvider<TData>
-  context: RouteSourceLoadContext<TData>
 }
 
 export class RouteRegistry<TData = unknown> {
@@ -84,7 +69,7 @@ export class RouteRegistry<TData = unknown> {
 
   async markChanged(file: string): Promise<RouteRegistryChange> {
     const normalized = normalizePath(file)
-    if (this.getRouteSources().length > 0) {
+    if (this.routeSources.length > 0) {
       if (!this.isCustomWatchedFile(normalized)) {
         return noChange()
       }
@@ -129,7 +114,7 @@ export class RouteRegistry<TData = unknown> {
 
   async addFile(file: string): Promise<RouteRegistryChange> {
     const normalized = normalizePath(file)
-    if (this.getRouteSources().length > 0) {
+    if (this.routeSources.length > 0) {
       if (!this.isCustomWatchedFile(normalized)) {
         return noChange()
       }
@@ -162,8 +147,13 @@ export class RouteRegistry<TData = unknown> {
       return noChange()
     }
 
-    const entry = createFileEntry(normalized)
-    this.entries.set(entry.moduleId, entry)
+    const entry = {
+      routeId: normalized,
+      routePath: normalized,
+      moduleId: normalized,
+      sourcePath: normalized,
+    }
+    this.entries.set(normalized, entry)
     generateDefinition([normalized], this.definitionCache, this.pagesDir)
     this.typesDirty = true
     log(`Route added: ${normalized}`)
@@ -177,7 +167,7 @@ export class RouteRegistry<TData = unknown> {
 
   async removeFile(file: string): Promise<RouteRegistryChange> {
     const normalized = normalizePath(file)
-    if (this.getRouteSources().length > 0) {
+    if (this.routeSources.length > 0) {
       if (!this.isCustomWatchedFile(normalized)) {
         return noChange()
       }
@@ -265,11 +255,11 @@ export class RouteRegistry<TData = unknown> {
   }
 
   async loadRouteSourceModule(id: string): Promise<string | undefined> {
-    if (this.getRouteSources().length === 0) {
+    if (this.routeSources.length === 0) {
       return undefined
     }
 
-    const moduleId = stripQuery(normalizePath(id))
+    const moduleId = normalizePath(id).replace(/\?.*$/, '')
     const source = this.routeSourceModuleMap.get(moduleId)
     if (!source) {
       return undefined
@@ -289,10 +279,13 @@ export class RouteRegistry<TData = unknown> {
 
     this.pagesDir = resolveFromRoot(this.root, this.options.pagesDir)
     this.outputPath = resolveFromRoot(this.root, this.options.output)
-    if (this.getRouteSources().length > 0) {
-      this.routeSourceStates = this.getRouteSources().map((provider) => ({
+    if (this.routeSources.length > 0) {
+      this.routeSourceStates = this.routeSources.map((provider) => ({
         provider,
-        watch: createRouteSourceWatchConfig(this.root, getRouteSourceWatchFiles(provider)),
+        watch: createRouteSourceWatchConfig(this.root, [
+          provider.filter,
+          ...(provider.watch ?? []),
+        ]),
         entries: [],
       }))
       await this.refreshCustomEntries('')
@@ -308,7 +301,12 @@ export class RouteRegistry<TData = unknown> {
     this.entries.clear()
     for (const file of files) {
       const normalized = normalizePath(file)
-      this.entries.set(normalized, createFileEntry(normalized))
+      this.entries.set(normalized, {
+        routeId: normalized,
+        routePath: normalized,
+        moduleId: normalized,
+        sourcePath: normalized,
+      })
     }
 
     this.definitionCache.clear()
@@ -399,7 +397,7 @@ export class RouteRegistry<TData = unknown> {
 
   private getRouteInputs(): RouteInput[] {
     const entries = this.getEntries()
-    if (this.getRouteSources().length > 0) {
+    if (this.routeSources.length > 0) {
       return entries
     }
 
@@ -422,10 +420,6 @@ export class RouteRegistry<TData = unknown> {
           : -1,
       )
       .filter((index) => index >= 0)
-  }
-
-  private getRouteSources(): readonly RouteSourceProvider<TData>[] {
-    return this.routeSources
   }
 
   private getCustomModuleIds(): string[] {
@@ -463,174 +457,10 @@ export class RouteRegistry<TData = unknown> {
   }
 }
 
-function resolveFromRoot(root: string, dir: string): string {
-  return normalizePath(resolve(root, dir || '.'))
-}
-
-function getRouteSourceFilterPath(root: string, file: string): string {
-  return relativePath(root, resolveFromRoot(root, file)).replace(/^(?:\.\.\/)+/, '')
-}
+export { isRouteSourceModuleId, resolveRouteSourceModuleId } from './registry-source'
 
 function log(message: string, timestamp = true) {
   logger.info(message, { timestamp })
-}
-
-export function resolveRouteSourceModuleId(id: string): string | undefined {
-  return isRouteSourceModuleId(id) ? normalizePath(id) : undefined
-}
-
-export function isRouteSourceModuleId(id: string): boolean {
-  return stripQuery(normalizePath(id)).endsWith(ROUTE_SOURCE_MODULE_SUFFIX)
-}
-
-function createFileEntry(file: string): NormalizedRouteEntry {
-  return {
-    routeId: file,
-    routePath: file,
-    moduleId: file,
-    sourcePath: file,
-  }
-}
-
-function normalizeRouteSourceEntry<TData>(
-  root: string,
-  sourcePath: string,
-  entry: RouteSourceEntry<TData>,
-): NormalizedRouteSourceEntry<TData> {
-  const routePath = normalizeRoutePath(entry.path)
-  const routeId = normalizeRouteId(entry.routeId ?? getDerivedRouteId(routePath))
-  const resolvedSourcePath = resolveFromRoot(root, sourcePath)
-  return {
-    routeId,
-    routePath,
-    moduleId: getRouteSourceModuleId(resolvedSourcePath),
-    sourcePath: resolvedSourcePath,
-    data: entry.data,
-  }
-}
-
-function mergeRouteSourceEntries<TData>(
-  sourceEntries: NormalizedRouteSourceEntry<TData>[][],
-): NormalizedRouteSourceEntry<TData>[] {
-  const merged: NormalizedRouteSourceEntry<TData>[] = []
-  const firstByRouteId = new Map<string, NormalizedRouteSourceEntry<TData>>()
-  const firstByRoutePath = new Map<string, NormalizedRouteSourceEntry<TData>>()
-  const firstBySourcePath = new Map<string, NormalizedRouteSourceEntry<TData>>()
-
-  for (const entries of sourceEntries) {
-    for (const entry of entries) {
-      const firstRouteId = firstByRouteId.get(entry.routeId)
-      if (firstRouteId) {
-        throwRouteSourceCollision('routeId', entry.routeId, firstRouteId, entry)
-      }
-      const firstRoutePath = firstByRoutePath.get(entry.routePath)
-      if (firstRoutePath) {
-        throwRouteSourceCollision('routePath', entry.routePath, firstRoutePath, entry)
-      }
-      const firstSourcePath = firstBySourcePath.get(entry.sourcePath!)
-      if (firstSourcePath) {
-        throwRouteSourceCollision('sourcePath', entry.sourcePath!, firstSourcePath, entry)
-      }
-
-      firstByRouteId.set(entry.routeId, entry)
-      firstByRoutePath.set(entry.routePath, entry)
-      firstBySourcePath.set(entry.sourcePath!, entry)
-      merged.push(entry)
-    }
-  }
-
-  return merged
-}
-
-function throwRouteSourceCollision<TData>(
-  field: 'routeId' | 'routePath' | 'sourcePath',
-  value: string,
-  first: NormalizedRouteSourceEntry<TData>,
-  current: NormalizedRouteSourceEntry<TData>,
-): never {
-  throw new Error(
-    `[solid-file-router] duplicate routeSource.${field}: ${value}; source paths: ${first.sourcePath} and ${current.sourcePath}`,
-  )
-}
-
-function getDerivedRouteId(routePath: string): string {
-  return getRoutePath(routePath, '') ?? `/${routePath.replace(REG_ROUTE_SOURCE_EXT, '')}`
-}
-
-function normalizeRouteId(routeId: string): string {
-  const normalized = normalizePath(routeId).replace(/^(?:\.\/)|\/+$/g, '')
-  if (!normalized) {
-    return '/'
-  }
-  return normalized.startsWith('/') ? normalized : `/${normalized}`
-}
-
-function normalizeRoutePath(routePath: string): string {
-  const normalized = normalizePath(routePath).replace(/^(?:\.\/|\/+)|\/+$/g, '')
-  if (!normalized) {
-    return 'index.tsx'
-  }
-  return normalized
-}
-
-function getRouteSourceModuleId(sourcePath: string): string {
-  return `${sourcePath}${ROUTE_SOURCE_MODULE_SUFFIX}`
-}
-
-function stripQuery(id: string): string {
-  return id.replace(REG_QUERY, '')
-}
-
-function createRouteSourceWatchConfig(root: string, patterns: string[]): RouteSourceWatchConfig {
-  const includes: string[] = []
-  const excludes: string[] = []
-  const roots: string[] = []
-
-  for (const pattern of patterns) {
-    const isExclude = pattern.startsWith('!')
-    const value = pattern.slice(isExclude ? 1 : 0)
-    if (!value) {
-      continue
-    }
-
-    const resolved = resolveFromRoot(root, value)
-    if (isExclude) {
-      excludes.push(resolved, `${resolved}/**`)
-      continue
-    }
-
-    if (REG_GLOB_CHAR.test(resolved)) {
-      includes.push(resolved)
-    } else {
-      includes.push(resolved, `${resolved}/**`)
-    }
-    roots.push(getGlobWatchRoot(resolved))
-  }
-
-  return {
-    roots: [...new Set(roots)],
-    filter: includes.length > 0 ? createFilter(includes, excludes) : () => false,
-  }
-}
-
-function getRouteSourceWatchFiles<TData>(source: RouteSourceProvider<TData>): string[] {
-  return [source.filter, ...(source.watch ?? [])]
-}
-
-function getGlobWatchRoot(pattern: string): string {
-  const normalized = normalizePath(pattern).replace(/^\.\//, '')
-  const globIndex = normalized.search(REG_GLOB_CHAR)
-  if (globIndex < 0) {
-    return normalized
-  }
-
-  const prefix = normalized.slice(0, globIndex)
-  const lastSlashIndex = prefix.lastIndexOf('/')
-  if (lastSlashIndex < 0) {
-    return ''
-  }
-
-  return prefix.slice(0, lastSlashIndex)
 }
 
 function uniqueModuleIds(...groups: Array<Array<string | undefined>>): string[] {
