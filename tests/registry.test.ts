@@ -5,14 +5,14 @@ import { join, resolve } from 'node:path'
 import { normalizePath } from 'vite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { generateDefinition } from '../src/utils/definition'
-import { invalidateCache } from '../src/utils/extract'
-import { RouteRegistry } from '../src/utils/registry'
-import { generateRouteTypes } from '../src/utils/route-type'
+import { generateDefinition } from '../src/route/definition'
+import { invalidateCache } from '../src/route/extract'
+import { RouteRegistry } from '../src/route/registry'
+import { generateRouteTypes } from '../src/route/type-gen'
 
-vi.mock('../src/utils/definition', async () => {
+vi.mock('../src/route/definition', async () => {
   const actual =
-    await vi.importActual<typeof import('../src/utils/definition')>('../src/utils/definition')
+    await vi.importActual<typeof import('../src/route/definition')>('../src/route/definition')
   return {
     ...actual,
     generateDefinition: vi.fn(
@@ -39,9 +39,9 @@ vi.mock('../src/utils/definition', async () => {
   }
 })
 
-vi.mock('../src/utils/route-type', async () => {
+vi.mock('../src/route/type-gen', async () => {
   const actual =
-    await vi.importActual<typeof import('../src/utils/route-type')>('../src/utils/route-type')
+    await vi.importActual<typeof import('../src/route/type-gen')>('../src/route/type-gen')
   return {
     ...actual,
     generateRouteTypes: vi.fn((_files, output: string) => {
@@ -52,9 +52,9 @@ vi.mock('../src/utils/route-type', async () => {
   }
 })
 
-vi.mock('../src/utils/extract', async () => {
+vi.mock('../src/route/extract', async () => {
   const actual =
-    await vi.importActual<typeof import('../src/utils/extract')>('../src/utils/extract')
+    await vi.importActual<typeof import('../src/route/extract')>('../src/route/extract')
   return {
     ...actual,
     invalidateCache: vi.fn(),
@@ -62,6 +62,13 @@ vi.mock('../src/utils/extract', async () => {
 })
 
 const tempDirs: string[] = []
+
+function collisionPattern(message: string, ...paths: string[]) {
+  const escapedPaths = paths.map((path) =>
+    normalizePath(path).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+  )
+  return new RegExp([message, ...escapedPaths].join('.*'))
+}
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
@@ -314,7 +321,7 @@ export default createRoute({
       ignore: [],
       output: outputPath,
       inheritance: { enabled: true, inheritLoading: true, inheritError: true },
-      routeSources: [
+      routeProviders: [
         {
           filter: '../content/**/*',
           glob: async () => ['../content/page.mdx'],
@@ -362,7 +369,7 @@ export default createRoute({
       expectedPagesDir,
     )
 
-    await expect(registry.loadRouteSourceModule(expectedModuleId)).resolves.toBe(
+    await expect(registry.loadRouteProviderModule(expectedModuleId)).resolves.toBe(
       'export default {}',
     )
     expect(loadedContexts).toStrictEqual([
@@ -376,7 +383,7 @@ export default createRoute({
     })
   })
 
-  it('rescans custom route sources when watched files change', async () => {
+  it('rescans route providers when watched files change', async () => {
     const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
     tempDirs.push(workspaceRoot)
     mkdirSync(join(workspaceRoot, 'docs/pages'), { recursive: true })
@@ -398,7 +405,7 @@ export default createRoute({
         inheritLoading: true,
         inheritError: true,
       },
-      routeSources: [
+      routeProviders: [
         {
           filter: 'docs/pages/**/*',
           glob: async () => entries.map((entry) => entry.sourcePath),
@@ -435,7 +442,7 @@ export default createRoute({
     expect(generateRouteTypes).toHaveBeenCalledTimes(2)
   })
 
-  it('invalidates only the changed custom route module', async () => {
+  it('invalidates only the changed route provider module', async () => {
     const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
     tempDirs.push(workspaceRoot)
     const entries = [
@@ -448,7 +455,7 @@ export default createRoute({
       ignore: [],
       output: 'src/routes.d.ts',
       inheritance: { enabled: true, inheritLoading: true, inheritError: true },
-      routeSources: [
+      routeProviders: [
         {
           filter: 'docs/pages/**/*',
           glob: async () => entries.map((entry) => entry.sourcePath),
@@ -482,7 +489,7 @@ export default createRoute({
       ignore: [],
       output: 'src/routes.d.ts',
       inheritance: { enabled: true, inheritLoading: true, inheritError: true },
-      routeSources: [
+      routeProviders: [
         {
           filter: 'docs/**/*.mdx',
           glob: async () => ['docs/button.mdx'],
@@ -497,7 +504,7 @@ export default createRoute({
     })
 
     await registry.initialize(workspaceRoot)
-    await registry.loadRouteSourceModule(
+    await registry.loadRouteProviderModule(
       normalizePath(join(workspaceRoot, 'docs/button.mdx-sfr.tsx')),
     )
     expect(loadedData).toBe(firstData)
@@ -505,13 +512,13 @@ export default createRoute({
     data = secondData
     const change = await registry.markChanged(join(workspaceRoot, 'docs/button.mdx'))
     expect(change.structureChanged).toBe(false)
-    await registry.loadRouteSourceModule(
+    await registry.loadRouteProviderModule(
       normalizePath(join(workspaceRoot, 'docs/button.mdx-sfr.tsx')),
     )
     expect(loadedData).toBe(secondData)
   })
 
-  it('derives custom route IDs from route paths', async () => {
+  it('derives route provider IDs from route paths', async () => {
     const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
     tempDirs.push(workspaceRoot)
     const registry = new RouteRegistry({
@@ -519,7 +526,7 @@ export default createRoute({
       ignore: [],
       output: 'src/routes.d.ts',
       inheritance: { enabled: true, inheritLoading: true, inheritError: true },
-      routeSources: [
+      routeProviders: [
         {
           filter: 'docs/**/*.mdx',
           glob: async () => [
@@ -565,7 +572,7 @@ export default createRoute({
       ignore: [],
       output: 'src/routes.d.ts',
       inheritance: { enabled: true, inheritLoading: true, inheritError: true },
-      routeSources: [
+      routeProviders: [
         {
           filter: 'docs/**/*.mdx',
           glob: async () => ['docs/first.mdx', 'docs/second.mdx'],
@@ -579,8 +586,10 @@ export default createRoute({
     })
 
     await expect(registry.initialize(workspaceRoot)).rejects.toThrow(
-      new RegExp(
-        `duplicate routeSource.routeId: /same.*${workspaceRoot}/docs/first\\.mdx.*${workspaceRoot}/docs/second\\.mdx`,
+      collisionPattern(
+        'duplicate routeProvider.routeId: /same',
+        join(workspaceRoot, 'docs/first.mdx'),
+        join(workspaceRoot, 'docs/second.mdx'),
       ),
     )
   })
@@ -593,7 +602,7 @@ export default createRoute({
       ignore: [],
       output: 'src/routes.d.ts',
       inheritance: { enabled: true, inheritLoading: true, inheritError: true },
-      routeSources: [
+      routeProviders: [
         {
           filter: 'docs/**/*.mdx',
           glob: async () => ['docs/first.mdx'],
@@ -610,8 +619,10 @@ export default createRoute({
     })
 
     await expect(registry.initialize(workspaceRoot)).rejects.toThrow(
-      new RegExp(
-        `duplicate routeSource.routeId: /same.*${workspaceRoot}/docs/first\\.mdx.*${workspaceRoot}/content/second\\.md`,
+      collisionPattern(
+        'duplicate routeProvider.routeId: /same',
+        join(workspaceRoot, 'docs/first.mdx'),
+        join(workspaceRoot, 'content/second.md'),
       ),
     )
   })
@@ -624,7 +635,7 @@ export default createRoute({
       ignore: [],
       output: 'src/routes.d.ts',
       inheritance: { enabled: true, inheritLoading: true, inheritError: true },
-      routeSources: [
+      routeProviders: [
         {
           filter: 'docs/**/*.mdx',
           glob: async () => ['docs/first.mdx'],
@@ -641,8 +652,10 @@ export default createRoute({
     })
 
     await expect(registry.initialize(workspaceRoot)).rejects.toThrow(
-      new RegExp(
-        `duplicate routeSource.routePath: same.tsx.*${workspaceRoot}/docs/first\\.mdx.*${workspaceRoot}/content/second\\.md`,
+      collisionPattern(
+        'duplicate routeProvider.routePath: same.tsx',
+        join(workspaceRoot, 'docs/first.mdx'),
+        join(workspaceRoot, 'content/second.md'),
       ),
     )
   })
@@ -655,7 +668,7 @@ export default createRoute({
       ignore: [],
       output: 'src/routes.d.ts',
       inheritance: { enabled: true, inheritLoading: true, inheritError: true },
-      routeSources: [
+      routeProviders: [
         {
           filter: 'docs/**/*.mdx',
           glob: async () => ['docs/shared.mdx'],
@@ -671,13 +684,13 @@ export default createRoute({
       ],
     })
 
-    const sourcePath = `${workspaceRoot}/docs/shared.mdx`
+    const sourcePath = normalizePath(join(workspaceRoot, 'docs/shared.mdx'))
     await expect(registry.initialize(workspaceRoot)).rejects.toThrow(
-      new RegExp(`duplicate routeSource.sourcePath: ${sourcePath}.*${sourcePath}`),
+      collisionPattern('duplicate routeProvider.sourcePath:', sourcePath, sourcePath),
     )
   })
 
-  it('invalidates all custom route modules when extra watched files change', async () => {
+  it('invalidates all route provider modules when extra watched files change', async () => {
     const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
     tempDirs.push(workspaceRoot)
     mkdirSync(join(workspaceRoot, 'docs/config'), { recursive: true })
@@ -691,7 +704,7 @@ export default createRoute({
         inheritLoading: true,
         inheritError: true,
       },
-      routeSources: [
+      routeProviders: [
         {
           filter: 'docs/pages/**/*',
           glob: async () => ['docs/pages/_app.tsx', 'docs/pages/button.mdx'],
@@ -735,7 +748,7 @@ export default createRoute({ component: () => null })
     })
   })
 
-  it('normalizes mdx glob route sources without leaking the source extension', async () => {
+  it('normalizes MDX glob providers without leaking the source extension', async () => {
     const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
     tempDirs.push(workspaceRoot)
     mkdirSync(join(workspaceRoot, 'docs'), { recursive: true })
@@ -750,7 +763,7 @@ export default createRoute({ component: () => null })
         inheritLoading: true,
         inheritError: true,
       },
-      routeSources: [
+      routeProviders: [
         {
           filter: 'docs/**/*.mdx',
           transformPath: (path) => ({ path: path.replace(/\.mdx$/, '.tsx') }),
@@ -775,7 +788,7 @@ export default createRoute({ component: () => null })
     )
   })
 
-  it('uses ignore patterns and inferred watch roots for glob route sources', async () => {
+  it('uses ignore patterns and inferred watch roots for glob providers', async () => {
     const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
     tempDirs.push(workspaceRoot)
     mkdirSync(join(workspaceRoot, 'docs/private'), { recursive: true })
@@ -791,7 +804,7 @@ export default createRoute({ component: () => null })
         inheritLoading: true,
         inheritError: true,
       },
-      routeSources: [
+      routeProviders: [
         {
           filter: 'docs/**/*.mdx',
           transformPath: (path) => ({ path: path.replace(/\.mdx$/, '.tsx') }),
@@ -831,7 +844,7 @@ export default createRoute({ component: () => null })
       ignore: [],
       output: 'src/routes.d.ts',
       inheritance: { enabled: true, inheritLoading: true, inheritError: true },
-      routeSources: [
+      routeProviders: [
         {
           filter: 'docs/**/*.mdx',
           transformPath: () => ({ path: 'button.tsx', routeId: '/button' }),
@@ -853,7 +866,7 @@ export default createRoute({ component: () => null })
     ).resolves.toMatchObject({ matched: true })
   })
 
-  it('throws when route source load returns no code', async () => {
+  it('throws when route provider load returns no code', async () => {
     const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
     tempDirs.push(workspaceRoot)
 
@@ -866,7 +879,7 @@ export default createRoute({ component: () => null })
         inheritLoading: true,
         inheritError: true,
       },
-      routeSources: [
+      routeProviders: [
         {
           filter: 'docs/pages/**/*',
           glob: async () => ['docs/pages/button.mdx'],
@@ -879,9 +892,9 @@ export default createRoute({ component: () => null })
     await registry.initialize(workspaceRoot)
 
     await expect(
-      registry.loadRouteSourceModule(
+      registry.loadRouteProviderModule(
         normalizePath(join(workspaceRoot, 'docs/pages/button.mdx-sfr.tsx')),
       ),
-    ).rejects.toThrow('routeSource.load returned no code for routeId: /button')
+    ).rejects.toThrow('routeProvider.load returned no code for routeId: /button')
   })
 })

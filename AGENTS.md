@@ -106,15 +106,12 @@ bun run play:preview   # Preview playground build
 
 ```
 src/
-  index.ts          # Main Vite plugin entry (fileRouter)
-  runtime.ts        # createRoute, generatePath, __loader__, type exports
-  const.ts          # Shared constants, logger
-  helper/
-    loader.tsx       # Solid component loader exported directly from runtime
-  utils/
-    definition.ts   # Route tree generation, import codegen
-    extract.ts      # AST extraction of route config properties
-    route-type.ts   # DTS type generation for routes
+  index.ts          # Public runtime entry (createRoute, generatePath, client/server entries)
+  plugin.ts         # Vite plugin orchestration (fileRouter)
+  const.ts          # Shared constants and logger
+  mdx/              # MDX runtime components, compilation, and Vite plugin
+  route/            # Route discovery, transforms, registry, codegen, and Vite plugins
+  ssg/              # Static generation entry, Vite plugin, and rendering helpers
 ```
 
 ## Testing Conventions

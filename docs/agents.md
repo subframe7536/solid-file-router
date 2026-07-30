@@ -33,7 +33,7 @@ Do not duplicate those rules here.
 | Add metadata         | Define `info` and configure `infoDts`                               | `FileRouteInfo` and `routeInfo` are typed              |
 | Add SSG              | Enable Solid SSR, add `ssg`, and use `createClientEntry`            | Build emits `dist/client/index.html` and `404.html`    |
 | Use built-in MDX     | Install Satteri and set `mdx: true`                                 | `.md`/`.mdx` routes are generated and render           |
-| Use a CMS/provider   | Provide `routeSource.transformPath` and `routeSource.load`          | Every provider entry returns valid route module source |
+| Use a CMS/provider   | Provide `provider.transformPath` and `provider.load`                | Every provider entry returns valid route module source |
 
 Use [guide.md](guide.md) for workflows and [reference.md](reference.md) for exact
 options and types.
@@ -68,13 +68,13 @@ at the selected property boundary.
 
 | Concern                                        | Primary source            | Primary tests                                         |
 | ---------------------------------------------- | ------------------------- | ----------------------------------------------------- |
-| Vite plugin, options, SSG, HTML injection      | `src/index.ts`            | `tests/plugin.test.ts`                                |
-| Runtime API and loader boundaries              | `src/runtime.ts`          | `tests/runtime.test.ts`, `tests/generatePath.test.ts` |
-| File path conversion and route tree generation | `src/utils/definition.ts` | `tests/definition.test.ts`                            |
-| Route module AST extraction                    | `src/utils/extract.ts`    | `tests/extract.test.ts`                               |
-| Generated route declarations                   | `src/utils/route-type.ts` | `tests/route-type.test.ts`                            |
-| Route discovery, HMR, and custom sources       | `src/utils/registry.ts`   | `tests/registry.test.ts`                              |
-| Public custom source types                     | `src/utils/source.ts`     | `tests/plugin.test.ts`, `tests/registry.test.ts`      |
+| Vite plugin, options, SSG, HTML injection      | `src/plugin.ts`           | `tests/plugin.test.ts`                                |
+| Runtime API and loader boundaries              | `src/index.ts`            | `tests/runtime.test.ts`, `tests/generatePath.test.ts` |
+| File path conversion and route tree generation | `src/route/definition.ts` | `tests/definition.test.ts`                            |
+| Route module AST extraction                    | `src/route/extract.ts`    | `tests/extract.test.ts`                               |
+| Generated route declarations                   | `src/route/type-gen.ts`   | `tests/route-type.test.ts`                            |
+| Route definition registry                      | `src/route/registry.ts`   | `tests/registry.test.ts`                              |
+| Provider contract and discovery manager        | `src/route/provider/`     | `tests/plugin.test.ts`, `tests/registry.test.ts`      |
 | `virtual:routes` declaration                   | `client.d.ts`             | `tests/definition.test.ts`                            |
 
 Read the primary source and its tests before changing behavior. Search call
@@ -85,7 +85,7 @@ sites before changing an exported type or generated wire shape.
 ### Route generation
 
 - File routing is built in and scans only `.jsx` and `.tsx` under `pagesDir`.
-- Optional MDX discovery and custom `routeSource` providers add more route inputs;
+- Optional MDX discovery and configured route providers add more route inputs;
   all inputs participate in the same route tree and HMR rules.
 - Route import names remain stable when unrelated files are added.
 - `_app` and `404` have generated fallbacks when files are absent.
@@ -125,10 +125,10 @@ sites before changing an exported type or generated wire shape.
 - Route rendering is deduplicated and concurrency is never below one.
 - HTML accepts exactly one outlet strategy and requires a head insertion point.
 
-### Custom route providers
+### Route providers
 
 - Normalized `routeId`, logical `path`, and `sourcePath` values are unique across
-  built-in and custom route inputs.
+  built-in and configured route inputs.
 - Every route ID is unique; later providers never override an earlier route.
 - `routeId` derives from logical `path` when omitted.
 - `data` passes through the current process without serialization.

@@ -29,7 +29,7 @@ export default createRoute({
               >
                 <strong>MDX Custom Route</strong>
                 <div style={{ 'font-size': '14px', color: '#666', 'margin-top': '5px' }}>
-                  Compile MDX with Satteri through a custom route source
+                  Compile MDX with Satteri through the built-in route provider
                 </div>
               </A>
             </li>

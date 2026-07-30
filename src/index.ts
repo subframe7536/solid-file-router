@@ -1,690 +1,220 @@
-import path from 'node:path'
-import { pathToFileURL } from 'node:url'
+import type { RouteDefinition, RouteSectionProps } from '@solidjs/router'
+import type { Component } from 'solid-js'
+import { createComponent, ErrorBoundary, Suspense, untrack } from 'solid-js'
+import { hydrate, render, renderToStringAsync } from 'solid-js/web'
 
-import { generateHydrationScript } from 'solid-js/web'
-import type { Logger, Plugin, ResolvedConfig } from 'vite'
-import { normalizePath } from 'vite'
+type AnyComp = Component<any>
 
-import { PACKAGE_NAME, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
-import { compileMdx, mdxRouteSource } from './mdx/router'
-import type { MdxOptions } from './mdx/router'
-import type { InheritanceConfig } from './utils/definition'
-import { extract, getAstCacheKey } from './utils/extract'
-import { isRouteSourceModuleId, resolveRouteSourceModuleId, RouteRegistry } from './utils/registry'
-import type { RouteRegistryChange } from './utils/registry'
-import type { InfoTypeDefinition, InlineInfoTypeDefinition } from './utils/route-type'
-import type {
-  Promisable,
-  RouteSourceEntry,
-  RouteSourceLoadContext,
-  RouteSourceProvider,
-} from './utils/source'
-import { defineRouteSource, fsRouteSource } from './utils/source'
-
-type Awaitable<T> = T | Promise<T>
-/** A static route list or lazy route producer used by SSG. */
-export type PrerenderRoutesSource = readonly string[] | (() => Awaitable<readonly string[]>)
-export {
-  defineRouteSource,
-  type MdxOptions,
-  type Promisable,
-  type RouteSourceEntry,
-  type RouteSourceLoadContext,
-  type RouteSourceProvider,
-}
-export type { InfoTypeDefinition, InlineInfoTypeDefinition }
-
-export interface FileRouterPluginOption<TData = unknown> {
-  /**
-   * The output file path where the page types will be saved.
-   * @default 'src/routes.d.ts'
-   */
-  output?: string
-  /**
-   * The directory containing all route files.
-   *
-   * e.g. If your `_app.tsx` is located at `module/routes/_app.tsx`,
-   * You need to setup to `module/routes`
-   * @default 'src/pages'
-   */
-  pagesDir?: string
-  /**
-   * Additional custom route sources appended after the built-in sources.
-   * @default undefined
-   */
-  routeSource?: RouteSourceProvider<TData> | readonly RouteSourceProvider<TData>[]
-  /**
-   * Enable built-in Markdown/MDX route discovery and Satteri compilation.
-   * @default false
-   */
-  mdx?: boolean | MdxOptions
-  /**
-   * A list of glob patterns to be ignored during processing.
-   *
-   * Default is {@link DEFAULT_IGNORES}: all files in `components/`, `node_modules/` and `dist/`
-   * @default DEFAULT_IGNORES
-   */
-  ignore?: string[]
-  /**
-   * Escape hatch that reloads the page for route content updates. Structural
-   * changes may still reload automatically. Useful when route modules depend
-   * on state that Vite cannot update through the normal HMR module graph.
-   * @default false
-   */
-  reloadOnChange?: boolean
-  /**
-   * Whether to generate route modules with lazy imports.
-   * When omitted, enabled in client builds and disabled in SSR builds.
-   * @default Client builds: true; SSR builds: false
-   */
-  lazy?: boolean
-  /**
-   * Route's dts config to control Route's info type
-   * @example
-   * ```ts
-   * {
-   *   title: 'string',
-   *   description: 'string',
-   *   auth: {
-   *     required: 'boolean',
-   *     code: 'string',
-   *   },
-   *   tags: 'string[]',
-   * }
-   * ```
-   */
-  infoDts?: InfoTypeDefinition
-  /**
-   * Whether to enable verbose log
-   * @default false
-   */
-  verboseLog?: boolean
-  /**
-   * Component inheritance configuration.
-   *
-   * Controls how loading and error components are inherited from layouts.
-   *
-   * @default { enabled: true }
-   *
-   * @example
-   * // Disable inheritance globally
-   * { enabled: false }
-   *
-   * @example
-   * // Enable with custom behavior
-   * {
-   *   enabled: true,
-   *   inheritLoading: true,
-   *   inheritError: true
-   * }
-   */
-  inheritance?: InheritanceConfig
-  /**
-   * Optional SSG configuration with Vite Environment API.
-   * Keep `vite-plugin-solid` setup in user land while this plugin handles prerender outputs.
-   */
-  ssg?: {
-    /**
-     * Custom build-time renderer entry. When omitted, the generated internal
-     * prerender entry is used.
-     */
-    serverEntry?: string
-    /**
-     * The ID of the root element where the app will be mounted.
-     * @default 'root'
-     */
-    id?: string
-    /**
-     * Prerender routes or a lazy route producer.
-     * When omitted, every concrete static route in the registry is rendered.
-     */
-    routes?: PrerenderRoutesSource
-    /**
-     * Max concurrent prerender tasks.
-     * @default 4
-     */
-    concurrency?: number
+/** Wraps a route component with loading and error boundaries. */
+export function __loader__(Comp: AnyComp, Loading: AnyComp, Error: AnyComp) {
+  return (props: RouteSectionProps) => {
+    const Catch =
+      Error || ((props) => (import.meta.env.DEV && console.error(untrack(() => props.error)), null))
+    return createComponent(ErrorBoundary, {
+      fallback: (error, reset) =>
+        createComponent(Catch, {
+          error,
+          reset,
+        }),
+      children: Loading
+        ? createComponent(Suspense, {
+            get fallback() {
+              return createComponent(Loading, props)
+            },
+            get children() {
+              return createComponent(Comp, props)
+            },
+          })
+        : createComponent(Comp, props),
+    })
   }
 }
 
-/** Default directories excluded from route discovery. */
-export const DEFAULT_IGNORES = ['**/components/**', '**/node_modules/**', '**/dist/**']
-
-type BundleAsset = {
-  type: 'asset'
-  fileName: string
-  source: string | Uint8Array
-}
-type BundleChunk = {
-  type: 'chunk'
-  fileName: string
-  facadeModuleId?: string | null
-  isEntry?: boolean
-}
-type BundleOutput = Record<string, BundleAsset | BundleChunk>
-
-const queryMap = new Map<string, string[]>([
-  ['route', ['info', 'preload', 'matchFilters', 'inherit', 'loadingComponent', 'errorComponent']],
-  ['comp', ['component']],
-])
-const REG_ROUTE_QUERY = /\?(route|comp)$/
-const REG_ROUTE_SOURCE_MODULE_ID = /-sfr\.tsx(?:\?.*)?$/
-const REG_MARKDOWN_MODULE_ID = /\.(?:md|mdx)(?:\?.*)?$/i
-const ENVIRONMENT = {
-  CLIENT: 'client',
-  SERVER: 'ssr',
-} as const
-const INDEX_HTML_FILE_NAME = 'index.html'
-const DEFAULT_PRERENDER_CONCURRENCY = 4
-const CACHE_BUST_PARAM = 't'
-const SLASH_CODE_POINT = '/'.codePointAt(0)!
-const ID_PRERENDER = 'virtual:solid-file-router/prerender-entry'
-const VID_PRERENDER = `\0${ID_PRERENDER}`
-const OUTLET_MARKER = '<!--solid-file-router-outlet-->'
-const HEAD_MARKER = '<!--solid-file-router-head-->'
-
-type EnvironmentName = typeof ENVIRONMENT.CLIENT | typeof ENVIRONMENT.SERVER
-function trimTrailingSlashes(value: string) {
-  let end = value.length
-  while (end > 0 && value.codePointAt(end - 1) === SLASH_CODE_POINT) {
-    end -= 1
+/** Generated route path declarations augmented by the application. */
+export interface FileRoutePath {}
+/** Generated route metadata declarations augmented by the application. */
+export interface FileRouteInfo {}
+export type FileRouteInfoMap = Partial<
+  Record<keyof FileRoutePath & string, FileRouteInfo | undefined>
+>
+/** A matched route entry returned by the Solid router. */
+export interface FileRouteMatch {
+  info?: FileRouteInfo
+  route?: {
+    info?: FileRouteInfo
   }
-  return value.slice(0, end)
 }
 
-function normalizeRoutePath(route: string) {
-  const trimmedRoute = route.trim()
-  if (!trimmedRoute || trimmedRoute === '/') {
-    return '/'
-  }
-
-  const withLeadingSlash = trimmedRoute.startsWith('/') ? trimmedRoute : `/${trimmedRoute}`
-  if (withLeadingSlash.split('/').some((segment) => segment === '..' || segment === '.')) {
-    throw new Error(
-      `[solid-file-router] Invalid prerender route outside output directory: ${route}`,
-    )
-  }
-  const withoutTrailingSlash = trimTrailingSlashes(withLeadingSlash)
-  return withoutTrailingSlash || '/'
-}
-
-function getPrerenderAssetFileName(route: string) {
-  const normalizedRoute = normalizeRoutePath(route)
-
-  if (normalizedRoute === '/') {
-    return INDEX_HTML_FILE_NAME
-  }
-
-  const segments = normalizedRoute.slice(1).split('/')
-  const lastSegment = segments.pop()!
-  return path.posix.join(...segments, `${lastSegment}.html`)
-}
-
-function findIndexHtmlAsset(bundle: BundleOutput) {
-  const htmlAsset = Object.values(bundle).find(
-    (item): item is BundleAsset => item.type === 'asset' && item.fileName === INDEX_HTML_FILE_NAME,
-  )
-
-  if (!htmlAsset) {
-    throw new Error(`Missing client ${INDEX_HTML_FILE_NAME} asset in bundle`)
-  }
-
-  return htmlAsset
-}
-
-function findSsrEntryChunk(bundle: BundleOutput, entryModuleId: string) {
-  const entryChunks = Object.values(bundle).filter(
-    (item): item is BundleChunk => item.type === 'chunk' && !!item.isEntry,
-  )
-
-  return entryChunks.find(
-    (item) => normalizePath(item.facadeModuleId ?? '') === normalizePath(entryModuleId),
-  )
-}
-
-async function mapWithConcurrency<T, R>(
-  items: readonly T[],
-  concurrency: number,
-  mapper: (item: T, index: number) => Promise<R>,
-) {
-  const results = new Array<R>(items.length)
-  let nextIndex = 0
-
-  async function worker() {
-    while (nextIndex < items.length) {
-      const currentIndex = nextIndex
-      nextIndex += 1
-      const item = items[currentIndex]
-      if (item === undefined) {
-        continue
-      }
-      results[currentIndex] = await mapper(item, currentIndex)
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()))
-  return results
-}
-
-async function loadServerRenderer(config: ResolvedConfig, entryFileName: string) {
-  const serverOutDir = config.environments?.[ENVIRONMENT.SERVER]?.build?.outDir
-  if (!serverOutDir) {
-    throw new Error('Missing SSG server environment output directory')
-  }
-
-  const resolvedOutDir = path.resolve(config.root, serverOutDir)
-  const serverEntryUrl = pathToFileURL(path.join(resolvedOutDir, entryFileName)).href
-  return import(`${serverEntryUrl}?${CACHE_BUST_PARAM}=${Date.now()}`).then(
-    (mod) => mod.default ?? mod,
-  )
-}
-
-export function renderTemplate(template: string, id: string, app: string) {
-  const markerCount = template.split(OUTLET_MARKER).length - 1
-  if (markerCount > 1) {
-    throw new Error(`[solid-file-router] SSG found duplicate ${OUTLET_MARKER} markers`)
-  }
-
-  let rendered = template
-  if (markerCount === 1) {
-    rendered = rendered.replace(OUTLET_MARKER, `<div id="${id}">${app}</div>`)
-  } else {
-    const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const rootPattern = new RegExp(
-      `<([a-z][\\w:-]*)\\b([^>]*\\bid\\s*=\\s*(['"])${escapedId}\\3[^>]*)>[\\s\\S]*?</\\1>`,
-      'i',
-    )
-    if (rootPattern.test(rendered)) {
-      rendered = rendered.replace(
-        rootPattern,
-        (_match, tag, attributes) => `<${tag}${attributes}>${app}</${tag}>`,
-      )
-    } else {
-      throw new Error(
-        [
-          `[solid-file-router] SSG could not find an outlet in ${INDEX_HTML_FILE_NAME}.`,
-          `Add ${OUTLET_MARKER} or an element with id="${id}".`,
-        ].join('\n'),
-      )
-    }
-  }
-
-  // Vite has already injected client assets into the HTML template. Only the
-  // Solid hydration bootstrap belongs here; calling getAssets outside an SSR
-  // render owner is invalid and can duplicate Vite's tags.
-  const headAssets = generateHydrationScript()
-  if (rendered.includes(HEAD_MARKER)) {
-    return rendered.replace(HEAD_MARKER, headAssets)
-  }
-  if (!/<\/head\s*>/i.test(rendered)) {
-    throw new Error(
-      `[solid-file-router] SSG could not find </head> or ${HEAD_MARKER} in ${INDEX_HTML_FILE_NAME}`,
-    )
-  }
-  return rendered.replace(/<\/head\s*>/i, `${headAssets}</head>`)
+interface ErrorComponentProps {
+  error: Error
+  reset: VoidFunction
 }
 
 /**
- * Vite plugin for page generation.
+ * Configuration object for defining route behavior.
+ *
+ * When used in `_app.tsx` or `_layout.tsx` files, the `loadingComponent` and
+ * `errorComponent` properties serve as defaults for all descendant routes.
+ *
+ * **Component Inheritance:**
+ * Routes automatically inherit loading and error components through a three-tier
+ * fallback chain:
+ * 1. Route-specific component (defined in the route's own `createRoute()`)
+ * 2. Nearest ancestor `_layout.tsx` default
+ * 3. `_app.tsx` application-wide default
+ * 4. None (if not defined anywhere)
+ *
+ * **Controlling Inheritance:**
+ * Use the `inherit` property to control inheritance behavior for individual routes:
+ * - `inherit: false` - Disable all inheritance for this route
+ * - `inherit: { loading: false }` - Disable loading component inheritance only
+ * - `inherit: { error: false }` - Disable error component inheritance only
+ *
+ * @example
+ * // In _app.tsx - Define application-wide defaults
+ * export default createRoute({
+ *   component: (props) => <div>{props.children}</div>,
+ *   loadingComponent: () => <div>Loading...</div>,
+ *   errorComponent: (props) => <div>Error: {props.error.message}</div>
+ * })
+ *
+ * @example
+ * // In dashboard/_layout.tsx - Override for dashboard section
+ * export default createRoute({
+ *   component: (props) => <DashboardLayout>{props.children}</DashboardLayout>,
+ *   loadingComponent: () => <DashboardSpinner />
+ *   // errorComponent inherits from _app.tsx
+ * })
+ *
+ * @example
+ * // In dashboard/users.tsx - Route-specific override
+ * export default createRoute({
+ *   component: () => <UsersList />,
+ *   loadingComponent: () => <UsersLoadingSkeleton />
+ *   // Overrides dashboard/_layout.tsx default
+ * })
+ *
+ * @example
+ * // Disable inheritance for a specific route
+ * export default createRoute({
+ *   component: () => <SpecialPage />,
+ *   inherit: false // No loading/error components from layouts
+ * })
+ *
+ * @example
+ * // Selectively disable inheritance
+ * export default createRoute({
+ *   component: () => <CustomPage />,
+ *   loadingComponent: () => <CustomLoader />,
+ *   inherit: { error: false } // Use custom loader, but no error boundary
+ * })
  */
-export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TData> = {}): Plugin[] {
-  const {
-    output = 'src/routes.d.ts',
-    pagesDir = 'src/pages',
-    ignore = DEFAULT_IGNORES,
-    reloadOnChange = false,
-    lazy,
-    infoDts,
-    verboseLog,
-    inheritance = { enabled: true },
-    routeSource,
-    mdx = false,
-    ssg,
-  } = options
+export type RouteConfig<T = unknown> = Pick<
+  RouteDefinition<string, T>,
+  'matchFilters' | 'preload'
+> & {
+  info?: FileRouteInfo
+  component: Component<RouteSectionProps<T>>
+  errorComponent?: Component<ErrorComponentProps>
+  loadingComponent?: Component<RouteSectionProps<T>>
+  /**
+   * Control component inheritance from layouts.
+   *
+   * - `false`: Disable all inheritance (loading and error components)
+   * - `{ loading: false }`: Disable loading component inheritance only
+   * - `{ error: false }`: Disable error component inheritance only
+   * - `undefined` or `true`: Enable inheritance (default behavior)
+   *
+   * @default undefined (inheritance enabled)
+   */
+  inherit?:
+    | boolean
+    | {
+        loading?: boolean
+        error?: boolean
+      }
+}
 
-  const ssgConfig = {
-    enabled: !!ssg,
-    internalEntry: ssg?.serverEntry === undefined,
-    serverEntry: ssg?.serverEntry ?? ID_PRERENDER,
-    routes: ssg?.routes,
-    concurrency: Math.max(1, ssg?.concurrency ?? DEFAULT_PRERENDER_CONCURRENCY),
-    id: ssg?.id ?? 'root',
+/**
+ * Indicate the route export entry
+ *
+ * @example
+ * ```ts
+ * export default createRoute({})
+ * ```
+ */
+export function createRoute<T>(config: RouteConfig<T>): RouteConfig<T> {
+  return config
+}
+
+/** Reads route metadata from the deepest matched route. */
+export function readRouteInfo<T extends FileRouteInfo = FileRouteInfo>(
+  matches: readonly FileRouteMatch[],
+): T | undefined {
+  const route = matches.at(-1)
+  return (route?.route?.info ?? route?.info) as T | undefined
+}
+
+/** Generates a route URL from typed path and query parameters. */
+export function generatePath<T extends keyof FileRoutePath & string>(
+  path: T,
+  params: FileRoutePath[T] extends never
+    ? Record<string, unknown>
+    : FileRoutePath[T] & Record<string, unknown>,
+): string {
+  if (!params) {
+    return path
   }
-  let logger: Logger | undefined
-  let serverEntryFileName: string
-  let lastRouteChange: { key: string; promise: Promise<RouteRegistryChange> } | undefined
-
-  const inheritanceConfig = {
-    enabled: inheritance.enabled ?? true,
-    inheritLoading: inheritance.inheritLoading ?? true,
-    inheritError: inheritance.inheritError ?? true,
-  }
-
-  const extraRouteSources = routeSource
-    ? Array.isArray(routeSource)
-      ? routeSource
-      : [routeSource]
-    : []
-
-  const registry = new RouteRegistry<TData>({
-    pagesDir,
-    ignore,
-    output,
-    infoDts,
-    verboseLog,
-    inheritance: inheritanceConfig,
-    routeSources: [
-      fsRouteSource<TData>({ pagesDir }),
-      ...(mdx ? [mdxRouteSource<TData>(mdx === true ? { pagesDir } : { pagesDir, ...mdx })] : []),
-      ...extraRouteSources,
-    ],
-  })
-
-  function getRouteChange(
-    type: 'create' | 'update' | 'delete',
-    file: string,
-    timestamp: number,
-  ): Promise<RouteRegistryChange> {
-    const key = `${type}:${file}:${timestamp}`
-    if (lastRouteChange?.key === key) {
-      return lastRouteChange.promise
+  let result = path as string
+  let searchParam: URLSearchParams | undefined
+  for (const [k, v] of Object.entries(params)) {
+    if (k.startsWith('$')) {
+      result = result.replace(`:${k.slice(1)}`, v as string)
+    } else {
+      if (!searchParam) {
+        searchParam = new URLSearchParams()
+      }
+      searchParam.append(k, v as string)
     }
-
-    const promise =
-      type === 'create'
-        ? registry.addFile(file)
-        : type === 'delete'
-          ? registry.removeFile(file)
-          : registry.markChanged(file)
-    lastRouteChange = { key, promise }
-    return promise
   }
 
-  return [
-    {
-      name: `${PACKAGE_NAME}:extract`,
-      sharedDuringBuild: true,
-      async configResolved(config) {
-        logger = config.logger
-        await registry.initialize(config.root)
-      },
-      config(userConfig, env) {
-        if (!ssgConfig.enabled || env.command !== 'build') {
-          return
-        }
+  if (searchParam) {
+    result += `?${searchParam.toString()}`
+  }
 
-        const getOutDir = (envName: EnvironmentName, subDir: string) =>
-          normalizePath(
-            path.join(userConfig.environments?.[envName]?.build?.outDir ?? 'dist', subDir),
-          )
-        const clientOutDir = getOutDir(ENVIRONMENT.CLIENT, 'client')
-        const serverOutDir = getOutDir(ENVIRONMENT.SERVER, 'server')
-        return {
-          build: {
-            copyPublicDir: false,
-          },
-          builder: {
-            async buildApp(builder) {
-              const serverEnvironment = builder.environments[ENVIRONMENT.SERVER]
-              if (!serverEnvironment) {
-                throw new Error('Missing SSG server environment in builder')
-              }
-              if (!serverEnvironment.isBuilt) {
-                await builder.build(serverEnvironment)
-              }
-              const clientEnvironment = builder.environments[ENVIRONMENT.CLIENT]
-              if (!clientEnvironment) {
-                throw new Error('Missing SSG client environment in builder')
-              }
-              if (!clientEnvironment.isBuilt) {
-                await builder.build(clientEnvironment)
-              }
-              logger?.info(
-                `Build completed! You can serve ${clientOutDir} with a static file server.`,
-              )
-            },
-          },
-          environments: {
-            [ENVIRONMENT.CLIENT]: {
-              consumer: 'client',
-              build: {
-                outDir: clientOutDir,
-                copyPublicDir: true,
-              },
-            },
-            [ENVIRONMENT.SERVER]: {
-              consumer: 'server',
-              build: {
-                outDir: serverOutDir,
-                ssr: ssgConfig.internalEntry ? true : ssgConfig.serverEntry,
-                ...(ssgConfig.internalEntry
-                  ? {
-                      rolldownOptions: {
-                        input: ID_PRERENDER,
-                      },
-                    }
-                  : {}),
-                copyPublicDir: false,
-              },
-              optimizeDeps: {
-                exclude: ['solid-js', 'solid-js/web', '@solidjs/router', PACKAGE_NAME],
-              },
-            },
-          },
-        }
-      },
-      resolveId: {
-        filter: {
-          id: new RegExp(`^${VID_EXTRACT}$|^${ID_PRERENDER}$|${REG_ROUTE_SOURCE_MODULE_ID.source}`),
+  return result
+}
+
+/** Mounts or hydrates the client application at the supplied element. */
+export function createClientEntry(
+  component: Parameters<typeof render>[0],
+  mount: Parameters<typeof render>[1],
+) {
+  if (import.meta.env.DEV) {
+    render(component, mount)
+  } else if ('_$HY' in window) {
+    hydrate(component, mount)
+  } else {
+    render(component, mount)
+  }
+}
+
+/** Creates an SSR renderer for the supplied application component. */
+export async function createServerEntry(component: Component<{ url: string; base: string }>) {
+  if (!import.meta.env.SSR) {
+    throw new Error('[solid-file-router] createServerEntry can only run during SSR')
+  }
+
+  return (props: { url: string }) => {
+    return renderToStringAsync(() =>
+      component({
+        get base() {
+          return import.meta.env.BASE_URL
         },
-        handler(id) {
-          if (id === ID_PRERENDER) {
-            return VID_PRERENDER
-          }
-          if (id === VID_EXTRACT) {
-            return VID_EXTRACT_RESOLVED
-          }
-
-          return resolveRouteSourceModuleId(id)
+        get url() {
+          return props.url
         },
-      },
-      load: {
-        filter: {
-          id: new RegExp(
-            `^${VID_EXTRACT_RESOLVED}$|^${VID_PRERENDER}$|${REG_ROUTE_SOURCE_MODULE_ID.source}`,
-          ),
-        },
-        async handler(id, options) {
-          if (id === VID_PRERENDER) {
-            return `import { createComponent } from 'solid-js'
-import { StaticRouter } from '@solidjs/router'
-import { renderToStringAsync } from 'solid-js/web'
-import { Root, fileRoutes } from '${VID_EXTRACT}'
-
-export default ({ url }) => renderToStringAsync(() => createComponent(StaticRouter, {
-  url,
-  root: Root,
-  get children() { return fileRoutes }
-}))`
-          }
-          if (id && isRouteSourceModuleId(id)) {
-            return await registry.loadRouteSourceModule(id)
-          }
-
-          return registry.getDefinition(lazy ?? !options?.ssr)
-        },
-      },
-      configureServer(server) {
-        const watchedFiles = registry.getWatchFiles()
-        if (watchedFiles.length > 0) {
-          server.watcher.add(watchedFiles)
-        }
-      },
-      hotUpdate: {
-        order: 'pre',
-        async handler({ type, file, timestamp, modules }) {
-          const change = await getRouteChange(type, file, timestamp)
-          if (!change.matched) {
-            return
-          }
-
-          if (reloadOnChange || change.structureChanged) {
-            this.environment.hot.send({ type: 'full-reload' })
-            return []
-          }
-
-          const affectedModules = new Set(modules)
-          for (const moduleId of change.changedModuleIds) {
-            for (const id of [moduleId, `${moduleId}?route`, `${moduleId}?comp`]) {
-              const module = this.environment.moduleGraph.getModuleById(id)
-              if (module) {
-                affectedModules.add(module)
-              }
-            }
-          }
-
-          if (verboseLog) {
-            logger?.info(
-              `[solid-file-router] HMR modules: ${[...affectedModules]
-                .map((module) => module.id)
-                .join(', ')}`,
-            )
-          }
-
-          return [...affectedModules]
-        },
-      },
-      generateBundle: {
-        order: 'post',
-        async handler(_outputOptions, bundle) {
-          if (!ssgConfig.enabled) {
-            return
-          }
-
-          if (this.environment.name === ENVIRONMENT.SERVER) {
-            const serverEntryModuleId = ssgConfig.internalEntry
-              ? VID_PRERENDER
-              : normalizePath(path.resolve(this.environment.config.root, ssgConfig.serverEntry))
-            const ssrEntryChunk = findSsrEntryChunk(bundle as BundleOutput, serverEntryModuleId)
-            if (!ssrEntryChunk) {
-              this.error(`Missing SSR entry chunk for ${ssgConfig.serverEntry}`)
-            }
-
-            serverEntryFileName = ssrEntryChunk.fileName
-            return
-          }
-
-          if (this.environment.name !== ENVIRONMENT.CLIENT) {
-            return
-          }
-
-          if (!serverEntryFileName) {
-            this.error('Missing SSR renderer output before prerendering client routes')
-          }
-
-          const indexHtmlAsset = findIndexHtmlAsset(bundle as BundleOutput)
-          const htmlTemplate =
-            typeof indexHtmlAsset.source === 'string'
-              ? indexHtmlAsset.source
-              : Buffer.from(indexHtmlAsset.source).toString('utf-8')
-          const resolvedRoutes = ssgConfig.routes
-            ? typeof ssgConfig.routes === 'function'
-              ? await ssgConfig.routes()
-              : ssgConfig.routes
-            : registry.getStaticRoutes()
-          const prerenderRoutes = Array.from(
-            new Set(resolvedRoutes.map((route) => normalizeRoutePath(route))),
-          ).filter((route) => route !== '/404')
-          const serverRenderer = await loadServerRenderer(
-            this.environment.config,
-            serverEntryFileName,
-          )
-
-          const fallbackHtml = renderTemplate(
-            htmlTemplate,
-            ssgConfig.id,
-            await serverRenderer({ url: '/404' }),
-          )
-
-          // Keep static-host fallback for client-side routing.
-          this.emitFile({
-            type: 'asset',
-            fileName: '404.html',
-            source: fallbackHtml,
-          })
-
-          if (!prerenderRoutes.length) {
-            logger?.info('[solid-file-router] emitted 404 fallback; no prerender routes configured')
-            return
-          }
-
-          const renderedRoutes = await mapWithConcurrency(
-            prerenderRoutes,
-            ssgConfig.concurrency,
-            async (route) => {
-              const str = await serverRenderer({
-                url: route,
-              })
-
-              return {
-                route,
-                html: renderTemplate(htmlTemplate, ssgConfig.id, str),
-              }
-            },
-          )
-
-          for (const renderedRoute of renderedRoutes) {
-            if (renderedRoute.route === '/') {
-              indexHtmlAsset.source = renderedRoute.html
-              continue
-            }
-
-            this.emitFile({
-              type: 'asset',
-              fileName: getPrerenderAssetFileName(renderedRoute.route),
-              source: renderedRoute.html,
-            })
-          }
-
-          logger?.info(
-            `[solid-file-router] prerendered ${prerenderRoutes.length} routes with concurrency ${ssgConfig.concurrency}`,
-          )
-        },
-      },
-      transform: {
-        filter: {
-          id: REG_ROUTE_QUERY,
-        },
-        async handler(code, fullId, options) {
-          const [id, query] = fullId.split('?')
-          if (query && queryMap.has(query)) {
-            const pick = queryMap.get(query)!
-            const ssr = options?.ssr === true
-            return await extract(
-              code,
-              id!,
-              { entryFn: 'createRoute', pick },
-              verboseLog,
-              getAstCacheKey(id!, code, ssr),
-            )
-          }
-        },
-      },
-    } satisfies Plugin,
-    {
-      name: `${PACKAGE_NAME}:mdx`,
-      apply: () => !!mdx,
-      transform: {
-        order: 'pre',
-        filter: {
-          id: REG_MARKDOWN_MODULE_ID,
-        },
-        async handler(code, fullId) {
-          const sourcePath = fullId.split('?')[0]!
-          const mdxOptions = mdx === true ? { pagesDir } : { pagesDir, ...mdx }
-          return await compileMdx(code, sourcePath, mdxOptions)
-        },
-      },
-    } satisfies Plugin,
-  ]
+      }),
+    )
+  }
 }

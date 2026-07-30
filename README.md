@@ -5,7 +5,7 @@ Type-safe file-based routing for Solid and Vite.
 `solid-file-router` scans route modules, generates `@solidjs/router` route
 definitions, exposes a ready-to-render `<FileRouter />`, and writes route path
 types for navigation. It also supports nested layouts, loading and error
-inheritance, route metadata, custom route sources, and build-time SSG (Static Site Generation).
+inheritance, route metadata, route providers, and build-time SSG (Static Site Generation).
 
 > [!WARNING]
 > This project is under active development and is still pre-1.0. Minor releases
@@ -21,7 +21,7 @@ inheritance, route metadata, custom route sources, and build-time SSG (Static Si
 - Route `preload`, `matchFilters`, metadata, and lazy components
 - Inherited loading and error components
 - Built-in Markdown/MDX routes compiled with Satteri
-- Composable custom route providers for CMS or generated modules
+- Composable route providers for CMS or generated modules
 - Build-time static HTML generation
 
 ## Install
@@ -96,7 +96,7 @@ generates a pass-through root component.
 
 | Document                       | Use it for                                                              |
 | ------------------------------ | ----------------------------------------------------------------------- |
-| [Guide](docs/guide.md)         | Routes, layouts, data, navigation, metadata, and custom sources         |
+| [Guide](docs/guide.md)         | Routes, layouts, data, navigation, metadata, and route providers        |
 | [SSG Guide](docs/ssg.md)       | Prerender setup, route selection, output, templates, and server entries |
 | [MDX Guide](docs/mdx.md)       | Satteri setup, Markdown routes, component overrides, and HMR            |
 | [Reference](docs/reference.md) | Exact plugin options, generated modules, types, and runtime APIs        |
@@ -107,9 +107,9 @@ Enable the latest opt-in features with `fileRouter({ ssg: {} })` or
 requires the optional `satteri` peer dependency. Follow the dedicated guides
 for complete, copyable setup.
 
-Custom `routeSource` providers are additive: the built-in JSX/TSX source runs
-first, optional MDX runs next, and one or more custom providers follow. See the
-[custom route source guide](docs/guide.md#custom-route-providers).
+`routeProviders` are additive: the built-in filesystem provider runs first,
+optional MDX runs next, and the configured providers follow. See the
+[route provider guide](docs/guide.md#route-providers).
 
 ## Development
 

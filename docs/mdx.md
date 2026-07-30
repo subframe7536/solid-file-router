@@ -154,14 +154,13 @@ Satteri options can override those defaults.
 ## Combining Route Inputs
 
 File routing is built in and scans JSX/TSX files below `pagesDir`. Set `mdx: true`
-or pass MDX options to add Markdown and MDX route discovery. Use `routeSource`
-to add a CMS, generated route, or other custom provider; the option also accepts
-an array of providers.
+or pass MDX options to add Markdown and MDX route discovery. Use `routeProviders`
+to add a CMS, generated route, or other provider.
 
 All route inputs share the same route tree. Normalized route IDs, logical paths,
-and source paths must be unique across built-in, MDX, and custom inputs, so a
-custom provider cannot define a route with an existing route ID or replace an
-existing route by ordering. Use `defineRouteSource` for custom providers; file
+and source paths must be unique across built-in, MDX, and configured inputs, so a
+provider cannot define a route with an existing route ID or replace an existing
+route by ordering. Use `defineRouteProvider` for providers; file
 and MDX discovery are configured through `fileRouter`.
 
 ## HMR and Errors
@@ -172,8 +171,8 @@ renaming a route changes topology and triggers the required full reload.
 external state Vite cannot track; ordinary MDX routes should leave it off.
 
 If Satteri is not installed, route loading reports the install command. Compile
-errors retain the source file URL. Duplicate route IDs/paths and empty custom
-source output fail with descriptive errors.
+errors retain the source file URL. Duplicate route IDs/paths and empty provider
+output fail with descriptive errors.
 
-See [Custom Route Providers](guide.md#custom-route-providers) to generate richer
+See [Route Providers](guide.md#route-providers) to generate richer
 route modules and the [reference](reference.md) for exact public types.

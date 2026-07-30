@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 import { describe, it, expect } from 'vitest'
 
-import { generateRouteTypes, parseParams } from '../src/utils/route-type'
+import { generateRouteTypes, parseParams } from '../src/route/type-gen'
 
 const root = '/root/project'
 const files = [

@@ -5,22 +5,24 @@ The project is pre-1.0; minor releases may introduce breaking changes.
 
 ## Package Entries
 
-| Import                     | Contents                                                     |
-| -------------------------- | ------------------------------------------------------------ |
-| `solid-file-router`        | Runtime functions and route types                            |
-| `solid-file-router/plugin` | Vite plugin, custom route-provider helpers, and plugin types |
-| `solid-file-router/mdx`    | MDX provider, component hook, and component types            |
-| `solid-file-router/client` | Declaration for `virtual:routes`                             |
-| `virtual:routes`           | Generated router components, definitions, and metadata       |
+| Import                     | Contents                                               |
+| -------------------------- | ------------------------------------------------------ |
+| `solid-file-router`        | Runtime functions and route types                      |
+| `solid-file-router/plugin` | Vite plugin, route-provider helpers, and plugin types  |
+| `solid-file-router/mdx`    | MDX provider, component hook, and component types      |
+| `solid-file-router/client` | Declaration for `virtual:routes`                       |
+| `virtual:routes`           | Generated router components, definitions, and metadata |
 
 The package is ESM only.
 
 ## File Route Reference
 
 File routing is built in. It reads `**/*.{jsx,tsx}` below `pagesDir` and applies
-`ignore`. Enable `mdx` to add `.md` and `.mdx` discovery, then use `routeSource`
-to add custom providers. All route inputs use the same file-to-route
+`ignore`. Enable `mdx` to add `.md` and `.mdx` discovery, then use
+`routeProviders` to add providers. All route inputs use the same file-to-route
 conventions and uniqueness rules.
+The plugin assembles the built-in `fsRouteProvider` and, when enabled, the
+`mdxRouteProvider`; these factories are internal and are not exported.
 
 | Input relative to `pagesDir` | Generated path          |
 | ---------------------------- | ----------------------- |
@@ -87,19 +89,19 @@ Import `fileRouter` from `solid-file-router/plugin`:
 import { fileRouter } from 'solid-file-router/plugin'
 ```
 
-| Option           | Type                       | Default                    | Behavior                                                           |
-| ---------------- | -------------------------- | -------------------------- | ------------------------------------------------------------------ |
-| `pagesDir`       | `string`                   | `'src/pages'`              | Built-in JSX/TSX directory; inherited by MDX                       |
-| `output`         | `string`                   | `'src/routes.d.ts'`        | Generated declaration path                                         |
-| `routeSource`    | provider or provider array | `undefined`                | Adds custom route providers alongside file and optional MDX routes |
-| `mdx`            | `boolean \| MdxOptions`    | `false`                    | Adds Satteri-backed Markdown/MDX routes                            |
-| `ignore`         | `string[]`                 | see below                  | Globs ignored by discovery and watchers                            |
-| `reloadOnChange` | `boolean`                  | `false`                    | Full-reload escape hatch for nonstandard HMR                       |
-| `lazy`           | `boolean`                  | client `true`, SSR `false` | Controls lazy component imports                                    |
-| `infoDts`        | `InfoTypeDefinition`       | `undefined`                | Metadata declaration shape                                         |
-| `verboseLog`     | `boolean`                  | `false`                    | Additional plugin logging                                          |
-| `inheritance`    | `InheritanceConfig`        | `{ enabled: true }`        | Global component inheritance                                       |
-| `ssg`            | `SsgConfig`                | `undefined`                | Enables build-time prerendering                                    |
+| Option           | Type                    | Default                    | Behavior                                                    |
+| ---------------- | ----------------------- | -------------------------- | ----------------------------------------------------------- |
+| `pagesDir`       | `string`                | `'src/pages'`              | Built-in JSX/TSX directory; inherited by MDX                |
+| `output`         | `string`                | `'src/routes.d.ts'`        | Generated declaration path                                  |
+| `routeProviders` | readonly provider array | `[]`                       | Adds route providers alongside file and optional MDX routes |
+| `mdx`            | `boolean \| MdxOptions` | `false`                    | Adds Satteri-backed Markdown/MDX routes                     |
+| `ignore`         | `string[]`              | see below                  | Globs ignored by discovery and watchers                     |
+| `reloadOnChange` | `boolean`               | `false`                    | Full-reload escape hatch for nonstandard HMR                |
+| `lazy`           | `boolean`               | client `true`, SSR `false` | Controls lazy component imports                             |
+| `infoDts`        | `InfoTypeDefinition`    | `undefined`                | Metadata declaration shape                                  |
+| `verboseLog`     | `boolean`               | `false`                    | Additional plugin logging                                   |
+| `inheritance`    | `InheritanceConfig`     | `{ enabled: true }`        | Global component inheritance                                |
+| `ssg`            | `SsgConfig`             | `undefined`                | Enables build-time prerendering                             |
 
 Default ignores:
 
@@ -222,24 +224,24 @@ HTML and SVG props while accepting arbitrary authored component names, including
 does not perform runtime prop validation. See the [MDX guide](mdx.md) for setup
 and component override examples.
 
-## Custom Route Provider Reference
+## Route Provider Reference
 
 ```ts
 type Promisable<T> = T | Promise<T>
 
-type RouteSourceGlob = (
+type RouteProviderGlob = (
   glob: typeof import('tinyglobby').glob,
   filter: string,
   root: string,
 ) => Promisable<string[]>
 
-interface RouteSourceEntry<TData = unknown> {
+interface RouteProviderEntry<TData = unknown> {
   path: string
   routeId?: string
   data?: TData
 }
 
-interface RouteSourceLoadContext<TData = unknown> {
+interface RouteProviderLoadContext<TData = unknown> {
   path: string
   routeId: string
   sourcePath: string
@@ -247,22 +249,22 @@ interface RouteSourceLoadContext<TData = unknown> {
   data?: TData
 }
 
-interface RouteSourceProvider<TData = unknown> {
+interface RouteProvider<TData = unknown> {
   filter: string
-  glob?: RouteSourceGlob
-  transformPath?: (path: string) => RouteSourceEntry<TData>
+  glob?: RouteProviderGlob
+  transformPath?: (path: string) => RouteProviderEntry<TData>
   load: (
-    entry: RouteSourceLoadContext<TData>,
+    entry: RouteProviderLoadContext<TData>,
   ) => Promisable<string | null | undefined | false | void>
   watch?: string[]
 }
 ```
 
-`defineRouteSource<TData>(provider)` defines a custom route provider, preserves
+`defineRouteProvider<TData>(provider)` defines a route provider, preserves
 generic inference, and supplies the default glob and identity path transform.
 File and MDX route discovery are configured through `fileRouter` with
-`pagesDir`, `mdx`, and `MdxOptions`; they are built-in capabilities rather than
-factories exported from the plugin entry.
+`pagesDir`, `mdx`, and `MdxOptions`; the built-in providers are created
+automatically and are not exported from the plugin entry.
 
 | Field           | Behavior                                                                            |
 | --------------- | ----------------------------------------------------------------------------------- |

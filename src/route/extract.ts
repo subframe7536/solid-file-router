@@ -1,6 +1,6 @@
 import type * as Babel from '@babel/core'
 
-import { logger } from '../const'
+import { hashString, logger } from '../const'
 
 export interface ExtractConfig {
   entryFn: string
@@ -198,17 +198,6 @@ export function extractPlugin({ types: t }: typeof Babel): Babel.PluginObj<State
 // Promise-based AST cache
 const astPromiseCache = new Map<string, Promise<Babel.types.File | null>>()
 let babelModulePromise: Promise<typeof Babel> | undefined
-
-function hashString(value: string): string {
-  let hash = 2166136261
-
-  for (let index = 0; index < value.length; index++) {
-    hash ^= value.codePointAt(index) ?? 0
-    hash = Math.imul(hash, 16777619)
-  }
-
-  return (hash >>> 0).toString(36)
-}
 
 export function getAstCacheKey(id: string, code: string, ssr: boolean): string {
   return `${id}?ssr=${ssr}&hash=${hashString(code)}`

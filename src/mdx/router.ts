@@ -3,9 +3,9 @@ import { pathToFileURL } from 'node:url'
 
 import type { MdxCompileOptions } from 'satteri'
 
-import type { RouteConfig } from '../runtime'
-import { defineRouteSource } from '../utils/source'
-import type { RouteSourceProvider } from '../utils/source'
+import type { RouteConfig } from '../index'
+import { defineRouteProvider } from '../route/provider'
+import type { RouteProvider } from '../route/provider'
 
 export interface MdxOptions extends MdxCompileOptions {
   /**
@@ -77,16 +77,16 @@ export async function compileMdx(source: string, sourcePath: string, options: Md
 }
 
 /**
- * Creates the Satteri-backed Markdown/MDX route source.
+ * Creates the Satteri-backed Markdown/MDX route provider.
  */
-export const mdxRouteSource = <TData = unknown>(
+export const mdxRouteProvider = <TData = unknown>(
   options: MdxOptions = {},
-): RouteSourceProvider<TData> => {
+): RouteProvider<TData> => {
   const pagesDir = options.pagesDir ?? 'src/pages'
   const filter = options.filter ?? `${pagesDir}/**/*.{md,mdx}`
   const prefix = `${pagesDir.replace(/^\.\//, '').replace(/\/$/, '')}/`
 
-  return defineRouteSource<TData>({
+  return defineRouteProvider<TData>({
     filter,
     transformPath(file) {
       const relative = file.startsWith(prefix) ? file.slice(prefix.length) : file
