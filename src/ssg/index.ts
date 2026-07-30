@@ -1,160 +1,234 @@
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
 
-import { generateHydrationScript } from 'solid-js/web'
-import type { ResolvedConfig } from 'vite'
+import type { Plugin } from 'vite'
 import { normalizePath } from 'vite'
 
-export type Awaitable<T> = T | Promise<T>
-/** A static route list or lazy route producer used by SSG. */
-export type PrerenderRoutesSource = readonly string[] | (() => Awaitable<readonly string[]>)
+import { PACKAGE_NAME, VID_EXTRACT } from '../const'
+import type { RoutePluginContext } from '../route/plugin'
+import type { RouteRegistry } from '../route/registry'
 
-export type BundleAsset = {
-  type: 'asset'
-  fileName: string
-  source: string | Uint8Array
+import {
+  DEFAULT_PRERENDER_CONCURRENCY,
+  ENVIRONMENT,
+  findIndexHtmlAsset,
+  findSsrEntryChunk,
+  getPrerenderAssetFileName,
+  ID_PRERENDER,
+  loadServerRenderer,
+  mapWithConcurrency,
+  normalizeRoutePath,
+  renderTemplate,
+  VID_PRERENDER,
+} from './utils'
+import type { BundleOutput, EnvironmentName, PrerenderRoutesSource } from './utils'
+
+export interface SsgOptions {
+  serverEntry?: string
+  id?: string
+  routes?: PrerenderRoutesSource
+  concurrency?: number
 }
-export type BundleChunk = {
-  type: 'chunk'
-  fileName: string
-  facadeModuleId?: string | null
-  isEntry?: boolean
+
+interface NormalizedSsgOptions {
+  internalEntry: boolean
+  serverEntry: string
+  id: string
+  routes?: PrerenderRoutesSource
+  concurrency: number
 }
-export type BundleOutput = Record<string, BundleAsset | BundleChunk>
 
-export const ENVIRONMENT = {
-  CLIENT: 'client',
-  SERVER: 'ssr',
-} as const
-export type EnvironmentName = (typeof ENVIRONMENT)[keyof typeof ENVIRONMENT]
-
-const INDEX_HTML_FILE_NAME = 'index.html'
-export const DEFAULT_PRERENDER_CONCURRENCY = 4
-const CACHE_BUST_PARAM = 't'
-const SLASH_CODE_POINT = '/'.codePointAt(0)!
-export const ID_PRERENDER = 'virtual:solid-file-router/prerender-entry'
-export const VID_PRERENDER = `\0${ID_PRERENDER}`
-const OUTLET_MARKER = '<!--solid-file-router-outlet-->'
-const HEAD_MARKER = '<!--solid-file-router-head-->'
-
-function trimTrailingSlashes(value: string) {
-  let end = value.length
-  while (end > 0 && value.codePointAt(end - 1) === SLASH_CODE_POINT) {
-    end -= 1
+function normalizeOptions(options: SsgOptions): NormalizedSsgOptions {
+  return {
+    internalEntry: options.serverEntry === undefined,
+    serverEntry: options.serverEntry ?? ID_PRERENDER,
+    routes: options.routes,
+    concurrency: Math.max(1, options.concurrency ?? DEFAULT_PRERENDER_CONCURRENCY),
+    id: options.id ?? 'root',
   }
-  return value.slice(0, end)
 }
 
-export function normalizeRoutePath(route: string) {
-  const trimmedRoute = route.trim()
-  if (!trimmedRoute || trimmedRoute === '/') {
-    return '/'
-  }
-
-  const withLeadingSlash = trimmedRoute.startsWith('/') ? trimmedRoute : `/${trimmedRoute}`
-  if (withLeadingSlash.split('/').some((segment) => segment === '..' || segment === '.')) {
-    throw new Error(
-      `[solid-file-router] Invalid prerender route outside output directory: ${route}`,
-    )
-  }
-  return trimTrailingSlashes(withLeadingSlash) || '/'
-}
-
-export function getPrerenderAssetFileName(route: string) {
-  const normalizedRoute = normalizeRoutePath(route)
-  if (normalizedRoute === '/') {
-    return INDEX_HTML_FILE_NAME
-  }
-
-  const segments = normalizedRoute.slice(1).split('/')
-  const lastSegment = segments.pop()!
-  return path.posix.join(...segments, `${lastSegment}.html`)
-}
-
-export function findIndexHtmlAsset(bundle: BundleOutput) {
-  const htmlAsset = Object.values(bundle).find(
-    (item): item is BundleAsset => item.type === 'asset' && item.fileName === INDEX_HTML_FILE_NAME,
-  )
-  if (!htmlAsset) {
-    throw new Error(`Missing client ${INDEX_HTML_FILE_NAME} asset in bundle`)
-  }
-  return htmlAsset
-}
-
-export function findSsrEntryChunk(bundle: BundleOutput, entryModuleId: string) {
-  return Object.values(bundle)
-    .filter((item): item is BundleChunk => item.type === 'chunk' && !!item.isEntry)
-    .find((item) => normalizePath(item.facadeModuleId ?? '') === normalizePath(entryModuleId))
-}
-
-export async function mapWithConcurrency<T, R>(
-  items: readonly T[],
-  concurrency: number,
-  mapper: (item: T, index: number) => Promise<R>,
-) {
-  const results = new Array<R>(items.length)
-  let nextIndex = 0
-
-  async function worker() {
-    while (nextIndex < items.length) {
-      const currentIndex = nextIndex++
-      const item = items[currentIndex]
-      if (item !== undefined) {
-        results[currentIndex] = await mapper(item, currentIndex)
+/** Configures Vite's client and server build environments for static generation. */
+function createSsgConfigPlugin<TData>(
+  options: SsgOptions,
+  context: RoutePluginContext<TData>,
+): Plugin {
+  const config = normalizeOptions(options)
+  return {
+    name: `${PACKAGE_NAME}:ssg-config`,
+    config(userConfig, env) {
+      if (env.command !== 'build') {
+        return
       }
-    }
+      const getOutDir = (envName: EnvironmentName, subDir: string) =>
+        normalizePath(
+          path.join(userConfig.environments?.[envName]?.build?.outDir ?? 'dist', subDir),
+        )
+      const clientOutDir = getOutDir(ENVIRONMENT.CLIENT, 'client')
+      const serverOutDir = getOutDir(ENVIRONMENT.SERVER, 'server')
+      return {
+        build: { copyPublicDir: false },
+        builder: {
+          async buildApp(builder) {
+            for (const name of [ENVIRONMENT.SERVER, ENVIRONMENT.CLIENT]) {
+              const environment = builder.environments[name]
+              if (!environment) {
+                throw new Error(`Missing SSG ${name} environment in builder`)
+              }
+              if (!environment.isBuilt) {
+                await builder.build(environment)
+              }
+            }
+            context.logger?.info(
+              `Build completed! You can serve ${clientOutDir} with a static file server.`,
+            )
+          },
+        },
+        environments: {
+          [ENVIRONMENT.CLIENT]: {
+            consumer: 'client',
+            build: { outDir: clientOutDir, copyPublicDir: true },
+          },
+          [ENVIRONMENT.SERVER]: {
+            consumer: 'server',
+            build: {
+              outDir: serverOutDir,
+              ssr: config.internalEntry ? true : config.serverEntry,
+              ...(config.internalEntry ? { rolldownOptions: { input: ID_PRERENDER } } : {}),
+              copyPublicDir: false,
+            },
+            optimizeDeps: {
+              exclude: ['solid-js', 'solid-js/web', '@solidjs/router', PACKAGE_NAME],
+            },
+          },
+        },
+      }
+    },
   }
-
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()))
-  return results
 }
 
-export async function loadServerRenderer(config: ResolvedConfig, entryFileName: string) {
-  const serverOutDir = config.environments?.[ENVIRONMENT.SERVER]?.build?.outDir
-  if (!serverOutDir) {
-    throw new Error('Missing SSG server environment output directory')
-  }
+/** Provides the default server rendering entry used by SSG builds. */
+function createSsgEntryPlugin(): Plugin {
+  return {
+    name: `${PACKAGE_NAME}:ssg-entry`,
+    resolveId: {
+      filter: { id: new RegExp(`^${ID_PRERENDER}$`) },
+      handler: () => VID_PRERENDER,
+    },
+    load: {
+      filter: { id: new RegExp(`^${VID_PRERENDER}$`) },
+      handler: () => `import { createComponent } from 'solid-js'
+import { StaticRouter } from '@solidjs/router'
+import { renderToStringAsync } from 'solid-js/web'
+import { Root, fileRoutes } from '${VID_EXTRACT}'
 
-  const serverEntryUrl = pathToFileURL(path.join(config.root, serverOutDir, entryFileName)).href
-  return import(`${serverEntryUrl}?${CACHE_BUST_PARAM}=${Date.now()}`).then(
-    (module) => module.default ?? module,
-  )
+export default ({ url }) => renderToStringAsync(() => createComponent(StaticRouter, {
+  url,
+  root: Root,
+  get children() { return fileRoutes }
+}))`,
+    },
+  }
 }
 
-export function renderTemplate(template: string, id: string, app: string) {
-  const markerCount = template.split(OUTLET_MARKER).length - 1
-  if (markerCount > 1) {
-    throw new Error(`[solid-file-router] SSG found duplicate ${OUTLET_MARKER} markers`)
-  }
+/** Renders discovered static routes into the completed client bundle. */
+function createSsgRenderPlugin<TData>(
+  options: SsgOptions,
+  registry: RouteRegistry<TData>,
+  context: RoutePluginContext<TData>,
+): Plugin {
+  const config = normalizeOptions(options)
+  let serverEntryFileName: string
+  return {
+    name: `${PACKAGE_NAME}:ssg-render`,
+    generateBundle: {
+      order: 'post',
+      async handler(_outputOptions, bundle) {
+        if (this.environment.name === ENVIRONMENT.SERVER) {
+          const moduleId = config.internalEntry
+            ? VID_PRERENDER
+            : normalizePath(path.resolve(this.environment.config.root, config.serverEntry))
+          const chunk = findSsrEntryChunk(bundle as BundleOutput, moduleId)
+          if (!chunk) {
+            this.error(`Missing SSR entry chunk for ${config.serverEntry}`)
+          }
+          serverEntryFileName = chunk.fileName
+          return
+        }
+        if (this.environment.name !== ENVIRONMENT.CLIENT) {
+          return
+        }
+        if (!serverEntryFileName) {
+          this.error('Missing SSR renderer output before prerendering client routes')
+        }
 
-  let rendered = template
-  if (markerCount === 1) {
-    rendered = rendered.replace(OUTLET_MARKER, `<div id="${id}">${app}</div>`)
-  } else {
-    const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const rootPattern = new RegExp(
-      `<([a-z][\\w:-]*)\\b([^>]*\\bid\\s*=\\s*(['"])${escapedId}\\3[^>]*)>[\\s\\S]*?</\\1>`,
-      'i',
-    )
-    if (!rootPattern.test(rendered)) {
-      throw new Error(
-        `[solid-file-router] SSG could not find an outlet in ${INDEX_HTML_FILE_NAME}.\nAdd ${OUTLET_MARKER} or an element with id="${id}".`,
-      )
-    }
-    rendered = rendered.replace(
-      rootPattern,
-      (_match, tag, attributes) => `<${tag}${attributes}>${app}</${tag}>`,
-    )
-  }
+        const indexHtmlAsset = findIndexHtmlAsset(bundle as BundleOutput)
+        const template =
+          typeof indexHtmlAsset.source === 'string'
+            ? indexHtmlAsset.source
+            : Buffer.from(indexHtmlAsset.source).toString('utf-8')
+        const configuredRoutes =
+          typeof config.routes === 'function' ? await config.routes() : config.routes
+        const routes = Array.from(
+          new Set((configuredRoutes ?? registry.getStaticRoutes()).map(normalizeRoutePath)),
+        ).filter((route) => route !== '/404')
+        const renderer = await loadServerRenderer(this.environment.config, serverEntryFileName)
 
-  const headAssets = generateHydrationScript()
-  if (rendered.includes(HEAD_MARKER)) {
-    return rendered.replace(HEAD_MARKER, headAssets)
+        this.emitFile({
+          type: 'asset',
+          fileName: '404.html',
+          source: renderTemplate(template, config.id, await renderer({ url: '/404' })),
+        })
+        if (routes.length === 0) {
+          context.logger?.info(
+            '[solid-file-router] emitted 404 fallback; no prerender routes configured',
+          )
+          return
+        }
+
+        const renderedRoutes = await mapWithConcurrency(
+          routes,
+          config.concurrency,
+          async (route) => ({
+            route,
+            html: renderTemplate(template, config.id, await renderer({ url: route })),
+          }),
+        )
+        for (const route of renderedRoutes) {
+          if (route.route === '/') {
+            indexHtmlAsset.source = route.html
+          } else {
+            this.emitFile({
+              type: 'asset',
+              fileName: getPrerenderAssetFileName(route.route),
+              source: route.html,
+            })
+          }
+        }
+        context.logger?.info(
+          `[solid-file-router] prerendered ${routes.length} routes with concurrency ${config.concurrency}`,
+        )
+      },
+    },
   }
-  if (!/<\/head\s*>/i.test(rendered)) {
-    throw new Error(
-      `[solid-file-router] SSG could not find </head> or ${HEAD_MARKER} in ${INDEX_HTML_FILE_NAME}`,
-    )
+}
+
+export { renderTemplate } from './utils'
+export type { PrerenderRoutesSource } from './utils'
+
+/** Creates the complete SSG integration as a single plugin. */
+export function createSsgPlugin<TData>(
+  options: SsgOptions,
+  registry: RouteRegistry<TData>,
+  context: RoutePluginContext<TData>,
+): Plugin {
+  const configPlugin = createSsgConfigPlugin(options, context)
+  const entryPlugin = createSsgEntryPlugin()
+  const renderPlugin = createSsgRenderPlugin(options, registry, context)
+  return {
+    name: `${PACKAGE_NAME}:ssg`,
+    config: configPlugin.config,
+    resolveId: entryPlugin.resolveId,
+    load: entryPlugin.load,
+    generateBundle: renderPlugin.generateBundle,
   }
-  return rendered.replace(/<\/head\s*>/i, `${headAssets}</head>`)
 }

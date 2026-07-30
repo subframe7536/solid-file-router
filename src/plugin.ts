@@ -3,27 +3,28 @@ import type { Plugin } from 'vite'
 import { createMdxPlugin } from './mdx/plugin'
 import { mdxRouteSource } from './mdx/router'
 import type { MdxOptions } from './mdx/router'
-import type { InheritanceConfig } from './routes/definition'
+import type { InheritanceConfig } from './route/definition'
+import { fsRouteSource } from './route/fs-source'
 import {
   createRouteRegistryPlugin,
   createRouteTransformPlugin,
   createVirtualRoutesPlugin,
-} from './routes/plugin'
-import type { RoutePluginContext } from './routes/plugin'
-import { RouteRegistry } from './routes/registry'
-import type { InfoTypeDefinition } from './routes/route-type'
+} from './route/plugin'
+import type { RoutePluginContext } from './route/plugin'
+import { RouteRegistry } from './route/registry'
+import type { InfoTypeDefinition } from './route/route-type'
 import type {
   Promisable,
   RouteSourceEntry,
   RouteSourceLoadContext,
   RouteSourceProvider,
-} from './routes/source'
-import { defineRouteSource, fsRouteSource } from './routes/source'
-import { createSsgConfigPlugin, createSsgEntryPlugin, createSsgRenderPlugin } from './ssg/plugin'
-import type { SsgOptions } from './ssg/plugin'
+} from './route/source'
+import { defineRouteSource } from './route/source'
+import { createSsgPlugin } from './ssg'
+import type { SsgOptions } from './ssg'
 
 export type { MdxOptions } from './mdx/router'
-export type { InfoTypeDefinition, InlineInfoTypeDefinition } from './routes/route-type'
+export type { InfoTypeDefinition, InlineInfoTypeDefinition } from './route/route-type'
 export {
   defineRouteSource,
   type Promisable,
@@ -43,7 +44,7 @@ export interface FileRouterPluginOption<TData = unknown> {
   /**
    * The directory containing all route files.
    *
-   * e.g. If your `_app.tsx` is located at `module/routes/_app.tsx`,
+   * e.g. If your `_app.tsx` is located at `module/route/_app.tsx`,
    * You need to setup to `module/routes`
    * @default 'src/pages'
    */
@@ -176,11 +177,7 @@ export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TDat
     createMdxPlugin(mdxOptions),
   ]
   if (ssg) {
-    plugins.push(
-      createSsgConfigPlugin(ssg, context),
-      createSsgEntryPlugin(),
-      createSsgRenderPlugin(ssg, registry, context),
-    )
+    plugins.push(createSsgPlugin(ssg, registry, context))
   }
   return plugins
 }

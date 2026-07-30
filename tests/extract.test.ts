@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 import { logger } from '../src/const'
-import type { ExtractConfig } from '../src/routes/extract'
-import { clearCache, extract, getAstCacheKey, invalidateCache } from '../src/routes/extract'
+import type { ExtractConfig } from '../src/route/extract'
+import { clearCache, extract, getAstCacheKey, invalidateCache } from '../src/route/extract'
 
 describe('extractPlugin', () => {
   beforeEach(() => {
@@ -13,7 +13,7 @@ describe('extractPlugin', () => {
       const result = await extract(
         `import { createRoute as defineRoute } from 'solid-file-router'
 export default defineRoute({ info: { title: 'Alias' }, component: Page })`,
-        '/routes/alias.tsx',
+        '/route/alias.tsx',
         { entryFn: 'createRoute', pick: ['info'] },
       )
 
@@ -26,19 +26,19 @@ export default defineRoute({ info: { title: 'Alias' }, component: Page })`,
       const code = `function createRoute(value: unknown) { return value }
 export default createRoute({ component: Page })`
       await expect(
-        extract(code, '/routes/shadow.tsx', { entryFn: 'createRoute', pick: ['component'] }),
-      ).rejects.toThrow('/routes/shadow.tsx')
+        extract(code, '/route/shadow.tsx', { entryFn: 'createRoute', pick: ['component'] }),
+      ).rejects.toThrow('/route/shadow.tsx')
     })
 
     it('does not transform createRoute imported from another package', async () => {
       const code = `import { createRoute } from 'other-router'
 export default createRoute({ info: { title: 'Other' }, component: Page })`
       await expect(
-        extract(code, '/routes/other-package.tsx', {
+        extract(code, '/route/other-package.tsx', {
           entryFn: 'createRoute',
           pick: ['info'],
         }),
-      ).rejects.toThrow('/routes/other-package.tsx')
+      ).rejects.toThrow('/route/other-package.tsx')
     })
 
     it('extracts properties from direct call expression', async () => {

@@ -3,8 +3,8 @@ import { dirname } from 'node:path'
 
 import { PACKAGE_NAME } from '../const'
 
-import { getRoutePath } from './definition'
 import type { RouteInput } from './definition'
+import { getRoutePath } from './path'
 
 export interface InlineInfoTypeDefinition {
   [key: string]: string | InlineInfoTypeDefinition

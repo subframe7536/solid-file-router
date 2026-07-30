@@ -241,9 +241,7 @@ describe('fileRouter', () => {
       'solid-file-router:virtual-routes',
       'solid-file-router:route-transform',
       'solid-file-router:mdx',
-      'solid-file-router:ssg-config',
-      'solid-file-router:ssg-entry',
-      'solid-file-router:ssg-render',
+      'solid-file-router:ssg',
     ])
   })
 
@@ -708,7 +706,7 @@ export default createRoute({ component: () => <h1>missing</h1> })
 
   it('does not inject ssg config unless explicitly enabled', () => {
     const plugins = fileRouter()
-    const configPlugin = plugins.find(({ name }) => name.endsWith(':ssg-config'))
+    const configPlugin = plugins.find(({ name }) => name.endsWith(':ssg'))
     const config = configPlugin ? getBuildConfig(configPlugin) : undefined
     expect(config).toBeUndefined()
   })
@@ -717,7 +715,7 @@ export default createRoute({ component: () => <h1>missing</h1> })
     const plugins = fileRouter({
       ssg: {},
     })
-    const configPlugin = plugins.find(({ name }) => name.endsWith(':ssg-config'))
+    const configPlugin = plugins.find(({ name }) => name.endsWith(':ssg'))
     const config = configPlugin ? getBuildConfig(configPlugin) : undefined
     expect(config).toMatchObject({
       build: { copyPublicDir: false },
@@ -780,7 +778,7 @@ export default createRoute({ component: () => <h1>missing</h1> })
         serverEntry: 'app/entry-ssg.tsx',
       },
     })
-    const configPlugin = plugins.find(({ name }) => name.endsWith(':ssg-config'))!
+    const configPlugin = plugins.find(({ name }) => name.endsWith(':ssg'))!
     const config = getBuildConfig(configPlugin, {
       environments: {
         client: { build: { outDir: 'build' } },

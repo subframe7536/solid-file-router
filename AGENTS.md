@@ -110,8 +110,8 @@ src/
   plugin.ts         # Vite plugin orchestration (fileRouter)
   const.ts          # Shared constants and logger
   mdx/              # MDX runtime components, compilation, and Vite plugin
-  routes/           # Route discovery, transforms, registry, codegen, and Vite plugins
-  ssg/              # Static generation helpers and focused Vite plugins
+  route/            # Route discovery, transforms, registry, codegen, and Vite plugins
+  ssg/              # Static generation entry, Vite plugin, and rendering helpers
 ```
 
 ## Testing Conventions

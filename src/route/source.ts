@@ -1,5 +1,3 @@
-import { readFile } from 'node:fs/promises'
-
 /** A value that may be returned synchronously or asynchronously. */
 export type Promisable<T> = T | Promise<T>
 
@@ -59,48 +57,19 @@ export interface RouteSourceProvider<TData = unknown> {
   watch?: string[]
 }
 
-export interface FsRouteSourceOptions {
-  /**
-   * Glob scanned relative to the Vite root.
-   * @default Derived from `pagesDir` for JSX and TSX files.
-   */
-  filter?: string
-  /**
-   * Directory used by the default filter.
-   * @default 'src/pages'.
-   */
-  pagesDir?: string
+function defaultGlob(glob: Parameters<RouteSourceGlob>[0], filter: string, root: string) {
+  return glob(filter, { cwd: root, absolute: false })
 }
 
-const defaultGlob: RouteSourceGlob = (glob, filter, root) =>
-  glob(filter, { cwd: root, absolute: false })
-
 /** Normalizes a route source and supplies default glob/path transforms. */
-export const defineRouteSource = <TData>(
+export function defineRouteSource<TData>(
   provider: RouteSourceProvider<TData>,
-): RouteSourceProvider<TData> => ({
-  glob: defaultGlob,
-  transformPath: (path) => ({ path }),
-  ...provider,
-})
-
-/**
- * Creates the built-in JSX/TSX filesystem route source.
- * @default `{}`.
- */
-export const fsRouteSource = <TData = unknown>(
-  options: FsRouteSourceOptions = {},
-): RouteSourceProvider<TData> => {
-  const pagesDir = options.pagesDir ?? 'src/pages'
-  const filter = options.filter ?? `${pagesDir}/**/*.{jsx,tsx}`
-  const prefix = `${pagesDir.replace(/^\.\//, '').replace(/\/$/, '')}/`
-
-  return defineRouteSource<TData>({
-    filter,
-    transformPath(file) {
-      const relative = file.startsWith(prefix) ? file.slice(prefix.length) : file
-      return { path: relative.replace(/\.(jsx|tsx)$/i, '.tsx') }
+): RouteSourceProvider<TData> {
+  return {
+    glob: defaultGlob,
+    transformPath(path) {
+      return { path }
     },
-    load: ({ sourcePath }) => readFile(sourcePath, 'utf8'),
-  })
+    ...provider,
+  }
 }

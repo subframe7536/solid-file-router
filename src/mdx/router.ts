@@ -4,8 +4,8 @@ import { pathToFileURL } from 'node:url'
 import type { MdxCompileOptions } from 'satteri'
 
 import type { RouteConfig } from '../index'
-import { defineRouteSource } from '../routes/source'
-import type { RouteSourceProvider } from '../routes/source'
+import { defineRouteSource } from '../route/source'
+import type { RouteSourceProvider } from '../route/source'
 
 export interface MdxOptions extends MdxCompileOptions {
   /**

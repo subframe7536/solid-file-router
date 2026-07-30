@@ -5,8 +5,8 @@ import {
   generateDefinition,
   getComponentImportName,
   getRouteImportName,
-} from '../src/routes/definition'
-import type { InheritanceConfig } from '../src/routes/definition'
+} from '../src/route/definition'
+import type { InheritanceConfig } from '../src/route/definition'
 
 const root = '/root/project'
 const defaultRouteRoot = `${root}/src/pages`

@@ -6,9 +6,10 @@ import { createFilter, normalizePath } from 'vite'
 
 import { logger } from '../const'
 
-import { generateDefinition, assembleDefinition, getRoutePath } from './definition'
+import { generateDefinition, assembleDefinition } from './definition'
 import type { InheritanceConfig, NormalizedRouteEntry, RouteEntry, RouteInput } from './definition'
 import { invalidateCache } from './extract'
+import { getRoutePath } from './path'
 import type { InfoTypeDefinition } from './route-type'
 import { generateRouteTypes } from './route-type'
 import { defineRouteSource } from './source'
