@@ -6,7 +6,7 @@ import type { Logger, Plugin, ResolvedConfig } from 'vite'
 import { normalizePath } from 'vite'
 
 import { PACKAGE_NAME, VID_EXTRACT, VID_EXTRACT_RESOLVED } from './const'
-import { mdxRouteSource } from './mdx/router'
+import { compileMdx, mdxRouteSource } from './mdx/router'
 import type { MdxOptions } from './mdx/router'
 import type { InheritanceConfig } from './utils/definition'
 import { extract, getAstCacheKey } from './utils/extract'
@@ -169,6 +169,7 @@ const queryMap = new Map<string, string[]>([
 ])
 const REG_ROUTE_QUERY = /\?(route|comp)$/
 const REG_ROUTE_SOURCE_MODULE_ID = /-sfr\.tsx(?:\?.*)?$/
+const REG_MARKDOWN_MODULE_ID = /\.(?:md|mdx)(?:\?.*)?$/i
 const ENVIRONMENT = {
   CLIENT: 'client',
   SERVER: 'ssr',
@@ -667,6 +668,21 @@ export default ({ url }) => renderToStringAsync(() => createComponent(StaticRout
               getAstCacheKey(id!, code, ssr),
             )
           }
+        },
+      },
+    } satisfies Plugin,
+    {
+      name: `${PACKAGE_NAME}:mdx`,
+      apply: () => !!mdx,
+      transform: {
+        order: 'pre',
+        filter: {
+          id: REG_MARKDOWN_MODULE_ID,
+        },
+        async handler(code, fullId) {
+          const sourcePath = fullId.split('?')[0]!
+          const mdxOptions = mdx === true ? { pagesDir } : { pagesDir, ...mdx }
+          return await compileMdx(code, sourcePath, mdxOptions)
         },
       },
     } satisfies Plugin,

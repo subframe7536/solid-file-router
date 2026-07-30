@@ -11,3 +11,29 @@ declare module 'virtual:routes' {
    */
   export const FileRouter: typeof Router
 }
+
+declare module '*.mdx' {
+  import type { Component } from 'solid-js'
+
+  export interface MDXContentProps {
+    components?: Record<string, Component<any>>
+  }
+
+  export const frontmatter: Record<string, unknown>
+
+  const MDXContent: Component<MDXContentProps>
+  export default MDXContent
+}
+
+declare module '*.md' {
+  import type { Component } from 'solid-js'
+
+  export interface MDXContentProps {
+    components?: Record<string, Component<any>>
+  }
+
+  export const frontmatter: Record<string, unknown>
+
+  const MDXContent: Component<MDXContentProps>
+  export default MDXContent
+}

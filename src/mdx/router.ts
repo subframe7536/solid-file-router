@@ -52,6 +52,30 @@ async function getSatteri() {
   }
 }
 
+function getCompileOptions(options: MdxOptions, sourcePath: string) {
+  const { filter: _filter, pagesDir: _pagesDir, ...compileOptions } = options
+  if (compileOptions.outputFormat && compileOptions.outputFormat !== 'program') {
+    throw new Error(
+      '[solid-file-router] MdxRouter requires Satteri outputFormat="program" for route modules',
+    )
+  }
+
+  return {
+    jsx: true,
+    providerImportSource: 'solid-file-router/mdx',
+    elementAttributeNameCase: 'html',
+    stylePropertyNameCase: 'css',
+    fileURL: pathToFileURL(sourcePath),
+    ...compileOptions,
+  } as const
+}
+
+/** Compiles an MDX document for direct consumption by Vite. */
+export async function compileMdx(source: string, sourcePath: string, options: MdxOptions = {}) {
+  const { mdxToJs } = await getSatteri()
+  return mdxToJs(source, getCompileOptions(options, sourcePath))
+}
+
 /**
  * Creates the Satteri-backed Markdown/MDX route source.
  */
@@ -70,21 +94,7 @@ export const mdxRouteSource = <TData = unknown>(
     },
     async load({ sourcePath }) {
       const source = await readFile(sourcePath, 'utf8')
-      const { mdxToJs } = await getSatteri()
-      const { filter: _filter, pagesDir: _pagesDir, ...compileOptions } = options
-      if (compileOptions.outputFormat && compileOptions.outputFormat !== 'program') {
-        throw new Error(
-          '[solid-file-router] MdxRouter requires Satteri outputFormat="program" for route modules',
-        )
-      }
-      const result = await mdxToJs(source, {
-        jsx: true,
-        providerImportSource: 'solid-file-router/mdx',
-        elementAttributeNameCase: 'html',
-        stylePropertyNameCase: 'css',
-        fileURL: pathToFileURL(sourcePath),
-        ...compileOptions,
-      })
+      const result = await compileMdx(source, sourcePath, options)
 
       const routeConfigName = getRouteConfigName(result.code)
       const isLayout = REG_MDX_LAYOUT.test(sourcePath.replaceAll('\\', '/'))
