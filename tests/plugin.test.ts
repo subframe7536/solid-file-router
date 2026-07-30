@@ -16,7 +16,7 @@ import { createBuilder, normalizePath } from 'vite'
 import solidPlugin from 'vite-plugin-solid'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { defineRouteSource, fileRouter, renderTemplate } from '../src/index'
+import { defineRouteSource, fileRouter, renderTemplate } from '../src/plugin'
 
 const tempDirs: string[] = []
 
@@ -128,7 +128,7 @@ export default createServerEntry((props) => (
         },
         {
           find: 'solid-file-router',
-          replacement: fileURLToPath(new URL('../src/runtime.ts', import.meta.url)),
+          replacement: fileURLToPath(new URL('../src/index.ts', import.meta.url)),
         },
         {
           find: 'solid-js',

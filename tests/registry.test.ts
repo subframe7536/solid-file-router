@@ -5,14 +5,15 @@ import { join, resolve } from 'node:path'
 import { normalizePath } from 'vite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { generateDefinition } from '../src/utils/definition'
-import { invalidateCache } from '../src/utils/extract'
-import { RouteRegistry } from '../src/utils/registry'
-import { generateRouteTypes } from '../src/utils/route-type'
+import { generateDefinition } from '../src/routes/definition'
+import { invalidateCache } from '../src/routes/extract'
+import { RouteRegistry } from '../src/routes/registry'
+import { generateRouteTypes } from '../src/routes/route-type'
 
-vi.mock('../src/utils/definition', async () => {
-  const actual =
-    await vi.importActual<typeof import('../src/utils/definition')>('../src/utils/definition')
+vi.mock('../src/routes/definition', async () => {
+  const actual = await vi.importActual<typeof import('../src/routes/definition')>(
+    '../src/routes/definition',
+  )
   return {
     ...actual,
     generateDefinition: vi.fn(
@@ -39,9 +40,10 @@ vi.mock('../src/utils/definition', async () => {
   }
 })
 
-vi.mock('../src/utils/route-type', async () => {
-  const actual =
-    await vi.importActual<typeof import('../src/utils/route-type')>('../src/utils/route-type')
+vi.mock('../src/routes/route-type', async () => {
+  const actual = await vi.importActual<typeof import('../src/routes/route-type')>(
+    '../src/routes/route-type',
+  )
   return {
     ...actual,
     generateRouteTypes: vi.fn((_files, output: string) => {
@@ -52,9 +54,9 @@ vi.mock('../src/utils/route-type', async () => {
   }
 })
 
-vi.mock('../src/utils/extract', async () => {
+vi.mock('../src/routes/extract', async () => {
   const actual =
-    await vi.importActual<typeof import('../src/utils/extract')>('../src/utils/extract')
+    await vi.importActual<typeof import('../src/routes/extract')>('../src/routes/extract')
   return {
     ...actual,
     invalidateCache: vi.fn(),

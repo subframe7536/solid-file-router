@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 import { logger } from '../src/const'
-import type { ExtractConfig } from '../src/utils/extract'
-import { clearCache, extract, getAstCacheKey, invalidateCache } from '../src/utils/extract'
+import type { ExtractConfig } from '../src/routes/extract'
+import { clearCache, extract, getAstCacheKey, invalidateCache } from '../src/routes/extract'
 
 describe('extractPlugin', () => {
   beforeEach(() => {

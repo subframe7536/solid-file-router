@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 
-import { generatePath } from '../src/runtime'
+import { generatePath } from '../src/index'
 
-declare module '../src/runtime' {
+declare module '../src/index' {
   interface FileRoutePath {
     [x: string]: any
   }

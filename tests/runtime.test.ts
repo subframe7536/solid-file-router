@@ -3,7 +3,7 @@ import { createComponent, ErrorBoundary, Suspense } from 'solid-js'
 import { hydrate, render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { __loader__, createClientEntry, createServerEntry, readRouteInfo } from '../src/runtime'
+import { __loader__, createClientEntry, createServerEntry, readRouteInfo } from '../src/index'
 
 vi.mock('solid-js', async (importOriginal) => {
   const original = await importOriginal<typeof import('solid-js')>()
