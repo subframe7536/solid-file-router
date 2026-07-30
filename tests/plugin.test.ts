@@ -109,7 +109,7 @@ export default createServerEntry((props) => (
     )
   }
 
-  const [fileRouterPlugin] = fileRouter({
+  const routerPlugins = fileRouter({
     ...(mdx ? { mdx: true } : {}),
     ssg: {
       ...(serverEntry ? { serverEntry } : {}),
@@ -117,6 +117,8 @@ export default createServerEntry((props) => (
     },
   })
 
+  const virtualRoutesPlugin = routerPlugins.find(({ name }) => name.endsWith(':virtual-routes'))!
+  const routeTransformPlugin = routerPlugins.find(({ name }) => name.endsWith(':route-transform'))!
   const builder = await createBuilder({
     configFile: false,
     root,
@@ -140,16 +142,16 @@ export default createServerEntry((props) => (
         },
       ],
     },
-    plugins: [solidPlugin({ ssr: true }), fileRouterPlugin],
+    plugins: [solidPlugin({ ssr: true }), ...routerPlugins],
   })
   await builder.buildApp()
   const mdxRouteModuleId = normalizePath(`${join(root, 'src/pages/docs.mdx')}-sfr.tsx`)
   const mdxRouteModule = mdx
-    ? await (fileRouterPlugin as any).load.handler(mdxRouteModuleId)
+    ? await (virtualRoutesPlugin as any).load.handler(mdxRouteModuleId)
     : undefined
   const mdxRouteQuery = mdx
     ? (
-        await (fileRouterPlugin as any).transform.handler(
+        await (routeTransformPlugin as any).transform.handler(
           mdxRouteModule,
           `${mdxRouteModuleId}?route`,
         )
@@ -205,18 +207,10 @@ export default createRoute({
 }
 
 async function createPlugin(root: string, lazy?: boolean, pagesDir = 'src/pages') {
-  const [plugin] = fileRouter({
-    pagesDir,
-    ignore: [],
-    lazy,
-  })
-
-  await (plugin as any).configResolved({
-    build: { ssr: false },
-    root,
-  })
-
-  return plugin as any
+  const plugins = fileRouter({ pagesDir, ignore: [], lazy })
+  const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
+  await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
+  return plugins.find(({ name }) => name.endsWith(':virtual-routes')) as any
 }
 
 function getBuildConfig(plugin: Plugin, userConfig: UserConfig = {}) {
@@ -241,6 +235,18 @@ function createSolidPluginStub(transformedCode: string): Plugin {
 }
 
 describe('fileRouter', () => {
+  it('returns focused plugins for each enabled feature', () => {
+    expect(fileRouter({ ssg: {} }).map(({ name }) => name)).toStrictEqual([
+      'solid-file-router:routes',
+      'solid-file-router:virtual-routes',
+      'solid-file-router:route-transform',
+      'solid-file-router:mdx',
+      'solid-file-router:ssg-config',
+      'solid-file-router:ssg-entry',
+      'solid-file-router:ssg-render',
+    ])
+  })
+
   it.each([
     '<div id="root"></div>',
     '<div class="app" id="root">\n</div>',
@@ -287,11 +293,6 @@ describe('fileRouter', () => {
   it('respects lazy: true even in an SSR build', async () => {
     const root = createTempProject()
     const plugin = await createPlugin(root, true)
-
-    await plugin.configResolved({
-      build: { ssr: true },
-      root,
-    })
 
     const module = await plugin.load.handler()
 
@@ -364,8 +365,11 @@ describe('fileRouter', () => {
 # Content`,
     )
     writeFileSync(markdownPath, '# Markdown')
-    const [plugin] = fileRouter({ mdx: true, lazy: false })
-    await (plugin as any).configResolved({ build: { ssr: false }, root })
+    const plugins = fileRouter({ mdx: true, lazy: false })
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':virtual-routes'))!
+
+    await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
 
     const module = await (plugin as any).load.handler()
     const routeModuleId = normalizePath(`${mdxPath}-sfr.tsx`)
@@ -392,7 +396,7 @@ describe('fileRouter', () => {
       const root = createTempProject()
       const markdownPath = join(root, `src/content.${ext}`)
       writeFileSync(markdownPath, "export const frontmatter = { title: 'Content' }\n\n# Content")
-      const [, mdxPlugin] = fileRouter({ mdx: true })
+      const mdxPlugin = fileRouter({ mdx: true }).find(({ name }) => name.endsWith(':mdx'))!
 
       const result = await (mdxPlugin as any).transform.handler(
         readFileSync(markdownPath, 'utf8'),
@@ -406,7 +410,7 @@ describe('fileRouter', () => {
   )
 
   it('disables the direct Markdown import plugin when mdx is disabled', () => {
-    const [, mdxPlugin] = fileRouter()
+    const mdxPlugin = fileRouter().find(({ name }) => name.endsWith(':mdx'))!
 
     expect((mdxPlugin as any).apply()).toBe(false)
   })
@@ -428,14 +432,20 @@ describe('fileRouter', () => {
 
 # Content`,
     )
-    const [plugin] = fileRouter({ mdx: true, lazy: false })
-    await (plugin as any).configResolved({ build: { ssr: false }, root })
+    const plugins = fileRouter({ mdx: true, lazy: false })
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':virtual-routes'))!
+    const transformPlugin = plugins.find(({ name }) => name.endsWith(':route-transform'))!
+    await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
     const moduleId = normalizePath(`${mdxPath}-sfr.tsx`)
     const routeModule = await (plugin as any).load.handler(moduleId)
 
-    const route = (await (plugin as any).transform.handler(routeModule, `${moduleId}?route`)).code
-    const component = (await (plugin as any).transform.handler(routeModule, `${moduleId}?comp`))
-      .code
+    const route = (
+      await (transformPlugin as any).transform.handler(routeModule, `${moduleId}?route`)
+    ).code
+    const component = (
+      await (transformPlugin as any).transform.handler(routeModule, `${moduleId}?comp`)
+    ).code
 
     expect(route).toContain('info: __sfr_mdx_route.info')
     expect(route).toContain('preload: __sfr_mdx_route.preload')
@@ -452,8 +462,11 @@ describe('fileRouter', () => {
     const root = createTempProject()
     const mdxPath = join(root, 'src/pages/content.mdx')
     writeFileSync(mdxPath, 'export const __sfr_mdx_route = {}\n\n# Content')
-    const [plugin] = fileRouter({ mdx: true, lazy: false })
-    await (plugin as any).configResolved({ build: { ssr: false }, root })
+    const plugins = fileRouter({ mdx: true, lazy: false })
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':virtual-routes'))!
+
+    await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
 
     const routeModule = await (plugin as any).load.handler(normalizePath(`${mdxPath}-sfr.tsx`))
 
@@ -469,8 +482,11 @@ describe('fileRouter', () => {
     rmSync(appPath)
     writeFileSync(appMdxPath, '# Layout\n\n<RouteOutlet />')
     writeFileSync(leafMdxPath, '# Content')
-    const [plugin] = fileRouter({ mdx: true, lazy: false })
-    await (plugin as any).configResolved({ build: { ssr: false }, root })
+    const plugins = fileRouter({ mdx: true, lazy: false })
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':virtual-routes'))!
+
+    await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
 
     const routeModule = await (plugin as any).load.handler(normalizePath(`${appMdxPath}-sfr.tsx`))
     const leafModule = await (plugin as any).load.handler(normalizePath(`${leafMdxPath}-sfr.tsx`))
@@ -487,8 +503,11 @@ describe('fileRouter', () => {
     const root = createTempProject('app/routes')
     const mdxPath = join(root, 'app/routes/content.mdx')
     writeFileSync(mdxPath, '# Content')
-    const [plugin] = fileRouter({ pagesDir: 'app/routes', mdx: true, lazy: false })
-    await (plugin as any).configResolved({ build: { ssr: false }, root })
+    const plugins = fileRouter({ pagesDir: 'app/routes', mdx: true, lazy: false })
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':virtual-routes'))!
+
+    await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
 
     const module = await (plugin as any).load.handler()
 
@@ -501,12 +520,15 @@ describe('fileRouter', () => {
     const mdxPath = join(mdxDir, 'article.mdx')
     mkdirSync(mdxDir, { recursive: true })
     writeFileSync(mdxPath, '# Article')
-    const [plugin] = fileRouter({
+    const plugins = fileRouter({
       pagesDir: 'app/routes',
       mdx: { pagesDir: 'content' },
       lazy: false,
     })
-    await (plugin as any).configResolved({ build: { ssr: false }, root })
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':virtual-routes'))!
+
+    await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
 
     const module = await (plugin as any).load.handler()
 
@@ -537,7 +559,7 @@ export default createRoute({ component: () => <h1>missing</h1> })
 `,
       ],
     ])
-    const [plugin] = fileRouter({
+    const plugins = fileRouter({
       lazy: false,
       routeSource: {
         filter: 'docs/pages/**/*',
@@ -552,7 +574,10 @@ export default createRoute({ component: () => <h1>missing</h1> })
       },
     })
 
-    await (plugin as any).configResolved({
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':virtual-routes'))!
+
+    await (registryPlugin as any).configResolved({
       build: { ssr: false },
       root,
     })
@@ -575,14 +600,16 @@ export default createRoute({ component: () => <h1>missing</h1> })
     mkdirSync(join(root, 'docs'), { recursive: true })
     writeFileSync(sourcePath, '# Button')
 
-    const [plugin] = fileRouter({
+    const plugins = fileRouter({
       routeSource: {
         filter: 'docs/**/*.mdx',
         transformPath: () => ({ path: 'button.tsx' }),
         load: () => 'export default {}',
       },
     })
-    await (plugin as any).configResolved({ build: { ssr: false }, root })
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
+
+    await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
 
     const moduleId = normalizePath(`${sourcePath}-sfr.tsx`)
     const routeModule = { id: `${moduleId}?route` }
@@ -602,7 +629,7 @@ export default createRoute({ component: () => <h1>missing</h1> })
       },
     }
 
-    const modules = await (plugin as any).hotUpdate.handler.call(
+    const modules = await (registryPlugin as any).hotUpdate.handler.call(
       { environment },
       {
         type: 'update',
@@ -623,7 +650,7 @@ export default createRoute({ component: () => <h1>missing</h1> })
     mkdirSync(join(root, 'docs'), { recursive: true })
     writeFileSync(sourcePath, '# Button')
 
-    const [plugin] = fileRouter({
+    const plugins = fileRouter({
       reloadOnChange: true,
       routeSource: {
         filter: 'docs/**/*.mdx',
@@ -631,10 +658,12 @@ export default createRoute({ component: () => <h1>missing</h1> })
         load: () => 'export default {}',
       },
     })
-    await (plugin as any).configResolved({ build: { ssr: false }, root })
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
+
+    await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
 
     const send = vi.fn()
-    const modules = await (plugin as any).hotUpdate.handler.call(
+    const modules = await (registryPlugin as any).hotUpdate.handler.call(
       {
         environment: {
           hot: { send },
@@ -663,9 +692,12 @@ export default createRoute({ component: () => <h1>missing</h1> })
         data ? `export default { title: '${data.title}' }` : 'export default {}',
     })
     const root = createTempProject()
-    const [plugin] = fileRouter({ routeSource: source })
+    const plugins = fileRouter({ routeSource: source })
 
-    await (plugin as any).configResolved({
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':virtual-routes'))!
+
+    await (registryPlugin as any).configResolved({
       build: { ssr: false },
       root,
     })
@@ -675,16 +707,18 @@ export default createRoute({ component: () => <h1>missing</h1> })
   })
 
   it('does not inject ssg config unless explicitly enabled', () => {
-    const [plugin] = fileRouter()
-    const config = getBuildConfig(plugin!)
+    const plugins = fileRouter()
+    const configPlugin = plugins.find(({ name }) => name.endsWith(':ssg-config'))
+    const config = configPlugin ? getBuildConfig(configPlugin) : undefined
     expect(config).toBeUndefined()
   })
 
   it('injects default ssg environment config when enabled', () => {
-    const [plugin] = fileRouter({
+    const plugins = fileRouter({
       ssg: {},
     })
-    const config = getBuildConfig(plugin!)
+    const configPlugin = plugins.find(({ name }) => name.endsWith(':ssg-config'))
+    const config = configPlugin ? getBuildConfig(configPlugin) : undefined
     expect(config).toMatchObject({
       build: { copyPublicDir: false },
       environments: {
@@ -741,12 +775,13 @@ export default createRoute({ component: () => <h1>missing</h1> })
   })
 
   it('respects custom ssg server entry and outDir', () => {
-    const [plugin] = fileRouter({
+    const plugins = fileRouter({
       ssg: {
         serverEntry: 'app/entry-ssg.tsx',
       },
     })
-    const config = getBuildConfig(plugin!, {
+    const configPlugin = plugins.find(({ name }) => name.endsWith(':ssg-config'))!
+    const config = getBuildConfig(configPlugin, {
       environments: {
         client: { build: { outDir: 'build' } },
         ssr: { build: { outDir: 'build' } },
@@ -770,15 +805,16 @@ export default createRoute({ component: () => <h1>missing</h1> })
 
   it('accepts ssg config when solid ssr transform is enabled', async () => {
     const root = createTempProject()
-    const [plugin] = fileRouter({
+    const plugins = fileRouter({
       ssg: {},
     })
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
     const solidWithSsr = createSolidPluginStub(
       'import { ssr as _$ssr } from "solid-js/web"; export default _$ssr',
     )
 
     await expect(
-      (plugin as any).configResolved({
+      (registryPlugin as any).configResolved({
         root,
         plugins: [solidWithSsr],
       }),

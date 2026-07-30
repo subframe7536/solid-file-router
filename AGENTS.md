@@ -109,9 +109,9 @@ src/
   index.ts          # Public runtime entry (createRoute, generatePath, client/server entries)
   plugin.ts         # Vite plugin orchestration (fileRouter)
   const.ts          # Shared constants and logger
-  mdx/              # MDX runtime components and Satteri route integration
-  routes/           # Route discovery, AST extraction, codegen, registry, and types
-  ssg/              # Static generation paths, templates, and server renderer loading
+  mdx/              # MDX runtime components, compilation, and Vite plugin
+  routes/           # Route discovery, transforms, registry, codegen, and Vite plugins
+  ssg/              # Static generation helpers and focused Vite plugins
 ```
 
 ## Testing Conventions

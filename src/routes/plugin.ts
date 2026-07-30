@@ -1,0 +1,135 @@
+import type { Logger, Plugin } from 'vite'
+
+import { PACKAGE_NAME, VID_EXTRACT, VID_EXTRACT_RESOLVED } from '../const'
+
+import { extract, getAstCacheKey } from './extract'
+import { isRouteSourceModuleId, resolveRouteSourceModuleId } from './registry'
+import type { RouteRegistry, RouteRegistryChange } from './registry'
+
+const REG_ROUTE_QUERY = /\?(route|comp)$/
+const REG_ROUTE_SOURCE_MODULE_ID = /-sfr\.tsx(?:\?.*)?$/
+const routeProperties = new Map<string, string[]>([
+  ['route', ['info', 'preload', 'matchFilters', 'inherit', 'loadingComponent', 'errorComponent']],
+  ['comp', ['component']],
+])
+
+export interface RoutePluginContext<TData> {
+  registry: RouteRegistry<TData>
+  lazy?: boolean
+  reloadOnChange: boolean
+  verboseLog?: boolean
+  logger?: Logger
+}
+
+/** Initializes route discovery and owns route-source watching and HMR. */
+export function createRouteRegistryPlugin<TData>(context: RoutePluginContext<TData>): Plugin {
+  let lastChange: { key: string; promise: Promise<RouteRegistryChange> } | undefined
+
+  function getChange(type: 'create' | 'update' | 'delete', file: string, timestamp: number) {
+    const key = `${type}:${file}:${timestamp}`
+    if (lastChange?.key === key) {
+      return lastChange.promise
+    }
+
+    const promise =
+      type === 'create'
+        ? context.registry.addFile(file)
+        : type === 'delete'
+          ? context.registry.removeFile(file)
+          : context.registry.markChanged(file)
+    lastChange = { key, promise }
+    return promise
+  }
+
+  return {
+    name: `${PACKAGE_NAME}:routes`,
+    sharedDuringBuild: true,
+    async configResolved(config) {
+      context.logger = config.logger
+      await context.registry.initialize(config.root)
+    },
+    configureServer(server) {
+      const watchedFiles = context.registry.getWatchFiles()
+      if (watchedFiles.length > 0) {
+        server.watcher.add(watchedFiles)
+      }
+    },
+    hotUpdate: {
+      order: 'pre',
+      async handler({ type, file, timestamp, modules }) {
+        const change = await getChange(type, file, timestamp)
+        if (!change.matched) {
+          return
+        }
+        if (context.reloadOnChange || change.structureChanged) {
+          this.environment.hot.send({ type: 'full-reload' })
+          return []
+        }
+
+        const affectedModules = new Set(modules)
+        for (const moduleId of change.changedModuleIds) {
+          for (const id of [moduleId, `${moduleId}?route`, `${moduleId}?comp`]) {
+            const module = this.environment.moduleGraph.getModuleById(id)
+            if (module) {
+              affectedModules.add(module)
+            }
+          }
+        }
+        if (context.verboseLog) {
+          context.logger?.info(
+            `[solid-file-router] HMR modules: ${[...affectedModules]
+              .map((module) => module.id)
+              .join(', ')}`,
+          )
+        }
+        return [...affectedModules]
+      },
+    },
+  }
+}
+
+/** Resolves and loads the generated route tree and route-source modules. */
+export function createVirtualRoutesPlugin<TData>(context: RoutePluginContext<TData>): Plugin {
+  return {
+    name: `${PACKAGE_NAME}:virtual-routes`,
+    resolveId: {
+      filter: { id: new RegExp(`^${VID_EXTRACT}$|${REG_ROUTE_SOURCE_MODULE_ID.source}`) },
+      handler(id) {
+        return id === VID_EXTRACT ? VID_EXTRACT_RESOLVED : resolveRouteSourceModuleId(id)
+      },
+    },
+    load: {
+      filter: { id: new RegExp(`^${VID_EXTRACT_RESOLVED}$|${REG_ROUTE_SOURCE_MODULE_ID.source}`) },
+      async handler(id, options) {
+        if (id && isRouteSourceModuleId(id)) {
+          return await context.registry.loadRouteSourceModule(id)
+        }
+        return context.registry.getDefinition(context.lazy ?? !options?.ssr)
+      },
+    },
+  }
+}
+
+/** Extracts the requested route definition fields from route modules. */
+export function createRouteTransformPlugin<TData>(context: RoutePluginContext<TData>): Plugin {
+  return {
+    name: `${PACKAGE_NAME}:route-transform`,
+    transform: {
+      filter: { id: REG_ROUTE_QUERY },
+      async handler(code, fullId, options) {
+        const [id, query] = fullId.split('?')
+        const pick = query ? routeProperties.get(query) : undefined
+        if (!id || !pick) {
+          return
+        }
+        return await extract(
+          code,
+          id,
+          { entryFn: 'createRoute', pick },
+          context.verboseLog,
+          getAstCacheKey(id, code, options?.ssr === true),
+        )
+      },
+    },
+  }
+}
