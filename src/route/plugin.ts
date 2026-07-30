@@ -21,8 +21,8 @@ export interface RoutePluginContext<TData> {
   logger?: Logger
 }
 
-/** Initializes route discovery and owns route-source watching and HMR. */
-export function createRouteRegistryPlugin<TData>(context: RoutePluginContext<TData>): Plugin {
+/** Owns route discovery, virtual modules, transforms, watching, and HMR. */
+export function createRouterPlugin<TData>(context: RoutePluginContext<TData>): Plugin {
   let lastChange: { key: string; promise: Promise<RouteRegistryChange> } | undefined
 
   function getChange(type: 'create' | 'update' | 'delete', file: string, timestamp: number) {
@@ -42,7 +42,7 @@ export function createRouteRegistryPlugin<TData>(context: RoutePluginContext<TDa
   }
 
   return {
-    name: `${PACKAGE_NAME}:routes`,
+    name: `${PACKAGE_NAME}:router`,
     sharedDuringBuild: true,
     async configResolved(config) {
       context.logger = config.logger
@@ -85,13 +85,6 @@ export function createRouteRegistryPlugin<TData>(context: RoutePluginContext<TDa
         return [...affectedModules]
       },
     },
-  }
-}
-
-/** Resolves and loads the generated route tree and route-source modules. */
-export function createVirtualRoutesPlugin<TData>(context: RoutePluginContext<TData>): Plugin {
-  return {
-    name: `${PACKAGE_NAME}:virtual-routes`,
     resolveId: {
       filter: { id: new RegExp(`^${VID_EXTRACT}$|${REG_ROUTE_SOURCE_MODULE_ID.source}`) },
       handler(id) {
@@ -107,13 +100,6 @@ export function createVirtualRoutesPlugin<TData>(context: RoutePluginContext<TDa
         return context.registry.getDefinition(context.lazy ?? !options?.ssr)
       },
     },
-  }
-}
-
-/** Extracts the requested route definition fields from route modules. */
-export function createRouteTransformPlugin<TData>(context: RoutePluginContext<TData>): Plugin {
-  return {
-    name: `${PACKAGE_NAME}:route-transform`,
     transform: {
       filter: { id: REG_ROUTE_QUERY },
       async handler(code, fullId, options) {

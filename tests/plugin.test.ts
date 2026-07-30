@@ -117,8 +117,8 @@ export default createServerEntry((props) => (
     },
   })
 
-  const virtualRoutesPlugin = routerPlugins.find(({ name }) => name.endsWith(':virtual-routes'))!
-  const routeTransformPlugin = routerPlugins.find(({ name }) => name.endsWith(':route-transform'))!
+  const virtualRoutesPlugin = routerPlugins.find(({ name }) => name.endsWith(':router'))!
+  const routeTransformPlugin = routerPlugins.find(({ name }) => name.endsWith(':router'))!
   const builder = await createBuilder({
     configFile: false,
     root,
@@ -208,9 +208,9 @@ export default createRoute({
 
 async function createPlugin(root: string, lazy?: boolean, pagesDir = 'src/pages') {
   const plugins = fileRouter({ pagesDir, ignore: [], lazy })
-  const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
+  const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
   await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
-  return plugins.find(({ name }) => name.endsWith(':virtual-routes')) as any
+  return plugins.find(({ name }) => name.endsWith(':router')) as any
 }
 
 function getBuildConfig(plugin: Plugin, userConfig: UserConfig = {}) {
@@ -237,9 +237,7 @@ function createSolidPluginStub(transformedCode: string): Plugin {
 describe('fileRouter', () => {
   it('returns focused plugins for each enabled feature', () => {
     expect(fileRouter({ ssg: {} }).map(({ name }) => name)).toStrictEqual([
-      'solid-file-router:routes',
-      'solid-file-router:virtual-routes',
-      'solid-file-router:route-transform',
+      'solid-file-router:router',
       'solid-file-router:mdx',
       'solid-file-router:ssg',
     ])
@@ -364,8 +362,8 @@ describe('fileRouter', () => {
     )
     writeFileSync(markdownPath, '# Markdown')
     const plugins = fileRouter({ mdx: true, lazy: false })
-    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
-    const plugin = plugins.find(({ name }) => name.endsWith(':virtual-routes'))!
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':router'))!
 
     await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
 
@@ -431,9 +429,9 @@ describe('fileRouter', () => {
 # Content`,
     )
     const plugins = fileRouter({ mdx: true, lazy: false })
-    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
-    const plugin = plugins.find(({ name }) => name.endsWith(':virtual-routes'))!
-    const transformPlugin = plugins.find(({ name }) => name.endsWith(':route-transform'))!
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':router'))!
+    const transformPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
     await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
     const moduleId = normalizePath(`${mdxPath}-sfr.tsx`)
     const routeModule = await (plugin as any).load.handler(moduleId)
@@ -461,8 +459,8 @@ describe('fileRouter', () => {
     const mdxPath = join(root, 'src/pages/content.mdx')
     writeFileSync(mdxPath, 'export const __sfr_mdx_route = {}\n\n# Content')
     const plugins = fileRouter({ mdx: true, lazy: false })
-    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
-    const plugin = plugins.find(({ name }) => name.endsWith(':virtual-routes'))!
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':router'))!
 
     await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
 
@@ -481,8 +479,8 @@ describe('fileRouter', () => {
     writeFileSync(appMdxPath, '# Layout\n\n<RouteOutlet />')
     writeFileSync(leafMdxPath, '# Content')
     const plugins = fileRouter({ mdx: true, lazy: false })
-    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
-    const plugin = plugins.find(({ name }) => name.endsWith(':virtual-routes'))!
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':router'))!
 
     await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
 
@@ -502,8 +500,8 @@ describe('fileRouter', () => {
     const mdxPath = join(root, 'app/routes/content.mdx')
     writeFileSync(mdxPath, '# Content')
     const plugins = fileRouter({ pagesDir: 'app/routes', mdx: true, lazy: false })
-    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
-    const plugin = plugins.find(({ name }) => name.endsWith(':virtual-routes'))!
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':router'))!
 
     await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
 
@@ -523,8 +521,8 @@ describe('fileRouter', () => {
       mdx: { pagesDir: 'content' },
       lazy: false,
     })
-    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
-    const plugin = plugins.find(({ name }) => name.endsWith(':virtual-routes'))!
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':router'))!
 
     await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
 
@@ -572,8 +570,8 @@ export default createRoute({ component: () => <h1>missing</h1> })
       },
     })
 
-    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
-    const plugin = plugins.find(({ name }) => name.endsWith(':virtual-routes'))!
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':router'))!
 
     await (registryPlugin as any).configResolved({
       build: { ssr: false },
@@ -605,7 +603,7 @@ export default createRoute({ component: () => <h1>missing</h1> })
         load: () => 'export default {}',
       },
     })
-    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
 
     await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
 
@@ -656,7 +654,7 @@ export default createRoute({ component: () => <h1>missing</h1> })
         load: () => 'export default {}',
       },
     })
-    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
 
     await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
 
@@ -692,8 +690,8 @@ export default createRoute({ component: () => <h1>missing</h1> })
     const root = createTempProject()
     const plugins = fileRouter({ routeSource: source })
 
-    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
-    const plugin = plugins.find(({ name }) => name.endsWith(':virtual-routes'))!
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':router'))!
 
     await (registryPlugin as any).configResolved({
       build: { ssr: false },
@@ -806,7 +804,7 @@ export default createRoute({ component: () => <h1>missing</h1> })
     const plugins = fileRouter({
       ssg: {},
     })
-    const registryPlugin = plugins.find(({ name }) => name.endsWith(':routes'))!
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
     const solidWithSsr = createSolidPluginStub(
       'import { ssr as _$ssr } from "solid-js/web"; export default _$ssr',
     )

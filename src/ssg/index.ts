@@ -29,40 +29,42 @@ export interface SsgOptions {
   concurrency?: number
 }
 
-interface NormalizedSsgOptions {
-  internalEntry: boolean
-  serverEntry: string
-  id: string
-  routes?: PrerenderRoutesSource
-  concurrency: number
-}
+export { renderTemplate } from './utils'
+export type { PrerenderRoutesSource } from './utils'
 
-function normalizeOptions(options: SsgOptions): NormalizedSsgOptions {
-  return {
-    internalEntry: options.serverEntry === undefined,
-    serverEntry: options.serverEntry ?? ID_PRERENDER,
-    routes: options.routes,
-    concurrency: Math.max(1, options.concurrency ?? DEFAULT_PRERENDER_CONCURRENCY),
-    id: options.id ?? 'root',
-  }
-}
-
-/** Configures Vite's client and server build environments for static generation. */
-function createSsgConfigPlugin<TData>(
-  options: SsgOptions,
+/** Creates the complete SSG integration as a single conditionally enabled plugin. */
+export function createSsgPlugin<TData>(
+  options: false | SsgOptions,
+  registry: RouteRegistry<TData>,
   context: RoutePluginContext<TData>,
 ): Plugin {
-  const config = normalizeOptions(options)
+  const config = {
+    internalEntry: options === false || options.serverEntry === undefined,
+    serverEntry: options === false ? ID_PRERENDER : (options.serverEntry ?? ID_PRERENDER),
+    routes: options === false ? undefined : options.routes,
+    concurrency: Math.max(
+      1,
+      options === false
+        ? DEFAULT_PRERENDER_CONCURRENCY
+        : (options.concurrency ?? DEFAULT_PRERENDER_CONCURRENCY),
+    ),
+    id: options === false ? 'root' : (options.id ?? 'root'),
+  }
+  let serverEntryFileName: string
   return {
-    name: `${PACKAGE_NAME}:ssg-config`,
+    name: `${PACKAGE_NAME}:ssg`,
+    apply() {
+      return !!options
+    },
     config(userConfig, env) {
-      if (env.command !== 'build') {
+      if (!options || env.command !== 'build') {
         return
       }
-      const getOutDir = (envName: EnvironmentName, subDir: string) =>
-        normalizePath(
+      function getOutDir(envName: EnvironmentName, subDir: string) {
+        return normalizePath(
           path.join(userConfig.environments?.[envName]?.build?.outDir ?? 'dist', subDir),
         )
+      }
       const clientOutDir = getOutDir(ENVIRONMENT.CLIENT, 'client')
       const serverOutDir = getOutDir(ENVIRONMENT.SERVER, 'server')
       return {
@@ -103,20 +105,16 @@ function createSsgConfigPlugin<TData>(
         },
       }
     },
-  }
-}
-
-/** Provides the default server rendering entry used by SSG builds. */
-function createSsgEntryPlugin(): Plugin {
-  return {
-    name: `${PACKAGE_NAME}:ssg-entry`,
     resolveId: {
       filter: { id: new RegExp(`^${ID_PRERENDER}$`) },
-      handler: () => VID_PRERENDER,
+      handler() {
+        return VID_PRERENDER
+      },
     },
     load: {
       filter: { id: new RegExp(`^${VID_PRERENDER}$`) },
-      handler: () => `import { createComponent } from 'solid-js'
+      handler() {
+        return `import { createComponent } from 'solid-js'
 import { StaticRouter } from '@solidjs/router'
 import { renderToStringAsync } from 'solid-js/web'
 import { Root, fileRoutes } from '${VID_EXTRACT}'
@@ -125,21 +123,9 @@ export default ({ url }) => renderToStringAsync(() => createComponent(StaticRout
   url,
   root: Root,
   get children() { return fileRoutes }
-}))`,
+}))`
+      },
     },
-  }
-}
-
-/** Renders discovered static routes into the completed client bundle. */
-function createSsgRenderPlugin<TData>(
-  options: SsgOptions,
-  registry: RouteRegistry<TData>,
-  context: RoutePluginContext<TData>,
-): Plugin {
-  const config = normalizeOptions(options)
-  let serverEntryFileName: string
-  return {
-    name: `${PACKAGE_NAME}:ssg-render`,
     generateBundle: {
       order: 'post',
       async handler(_outputOptions, bundle) {
@@ -209,26 +195,5 @@ function createSsgRenderPlugin<TData>(
         )
       },
     },
-  }
-}
-
-export { renderTemplate } from './utils'
-export type { PrerenderRoutesSource } from './utils'
-
-/** Creates the complete SSG integration as a single plugin. */
-export function createSsgPlugin<TData>(
-  options: SsgOptions,
-  registry: RouteRegistry<TData>,
-  context: RoutePluginContext<TData>,
-): Plugin {
-  const configPlugin = createSsgConfigPlugin(options, context)
-  const entryPlugin = createSsgEntryPlugin()
-  const renderPlugin = createSsgRenderPlugin(options, registry, context)
-  return {
-    name: `${PACKAGE_NAME}:ssg`,
-    config: configPlugin.config,
-    resolveId: entryPlugin.resolveId,
-    load: entryPlugin.load,
-    generateBundle: renderPlugin.generateBundle,
   }
 }

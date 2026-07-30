@@ -5,11 +5,7 @@ import { mdxRouteSource } from './mdx/router'
 import type { MdxOptions } from './mdx/router'
 import type { InheritanceConfig } from './route/definition'
 import { fsRouteSource } from './route/fs-source'
-import {
-  createRouteRegistryPlugin,
-  createRouteTransformPlugin,
-  createVirtualRoutesPlugin,
-} from './route/plugin'
+import { createRouterPlugin } from './route/plugin'
 import type { RoutePluginContext } from './route/plugin'
 import { RouteRegistry } from './route/registry'
 import type { InfoTypeDefinition } from './route/route-type'
@@ -170,14 +166,9 @@ export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TDat
     reloadOnChange,
     verboseLog,
   }
-  const plugins = [
-    createRouteRegistryPlugin(context),
-    createVirtualRoutesPlugin(context),
-    createRouteTransformPlugin(context),
+  return [
+    createRouterPlugin(context),
     createMdxPlugin(mdxOptions),
+    createSsgPlugin(ssg ?? false, registry, context),
   ]
-  if (ssg) {
-    plugins.push(createSsgPlugin(ssg, registry, context))
-  }
-  return plugins
 }

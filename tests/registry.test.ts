@@ -63,6 +63,13 @@ vi.mock('../src/route/extract', async () => {
 
 const tempDirs: string[] = []
 
+function collisionPattern(message: string, ...paths: string[]) {
+  const escapedPaths = paths.map((path) =>
+    normalizePath(path).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+  )
+  return new RegExp([message, ...escapedPaths].join('.*'))
+}
+
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
@@ -579,8 +586,10 @@ export default createRoute({
     })
 
     await expect(registry.initialize(workspaceRoot)).rejects.toThrow(
-      new RegExp(
-        `duplicate routeSource.routeId: /same.*${workspaceRoot}/docs/first\\.mdx.*${workspaceRoot}/docs/second\\.mdx`,
+      collisionPattern(
+        'duplicate routeSource.routeId: /same',
+        join(workspaceRoot, 'docs/first.mdx'),
+        join(workspaceRoot, 'docs/second.mdx'),
       ),
     )
   })
@@ -610,8 +619,10 @@ export default createRoute({
     })
 
     await expect(registry.initialize(workspaceRoot)).rejects.toThrow(
-      new RegExp(
-        `duplicate routeSource.routeId: /same.*${workspaceRoot}/docs/first\\.mdx.*${workspaceRoot}/content/second\\.md`,
+      collisionPattern(
+        'duplicate routeSource.routeId: /same',
+        join(workspaceRoot, 'docs/first.mdx'),
+        join(workspaceRoot, 'content/second.md'),
       ),
     )
   })
@@ -641,8 +652,10 @@ export default createRoute({
     })
 
     await expect(registry.initialize(workspaceRoot)).rejects.toThrow(
-      new RegExp(
-        `duplicate routeSource.routePath: same.tsx.*${workspaceRoot}/docs/first\\.mdx.*${workspaceRoot}/content/second\\.md`,
+      collisionPattern(
+        'duplicate routeSource.routePath: same.tsx',
+        join(workspaceRoot, 'docs/first.mdx'),
+        join(workspaceRoot, 'content/second.md'),
       ),
     )
   })
@@ -671,9 +684,9 @@ export default createRoute({
       ],
     })
 
-    const sourcePath = `${workspaceRoot}/docs/shared.mdx`
+    const sourcePath = normalizePath(join(workspaceRoot, 'docs/shared.mdx'))
     await expect(registry.initialize(workspaceRoot)).rejects.toThrow(
-      new RegExp(`duplicate routeSource.sourcePath: ${sourcePath}.*${sourcePath}`),
+      collisionPattern('duplicate routeSource.sourcePath:', sourcePath, sourcePath),
     )
   })
 
