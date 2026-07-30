@@ -1,14 +1,14 @@
 /** A value that may be returned synchronously or asynchronously. */
 export type Promisable<T> = T | Promise<T>
 
-/** Resolves route source files for a Vite root. */
-export type RouteSourceGlob = (
+/** Resolves route files for a Vite root. */
+export type RouteProviderGlob = (
   glob: typeof import('tinyglobby').glob,
   filter: string,
   root: string,
 ) => Promisable<string[]>
 
-export interface RouteSourceEntry<TData = unknown> {
+export interface RouteProviderEntry<TData = unknown> {
   /** Logical file path used for route matching and layout inheritance. */
   path: string
   /**
@@ -20,35 +20,35 @@ export interface RouteSourceEntry<TData = unknown> {
   data?: TData
 }
 
-export interface RouteSourceLoadContext<TData = unknown> {
+export interface RouteProviderLoadContext<TData = unknown> {
   /** Logical file path returned by `transformPath`. */
   path: string
   /** Normalized public route ID. */
   routeId: string
   /** Original source path returned by `glob`. */
   sourcePath: string
-  /** Generated virtual module ID for this route source. */
+  /** Generated virtual module ID for this route provider entry. */
   moduleId: string
   /** Provider-specific data returned by `transformPath`. */
   data?: TData
 }
 
-export interface RouteSourceProvider<TData = unknown> {
+export interface RouteProvider<TData = unknown> {
   /** Glob used for discovery and source-file HMR matching. */
   filter: string
   /**
    * Optional custom glob implementation.
    * @default (glob, filter, root) => glob(filter, { cwd: root, absolute: false })
    */
-  glob?: RouteSourceGlob
+  glob?: RouteProviderGlob
   /**
    * Maps each discovered source path to its logical route entry.
    * @default (path) => ({ path }).
    */
-  transformPath?: (path: string) => RouteSourceEntry<TData>
+  transformPath?: (path: string) => RouteProviderEntry<TData>
   /** Loads the generated route module source. */
   load: (
-    entry: RouteSourceLoadContext<TData>,
+    entry: RouteProviderLoadContext<TData>,
   ) => Promisable<string | null | undefined | false | void>
   /**
    * Additional files or globs that trigger provider rescans.
@@ -57,16 +57,10 @@ export interface RouteSourceProvider<TData = unknown> {
   watch?: string[]
 }
 
-function defaultGlob(glob: Parameters<RouteSourceGlob>[0], filter: string, root: string) {
-  return glob(filter, { cwd: root, absolute: false })
-}
-
-/** Normalizes a route source and supplies default glob/path transforms. */
-export function defineRouteSource<TData>(
-  provider: RouteSourceProvider<TData>,
-): RouteSourceProvider<TData> {
+/** Normalizes a route provider and supplies default glob/path transforms. */
+export function defineRouteProvider<TData>(provider: RouteProvider<TData>): RouteProvider<TData> {
   return {
-    glob: defaultGlob,
+    glob: (glob, filter, root) => glob(filter, { cwd: root, absolute: false }),
     transformPath(path) {
       return { path }
     },

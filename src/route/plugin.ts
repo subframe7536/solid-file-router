@@ -3,11 +3,11 @@ import type { Logger, Plugin } from 'vite'
 import { PACKAGE_NAME, VID_EXTRACT, VID_EXTRACT_RESOLVED } from '../const'
 
 import { extract, getAstCacheKey } from './extract'
-import { isRouteSourceModuleId, resolveRouteSourceModuleId } from './registry'
+import { isRouteProviderModuleId, resolveRouteProviderModuleId } from './provider'
 import type { RouteRegistry, RouteRegistryChange } from './registry'
 
 const REG_ROUTE_QUERY = /\?(route|comp)$/
-const REG_ROUTE_SOURCE_MODULE_ID = /-sfr\.tsx(?:\?.*)?$/
+const REG_ROUTE_PROVIDER_MODULE_ID = /-sfr\.tsx(?:\?.*)?$/
 const routeProperties = new Map<string, string[]>([
   ['route', ['info', 'preload', 'matchFilters', 'inherit', 'loadingComponent', 'errorComponent']],
   ['comp', ['component']],
@@ -86,16 +86,18 @@ export function createRouterPlugin<TData>(context: RoutePluginContext<TData>): P
       },
     },
     resolveId: {
-      filter: { id: new RegExp(`^${VID_EXTRACT}$|${REG_ROUTE_SOURCE_MODULE_ID.source}`) },
+      filter: { id: new RegExp(`^${VID_EXTRACT}$|${REG_ROUTE_PROVIDER_MODULE_ID.source}`) },
       handler(id) {
-        return id === VID_EXTRACT ? VID_EXTRACT_RESOLVED : resolveRouteSourceModuleId(id)
+        return id === VID_EXTRACT ? VID_EXTRACT_RESOLVED : resolveRouteProviderModuleId(id)
       },
     },
     load: {
-      filter: { id: new RegExp(`^${VID_EXTRACT_RESOLVED}$|${REG_ROUTE_SOURCE_MODULE_ID.source}`) },
+      filter: {
+        id: new RegExp(`^${VID_EXTRACT_RESOLVED}$|${REG_ROUTE_PROVIDER_MODULE_ID.source}`),
+      },
       async handler(id, options) {
-        if (id && isRouteSourceModuleId(id)) {
-          return await context.registry.loadRouteSourceModule(id)
+        if (id && isRouteProviderModuleId(id)) {
+          return await context.registry.loadRouteProviderModule(id)
         }
         return context.registry.getDefinition(context.lazy ?? !options?.ssr)
       },

@@ -5,17 +5,12 @@ import { createFilter, normalizePath } from 'vite'
 
 import { logger } from '../const'
 
-import { CustomRouteRegistry } from './custom-registry'
 import { assembleDefinition, generateDefinition } from './definition'
 import type { InheritanceConfig, NormalizedRouteEntry, RouteEntry, RouteInput } from './definition'
 import { invalidateCache } from './extract'
 import { getRoutePath } from './path'
-import {
-  isRouteSourceModuleId,
-  resolveFromRoot,
-  resolveRouteSourceModuleId,
-} from './registry-source'
-import type { RouteSourceProvider } from './source'
+import { resolveFromRoot, RouteProviderManager } from './provider'
+import type { RouteProvider } from './provider'
 import type { InfoTypeDefinition } from './type-gen'
 import { generateRouteTypes } from './type-gen'
 
@@ -26,7 +21,7 @@ interface RouteRegistryOption<TData> {
   infoDts?: InfoTypeDefinition
   verboseLog?: boolean
   inheritance: InheritanceConfig
-  routeSources?: readonly RouteSourceProvider<TData>[]
+  routeProviders?: readonly RouteProvider<TData>[]
 }
 
 export interface RouteRegistryChange {
@@ -50,21 +45,21 @@ export class RouteRegistry<TData = unknown> {
   private readonly entries = new Map<string, NormalizedRouteEntry>()
   private readonly definitionCache = new Map<string, RouteEntry>()
   private readonly routeFileFilter: ReturnType<typeof createFilter>
-  private readonly custom: CustomRouteRegistry<TData>
+  private readonly providerManager: RouteProviderManager<TData>
   private typesDirty = true
 
   constructor(private readonly options: RouteRegistryOption<TData>) {
     this.routeFileFilter = createFilter(['**/*.{jsx,tsx}'], options.ignore)
-    this.custom = new CustomRouteRegistry(options.routeSources ?? [], options.ignore)
+    this.providerManager = new RouteProviderManager(options.routeProviders ?? [], options.ignore)
   }
 
   async initialize(root: string): Promise<void> {
     this.root = normalizePath(root)
     this.pagesDir = resolveFromRoot(this.root, this.options.pagesDir)
     this.outputPath = resolveFromRoot(this.root, this.options.output)
-    if (this.custom.enabled) {
-      await this.custom.initialize(this.root)
-      this.replaceEntries(this.custom.getEntries())
+    if (this.providerManager.enabled) {
+      await this.providerManager.initialize(this.root)
+      this.replaceEntries(this.providerManager.getEntries())
       this.rebuildDefinitions()
       return
     }
@@ -85,50 +80,50 @@ export class RouteRegistry<TData = unknown> {
 
   async markChanged(file: string): Promise<RouteRegistryChange> {
     const normalized = normalizePath(file)
-    if (this.custom.enabled) {
-      return this.handleCustomChange(normalized, 'changed')
+    if (!this.providerManager.enabled) {
+      if (!this.isRouteFile(normalized)) {
+        return noChange()
+      }
+      invalidateCache(normalized)
+      log(`Route changed: ${normalized}`)
+      return change([normalized], normalized)
     }
-    if (!this.isRouteFile(normalized)) {
-      return noChange()
-    }
-    invalidateCache(normalized)
-    log(`Route changed: ${normalized}`)
-    return change([normalized], normalized)
+    return this.handleProviderChange(normalized, 'changed')
   }
 
   async addFile(file: string): Promise<RouteRegistryChange> {
     const normalized = normalizePath(file)
-    if (this.custom.enabled) {
-      return this.handleCustomChange(normalized, 'added')
+    if (!this.providerManager.enabled) {
+      if (!this.isRouteFile(normalized) || this.entries.has(normalized)) {
+        return noChange()
+      }
+      this.entries.set(normalized, {
+        routeId: normalized,
+        routePath: normalized,
+        moduleId: normalized,
+        sourcePath: normalized,
+      })
+      generateDefinition([normalized], this.definitionCache, this.pagesDir)
+      this.typesDirty = true
+      log(`Route added: ${normalized}`)
+      return change([normalized], normalized, true)
     }
-    if (!this.isRouteFile(normalized) || this.entries.has(normalized)) {
-      return noChange()
-    }
-    this.entries.set(normalized, {
-      routeId: normalized,
-      routePath: normalized,
-      moduleId: normalized,
-      sourcePath: normalized,
-    })
-    generateDefinition([normalized], this.definitionCache, this.pagesDir)
-    this.typesDirty = true
-    log(`Route added: ${normalized}`)
-    return change([normalized], normalized, true)
+    return this.handleProviderChange(normalized, 'added')
   }
 
   async removeFile(file: string): Promise<RouteRegistryChange> {
     const normalized = normalizePath(file)
-    if (this.custom.enabled) {
-      return this.handleCustomChange(normalized, 'removed')
+    if (!this.providerManager.enabled) {
+      if (!this.entries.delete(normalized)) {
+        return noChange()
+      }
+      invalidateCache(normalized)
+      this.definitionCache.delete(normalized)
+      this.typesDirty = true
+      log(`Route removed: ${normalized}`)
+      return change([normalized], normalized, true)
     }
-    if (!this.entries.delete(normalized)) {
-      return noChange()
-    }
-    invalidateCache(normalized)
-    this.definitionCache.delete(normalized)
-    this.typesDirty = true
-    log(`Route removed: ${normalized}`)
-    return change([normalized], normalized, true)
+    return this.handleProviderChange(normalized, 'removed')
   }
 
   async getDefinition(lazy: boolean): Promise<string> {
@@ -149,7 +144,7 @@ export class RouteRegistry<TData = unknown> {
   }
 
   getWatchFiles(): string[] {
-    return this.custom.enabled ? this.custom.getWatchFiles() : []
+    return this.providerManager.enabled ? this.providerManager.getWatchFiles() : []
   }
 
   getStaticRoutes(): string[] {
@@ -162,26 +157,26 @@ export class RouteRegistry<TData = unknown> {
       .sort()
   }
 
-  async loadRouteSourceModule(id: string): Promise<string | undefined> {
-    return this.custom.enabled ? this.custom.loadModule(id) : undefined
+  async loadRouteProviderModule(id: string): Promise<string | undefined> {
+    return this.providerManager.enabled ? this.providerManager.loadModule(id) : undefined
   }
 
-  private async handleCustomChange(
+  private async handleProviderChange(
     file: string,
     kind: 'changed' | 'added' | 'removed',
   ): Promise<RouteRegistryChange> {
-    const result = await this.custom.handleChange(file)
+    const result = await this.providerManager.handleChange(file)
     if (!result.matched) {
       return noChange()
     }
     if (result.structureChanged) {
-      this.replaceEntries(this.custom.getEntries())
+      this.replaceEntries(this.providerManager.getEntries())
       this.rebuildDefinitions()
       this.typesDirty = true
     }
     const label = kind === 'changed' ? 'changed' : kind === 'added' ? 'added' : 'removed'
     if (result.structureChanged || kind === 'changed') {
-      log(`Route source ${label}: ${file}`)
+      log(`Route provider ${label}: ${file}`)
     }
     return result
   }
@@ -205,7 +200,7 @@ export class RouteRegistry<TData = unknown> {
   }
 
   private getRouteInputs(): RouteInput[] {
-    return this.custom.enabled
+    return this.providerManager.enabled
       ? this.getEntries()
       : this.getEntries().map((entry) => entry.moduleId)
   }
@@ -229,5 +224,3 @@ function change(
 function log(message: string): void {
   logger.info(message, { timestamp: true })
 }
-
-export { isRouteSourceModuleId, resolveRouteSourceModuleId }

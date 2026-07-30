@@ -333,22 +333,22 @@ These build workflows have dedicated guides:
 - [Markdown and MDX Routes](mdx.md) covers Satteri installation, built-in MDX
   discovery, component overrides, compiler options, and HMR.
 
-## Custom Route Providers
+## Route Providers
 
-Use `routeSource` for a CMS, documentation index, or generated modules. File
+Use `routeProviders` for a CMS, documentation index, or generated modules. File
 routes remain available automatically, and `mdx` can add Markdown routes. A
-custom provider discovers source paths, maps logical route entries, and returns
+provider discovers source paths, maps logical route entries, and returns
 complete route module source from `load`:
 
 ```ts
 // vite.config.ts
-import { defineRouteSource, fileRouter } from 'solid-file-router/plugin'
+import { defineRouteProvider, fileRouter } from 'solid-file-router/plugin'
 
 interface DocsData {
   title: string
 }
 
-const routeSource = defineRouteSource<DocsData>({
+const provider = defineRouteProvider<DocsData>({
   filter: 'docs/**/*.mdx',
   transformPath: (path) => ({
     path: path.replace(/^docs\//, '').replace(/\.mdx$/, '.tsx'),
@@ -374,7 +374,7 @@ export default createRoute({
   watch: ['!docs/**/_*.mdx'],
 })
 
-fileRouter({ routeSource })
+fileRouter({ routeProviders: [provider] })
 ```
 
 `routeId` is optional and is derived from `path` when omitted. `path` controls
@@ -383,7 +383,7 @@ source for HMR; `data` is passed unchanged from `transformPath` to `load`.
 
 `load` must return non-empty module source for every entry. A missing value
 throws an error. For complete provider types and watcher matching rules, see
-[Custom Route Provider Reference](reference.md#custom-route-provider-reference).
+[Route Provider Reference](reference.md#route-provider-reference).
 
 ## Next Steps
 

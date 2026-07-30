@@ -16,7 +16,7 @@ import { createBuilder, normalizePath } from 'vite'
 import solidPlugin from 'vite-plugin-solid'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { defineRouteSource, fileRouter, renderTemplate } from '../src/plugin'
+import { defineRouteProvider, fileRouter, renderTemplate } from '../src/plugin'
 
 const tempDirs: string[] = []
 
@@ -531,7 +531,7 @@ describe('fileRouter', () => {
     expect(module).toContain(normalizePath(`${mdxPath}-sfr.tsx?comp`))
   })
 
-  it('supports custom route sources with generated route modules', async () => {
+  it('supports route providers with generated route modules', async () => {
     const root = createTempProject()
     const buttonSourcePath = 'docs/pages/general/button.mdx'
     const buttonModuleId = normalizePath(join(root, 'docs/pages/general/button.mdx-sfr.tsx'))
@@ -557,17 +557,19 @@ export default createRoute({ component: () => <h1>missing</h1> })
     ])
     const plugins = fileRouter({
       lazy: false,
-      routeSource: {
-        filter: 'docs/pages/**/*',
-        glob: async () => [buttonSourcePath, 'docs/routes/404.tsx'],
-        transformPath: (sourcePath) => ({
-          path: sourcePath.includes('button')
-            ? '(general)/button.tsx'
-            : sourcePath.split('/').pop()!,
-          routeId: sourcePath.includes('button') ? '/button' : undefined,
-        }),
-        load: (entry) => modules.get(entry.routeId),
-      },
+      routeProviders: [
+        {
+          filter: 'docs/pages/**/*',
+          glob: async () => [buttonSourcePath, 'docs/routes/404.tsx'],
+          transformPath: (sourcePath) => ({
+            path: sourcePath.includes('button')
+              ? '(general)/button.tsx'
+              : sourcePath.split('/').pop()!,
+            routeId: sourcePath.includes('button') ? '/button' : undefined,
+          }),
+          load: (entry) => modules.get(entry.routeId),
+        },
+      ],
     })
 
     const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
@@ -590,18 +592,20 @@ export default createRoute({ component: () => <h1>missing</h1> })
     expect(routeModule).toContain('title')
   })
 
-  it('returns generated custom route modules from the Vite hot update hook', async () => {
+  it('returns generated route provider modules from the Vite hot update hook', async () => {
     const root = createTempProject()
     const sourcePath = join(root, 'docs/button.mdx')
     mkdirSync(join(root, 'docs'), { recursive: true })
     writeFileSync(sourcePath, '# Button')
 
     const plugins = fileRouter({
-      routeSource: {
-        filter: 'docs/**/*.mdx',
-        transformPath: () => ({ path: 'button.tsx' }),
-        load: () => 'export default {}',
-      },
+      routeProviders: [
+        {
+          filter: 'docs/**/*.mdx',
+          transformPath: () => ({ path: 'button.tsx' }),
+          load: () => 'export default {}',
+        },
+      ],
     })
     const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
 
@@ -648,11 +652,13 @@ export default createRoute({ component: () => <h1>missing</h1> })
 
     const plugins = fileRouter({
       reloadOnChange: true,
-      routeSource: {
-        filter: 'docs/**/*.mdx',
-        transformPath: () => ({ path: 'button.tsx' }),
-        load: () => 'export default {}',
-      },
+      routeProviders: [
+        {
+          filter: 'docs/**/*.mdx',
+          transformPath: () => ({ path: 'button.tsx' }),
+          load: () => 'export default {}',
+        },
+      ],
     })
     const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
 
@@ -679,8 +685,8 @@ export default createRoute({ component: () => <h1>missing</h1> })
     expect(send).toHaveBeenCalledWith({ type: 'full-reload' })
   })
 
-  it('infers typed custom source data in load', async () => {
-    const source = defineRouteSource<{ title: string }>({
+  it('infers typed provider data in load', async () => {
+    const provider = defineRouteProvider<{ title: string }>({
       filter: 'docs/**/*.mdx',
       glob: async () => ['docs/button.mdx'],
       transformPath: () => ({ path: 'button.tsx', data: { title: 'Button' } }),
@@ -688,7 +694,7 @@ export default createRoute({ component: () => <h1>missing</h1> })
         data ? `export default { title: '${data.title}' }` : 'export default {}',
     })
     const root = createTempProject()
-    const plugins = fileRouter({ routeSource: source })
+    const plugins = fileRouter({ routeProviders: [provider] })
 
     const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
     const plugin = plugins.find(({ name }) => name.endsWith(':router'))!

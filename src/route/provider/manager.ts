@@ -1,46 +1,51 @@
 import { glob } from 'tinyglobby'
 import { createFilter, normalizePath } from 'vite'
 
-import { invalidateCache } from './extract'
-import {
-  createRouteSourceWatchConfig,
-  getRouteSourceFilterPath,
-  mergeRouteSourceEntries,
-  normalizeRouteSourceEntry,
-} from './registry-source'
-import type {
-  NormalizedRouteSourceEntry,
-  RouteSourceModule,
-  RouteSourceState,
-} from './registry-source'
-import { defineRouteSource } from './source'
-import type { RouteSourceProvider, RouteSourceLoadContext } from './source'
+import { invalidateCache } from '../extract'
 
-export interface CustomRouteChange {
+import { defineRouteProvider } from './contract'
+import type { RouteProvider, RouteProviderLoadContext } from './contract'
+import { mergeRouteProviderEntries, normalizeRouteProviderEntry } from './entry'
+import type { NormalizedRouteProviderEntry } from './entry'
+import { createRouteProviderWatchConfig, getRouteProviderFilterPath } from './watch'
+import type { RouteProviderWatchConfig } from './watch'
+
+export interface RouteProviderChange {
   matched: boolean
   structureChanged: boolean
   changedModuleIds: string[]
   changedFiles: string[]
 }
 
-const noChange = (): CustomRouteChange => ({
+const noChange = (): RouteProviderChange => ({
   matched: false,
   structureChanged: false,
   changedModuleIds: [],
   changedFiles: [],
 })
 
-export class CustomRouteRegistry<TData> {
+interface ProviderState<TData> {
+  provider: RouteProvider<TData>
+  watch: RouteProviderWatchConfig
+  entries: NormalizedRouteProviderEntry<TData>[]
+}
+
+interface ProviderModule<TData> {
+  provider: RouteProvider<TData>
+  context: RouteProviderLoadContext<TData>
+}
+
+export class RouteProviderManager<TData> {
   private root = ''
-  private states: RouteSourceState<TData>[] = []
-  private readonly entries = new Map<string, NormalizedRouteSourceEntry<TData>>()
-  private readonly modules = new Map<string, RouteSourceModule<TData>>()
+  private states: ProviderState<TData>[] = []
+  private readonly entries = new Map<string, NormalizedRouteProviderEntry<TData>>()
+  private readonly modules = new Map<string, ProviderModule<TData>>()
   private readonly sourcePaths = new Map<string, string>()
   private readonly fileFilter: ReturnType<typeof createFilter>
-  readonly providers: readonly RouteSourceProvider<TData>[]
+  readonly providers: readonly RouteProvider<TData>[]
 
-  constructor(routeSources: readonly RouteSourceProvider<TData>[], ignore: string[]) {
-    this.providers = routeSources.map((source) => defineRouteSource(source))
+  constructor(routeProviders: readonly RouteProvider<TData>[], ignore: string[]) {
+    this.providers = routeProviders.map((provider) => defineRouteProvider(provider))
     this.fileFilter = createFilter(['**/*'], ignore)
   }
 
@@ -52,13 +57,16 @@ export class CustomRouteRegistry<TData> {
     this.root = normalizePath(root)
     this.states = this.providers.map((provider) => ({
       provider,
-      watch: createRouteSourceWatchConfig(this.root, [provider.filter, ...(provider.watch ?? [])]),
+      watch: createRouteProviderWatchConfig(this.root, [
+        provider.filter,
+        ...(provider.watch ?? []),
+      ]),
       entries: [],
     }))
     await this.refresh()
   }
 
-  getEntries(): NormalizedRouteSourceEntry<TData>[] {
+  getEntries(): NormalizedRouteProviderEntry<TData>[] {
     return [...this.entries.values()].sort(
       (a, b) => a.routePath.localeCompare(b.routePath) || a.routeId.localeCompare(b.routeId),
     )
@@ -73,35 +81,35 @@ export class CustomRouteRegistry<TData> {
   }
 
   async loadModule(id: string): Promise<string | undefined> {
-    const source = this.modules.get(normalizePath(id).replace(/\?.*$/, ''))
-    if (!source) {
+    const module = this.modules.get(normalizePath(id).replace(/\?.*$/, ''))
+    if (!module) {
       return undefined
     }
-    const code = await source.provider.load(source.context)
+    const code = await module.provider.load(module.context)
     if (!code) {
       throw new Error(
-        `[solid-file-router] routeSource.load returned no code for routeId: ${source.context.routeId}`,
+        `[solid-file-router] routeProvider.load returned no code for routeId: ${module.context.routeId}`,
       )
     }
     return code
   }
 
-  async handleChange(file: string): Promise<CustomRouteChange> {
+  async handleChange(file: string): Promise<RouteProviderChange> {
     const normalized = normalizePath(file)
-    const sourceIndexes = this.getMatchingSourceIndexes(normalized)
-    if (sourceIndexes.length === 0) {
+    const providerIndexes = this.getMatchingProviderIndexes(normalized)
+    if (providerIndexes.length === 0) {
       return noChange()
     }
 
     const previousModuleIds = this.getModuleIds()
     const previousModuleId = this.sourcePaths.get(normalized)
-    const structureChanged = await this.refresh(this.getSnapshot(), sourceIndexes)
+    const structureChanged = await this.refresh(this.getSnapshot(), providerIndexes)
     const nextModuleId = this.sourcePaths.get(normalized)
     const changedModuleIds = structureChanged
       ? uniqueModuleIds(previousModuleIds, this.getModuleIds())
       : previousModuleId || nextModuleId
         ? uniqueModuleIds([previousModuleId, nextModuleId])
-        : this.getModuleIdsForSources(sourceIndexes)
+        : this.getModuleIdsForProviders(providerIndexes)
 
     changedModuleIds.forEach(invalidateCache)
     return {
@@ -112,8 +120,8 @@ export class CustomRouteRegistry<TData> {
     }
   }
 
-  private async refresh(previousSnapshot = '', sourceIndexes?: number[]): Promise<boolean> {
-    const selected = sourceIndexes ? new Set(sourceIndexes) : undefined
+  private async refresh(previousSnapshot = '', providerIndexes?: number[]): Promise<boolean> {
+    const selected = providerIndexes ? new Set(providerIndexes) : undefined
     const scanned = await Promise.all(
       this.states.map(async (state, index) => {
         if (selected && !selected.has(index)) {
@@ -126,7 +134,7 @@ export class CustomRouteRegistry<TData> {
       state.entries = scanned[index] ?? []
     })
 
-    const entries = mergeRouteSourceEntries(scanned)
+    const entries = mergeRouteProviderEntries(scanned)
     const structureChanged = previousSnapshot !== getSnapshot(entries)
     this.entries.clear()
     this.modules.clear()
@@ -146,7 +154,7 @@ export class CustomRouteRegistry<TData> {
           sourcePath: entry.sourcePath!,
           moduleId: entry.moduleId,
           data: entry.data,
-        } satisfies RouteSourceLoadContext<TData>,
+        } satisfies RouteProviderLoadContext<TData>,
       })
       this.sourcePaths.set(entry.sourcePath!, entry.moduleId)
     }
@@ -154,16 +162,16 @@ export class CustomRouteRegistry<TData> {
   }
 
   private async scanProvider(
-    source: RouteSourceProvider<TData>,
-  ): Promise<NormalizedRouteSourceEntry<TData>[]> {
-    const files = await source.glob!(glob, source.filter, this.root)
+    provider: RouteProvider<TData>,
+  ): Promise<NormalizedRouteProviderEntry<TData>[]> {
+    const files = await provider.glob!(glob, provider.filter, this.root)
     return files
       .map(normalizePath)
-      .filter((file) => this.fileFilter(getRouteSourceFilterPath(this.root, file)))
-      .map((file) => normalizeRouteSourceEntry(this.root, file, source.transformPath!(file)))
+      .filter((file) => this.fileFilter(getRouteProviderFilterPath(this.root, file)))
+      .map((file) => normalizeRouteProviderEntry(this.root, file, provider.transformPath!(file)))
   }
 
-  private getMatchingSourceIndexes(file: string): number[] {
+  private getMatchingProviderIndexes(file: string): number[] {
     return this.states
       .map((state, index) =>
         state.entries.some((entry) => entry.sourcePath === file) || state.watch.filter(file)
@@ -173,13 +181,13 @@ export class CustomRouteRegistry<TData> {
       .filter((index) => index >= 0)
   }
 
-  private getModuleIdsForSources(sourceIndexes: number[]): string[] {
-    const selected = new Set(sourceIndexes)
+  private getModuleIdsForProviders(providerIndexes: number[]): string[] {
+    const selected = new Set(providerIndexes)
     return [...this.modules.entries()]
       .filter(([moduleId]) => {
         const sourcePath = this.entries.get(moduleId)?.sourcePath
         return (
-          !!sourcePath && this.getMatchingSourceIndexes(sourcePath).some((i) => selected.has(i))
+          !!sourcePath && this.getMatchingProviderIndexes(sourcePath).some((i) => selected.has(i))
         )
       })
       .map(([moduleId]) => moduleId)
@@ -194,7 +202,7 @@ export class CustomRouteRegistry<TData> {
   }
 }
 
-function getSnapshot(entries: NormalizedRouteSourceEntry<unknown>[]): string {
+function getSnapshot(entries: NormalizedRouteProviderEntry<unknown>[]): string {
   return entries
     .map(
       (entry) => `${entry.moduleId}|${entry.routeId}|${entry.routePath}|${entry.sourcePath ?? ''}`,

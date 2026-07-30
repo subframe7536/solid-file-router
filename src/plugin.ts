@@ -1,20 +1,20 @@
 import type { Plugin } from 'vite'
 
 import { createMdxPlugin } from './mdx/plugin'
-import { mdxRouteSource } from './mdx/router'
+import { mdxRouteProvider } from './mdx/router'
 import type { MdxOptions } from './mdx/router'
 import type { InheritanceConfig } from './route/definition'
-import { fsRouteSource } from './route/fs-source'
+import { fsRouteProvider } from './route/fs-provider'
 import { createRouterPlugin } from './route/plugin'
 import type { RoutePluginContext } from './route/plugin'
-import { RouteRegistry } from './route/registry'
 import type {
   Promisable,
-  RouteSourceEntry,
-  RouteSourceLoadContext,
-  RouteSourceProvider,
-} from './route/source'
-import { defineRouteSource } from './route/source'
+  RouteProviderEntry,
+  RouteProviderLoadContext,
+  RouteProvider,
+} from './route/provider'
+import { defineRouteProvider } from './route/provider'
+import { RouteRegistry } from './route/registry'
 import type { InfoTypeDefinition } from './route/type-gen'
 import { createSsgPlugin } from './ssg'
 import type { SsgOptions } from './ssg'
@@ -22,11 +22,11 @@ import type { SsgOptions } from './ssg'
 export type { MdxOptions } from './mdx/router'
 export type { InfoTypeDefinition, InlineInfoTypeDefinition } from './route/type-gen'
 export {
-  defineRouteSource,
+  defineRouteProvider,
   type Promisable,
-  type RouteSourceEntry,
-  type RouteSourceLoadContext,
-  type RouteSourceProvider,
+  type RouteProviderEntry,
+  type RouteProviderLoadContext,
+  type RouteProvider,
 }
 export type { PrerenderRoutesSource } from './ssg'
 export { renderTemplate } from './ssg'
@@ -46,10 +46,10 @@ export interface FileRouterPluginOption<TData = unknown> {
    */
   pagesDir?: string
   /**
-   * Additional custom route sources appended after the built-in sources.
+   * Additional route providers appended after the built-in providers.
    * @default undefined
    */
-  routeSource?: RouteSourceProvider<TData> | readonly RouteSourceProvider<TData>[]
+  routeProviders?: readonly RouteProvider<TData>[]
   /**
    * Enable built-in Markdown/MDX route discovery and Satteri compilation.
    * @default false
@@ -137,12 +137,11 @@ export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TDat
     infoDts,
     verboseLog,
     inheritance = { enabled: true },
-    routeSource,
+    routeProviders = [],
     mdx = false,
     ssg,
   } = options
   const mdxOptions = mdx ? (mdx === true ? { pagesDir } : { pagesDir, ...mdx }) : false
-  const extraSources = routeSource ? (Array.isArray(routeSource) ? routeSource : [routeSource]) : []
   const registry = new RouteRegistry<TData>({
     pagesDir,
     ignore,
@@ -154,10 +153,10 @@ export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TDat
       inheritLoading: inheritance.inheritLoading ?? true,
       inheritError: inheritance.inheritError ?? true,
     },
-    routeSources: [
-      fsRouteSource<TData>({ pagesDir }),
-      ...(mdxOptions ? [mdxRouteSource<TData>(mdxOptions)] : []),
-      ...extraSources,
+    routeProviders: [
+      fsRouteProvider<TData>({ pagesDir }),
+      ...(mdxOptions ? [mdxRouteProvider<TData>(mdxOptions)] : []),
+      ...routeProviders,
     ],
   })
   const context: RoutePluginContext<TData> = {
