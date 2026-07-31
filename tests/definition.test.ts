@@ -17,7 +17,7 @@ async function buildDefinition(
   inheritanceConfig?: InheritanceConfig,
   lazy?: boolean,
   routeRoot = defaultRouteRoot,
-) {
+): Promise<string> {
   const cache = generateDefinition(files, new Map(), routeRoot)
   return assembleDefinition(files, cache, lazy, inheritanceConfig, verbose, routeRoot)
 }
@@ -53,24 +53,24 @@ const routeComponentExpression = (
   filePath: string,
   loadingExpression: string,
   errorExpression: string,
-) =>
+): string =>
   `__loader__(lazy(() => import('${filePath}?comp').then(mod => ({ default: mod.default.component }))), ${loadingExpression}, ${errorExpression})`
 
 const eagerRouteComponentExpression = (
   filePath: string,
   loadingExpression: string,
   errorExpression: string,
-) =>
+): string =>
   `__loader__(${getComponentImportName(filePath)}.component, ${loadingExpression}, ${errorExpression})`
 
 const inheritedExpression = (
   filePath: string,
   channel: 'loading' | 'error',
   fallbackExpression: string,
-) =>
+): string =>
   `${getRouteImportName(filePath)}.${channel}Component || ((${getRouteImportName(filePath)}.inherit === false || ${getRouteImportName(filePath)}.inherit?.${channel} === false) ? undefined : (${fallbackExpression}))`
 
-const routeOnlyExpression = (filePath: string, channel: 'loading' | 'error') =>
+const routeOnlyExpression = (filePath: string, channel: 'loading' | 'error'): string =>
   `${getRouteImportName(filePath)}.${channel}Component`
 
 function countOccurrences(value: string, needle: string): number {

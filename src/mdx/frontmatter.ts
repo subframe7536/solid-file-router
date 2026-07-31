@@ -22,7 +22,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-async function getYaml() {
+async function getYaml(): Promise<typeof import('yaml')> {
   try {
     return await (yamlPromise ??= import(YAML_PACKAGE))
   } catch (error) {

@@ -1,13 +1,13 @@
 import { readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 
-import type { MdxCompileOptions } from 'satteri'
+import type { MdxCompileOptions, MdxToJsResult } from 'satteri'
 
 import { defineRouteProvider } from '../route/provider'
 import type { RouteProvider } from '../route/provider'
 
 import { parseMdxFrontmatter, serializeJavaScriptValue } from './frontmatter'
-import type { MdxFrontmatterBlock } from './frontmatter'
+import type { MdxFrontmatterBlock, MdxRouteConfig } from './frontmatter'
 
 export interface MdxOptions extends MdxCompileOptions {
   /**
@@ -31,7 +31,12 @@ const REG_MDX_LAYOUT = /(?:^|\/)(?:_app|_layout)\.(?:md|mdx)$/i
 const SATTERI_PACKAGE = 'satteri'
 let satteriPromise: Promise<typeof import('satteri')> | undefined
 
-function getRouteConfigName(code: string) {
+type CompiledMdxDocument = Omit<MdxToJsResult, 'frontmatter'> & {
+  frontmatter: Record<string, unknown>
+  routeConfig: MdxRouteConfig
+}
+
+function getRouteConfigName(code: string): string {
   const baseName = '__sfr_mdx_route'
   let name = baseName
   let suffix = 0
@@ -43,18 +48,18 @@ function getRouteConfigName(code: string) {
   return name
 }
 
-function hasFrontmatterExport(code: string) {
+function hasFrontmatterExport(code: string): boolean {
   return /\bexport\s+(?:const|let|var|function|class)\s+frontmatter\b/.test(code)
 }
 
-function addFrontmatterExport(code: string, frontmatter: Record<string, unknown>) {
+function addFrontmatterExport(code: string, frontmatter: Record<string, unknown>): string {
   if (hasFrontmatterExport(code)) {
     return code
   }
   return `${code}\nexport const frontmatter = ${serializeJavaScriptValue(frontmatter)}\n`
 }
 
-async function getSatteri() {
+async function getSatteri(): Promise<typeof import('satteri')> {
   try {
     return await (satteriPromise ??= import(SATTERI_PACKAGE))
   } catch (error) {
@@ -65,7 +70,7 @@ async function getSatteri() {
   }
 }
 
-function getCompileOptions(options: MdxOptions, sourcePath: string) {
+function getCompileOptions(options: MdxOptions, sourcePath: string): MdxCompileOptions {
   const { filter: _filter, pagesDir: _pagesDir, ...compileOptions } = options
   if (compileOptions.outputFormat && compileOptions.outputFormat !== 'program') {
     throw new Error(
@@ -83,9 +88,13 @@ function getCompileOptions(options: MdxOptions, sourcePath: string) {
   } as const
 }
 
-async function compileMdxDocument(source: string, sourcePath: string, options: MdxOptions = {}) {
+async function compileMdxDocument(
+  source: string,
+  sourcePath: string,
+  options: MdxOptions = {},
+): Promise<CompiledMdxDocument> {
   const { mdxToJs } = await getSatteri()
-  const result = await mdxToJs(source, getCompileOptions(options, sourcePath))
+  const result = mdxToJs(source, getCompileOptions(options, sourcePath))
   const parsed = await parseMdxFrontmatter(
     (result.frontmatter as MdxFrontmatterBlock | null | undefined) ?? null,
   )
@@ -98,7 +107,11 @@ async function compileMdxDocument(source: string, sourcePath: string, options: M
 }
 
 /** Compiles an MDX document for direct consumption by Vite. */
-export async function compileMdx(source: string, sourcePath: string, options: MdxOptions = {}) {
+export async function compileMdx(
+  source: string,
+  sourcePath: string,
+  options: MdxOptions = {},
+): Promise<Omit<CompiledMdxDocument, 'routeConfig'>> {
   const result = await compileMdxDocument(source, sourcePath, options)
   const { routeConfig: _routeConfig, ...compiled } = result
   return compiled

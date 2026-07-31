@@ -26,7 +26,7 @@ afterEach(() => {
   }
 })
 
-function createTempProject(routeRoot = 'src/pages') {
+function createTempProject(routeRoot = 'src/pages'): string {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-plugin-')))
   const pagesDir = join(root, routeRoot)
 
@@ -61,7 +61,7 @@ async function buildTempSsgProject(
   routes: readonly string[] = ['/'],
   mdx = false,
   includeDraft = false,
-) {
+): Promise<any> {
   const root = createTempProject()
   if (mdx) {
     writeFileSync(
@@ -176,7 +176,10 @@ export default createServerEntry((props) => (
   }
 }
 
-function createTempProjectWithCustomRoot(customRoot: string, routeRoot = 'src/pages') {
+function createTempProjectWithCustomRoot(
+  customRoot: string,
+  routeRoot = 'src/pages',
+): { workspaceRoot: string; root: string } {
   const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-plugin-')))
   const root = join(workspaceRoot, customRoot)
   const pagesDir = join(root, routeRoot)
@@ -217,14 +220,14 @@ export default createRoute({
   return { workspaceRoot, root }
 }
 
-async function createPlugin(root: string, lazy?: boolean, pagesDir = 'src/pages') {
+async function createPlugin(root: string, lazy?: boolean, pagesDir = 'src/pages'): Promise<any> {
   const plugins = fileRouter({ pagesDir, ignore: [], lazy })
   const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
   await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
   return plugins.find(({ name }) => name.endsWith(':router')) as any
 }
 
-function getBuildConfig(plugin: Plugin, userConfig: UserConfig = {}) {
+function getBuildConfig(plugin: Plugin, userConfig: UserConfig = {}): any {
   const configHook = plugin.config
   if (!configHook || typeof configHook !== 'function') {
     return

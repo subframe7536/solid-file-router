@@ -1,11 +1,11 @@
 import { createRoute } from 'solid-file-router'
 import { onMount } from 'solid-js'
 
-function createInfo(name: string, usr: any) {
+function createInfo(name: string, usr: any): { name: string; role: any } {
   return { name, role: usr.role }
 }
 
-const preload = () => {
+const preload = (): void => {
   console.log('preload1')
 }
 const user = { role: 'admin' }

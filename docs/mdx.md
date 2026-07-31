@@ -6,10 +6,11 @@ JSX/TSX routes.
 
 ## Install and Enable
 
-Satteri is an optional peer dependency. Install it only when using MDX:
+Satteri and YAML frontmatter support are optional peer dependencies. Install
+them together when using MDX with frontmatter:
 
 ```bash
-bun add -d satteri
+bun add -d satteri yaml
 ```
 
 Then enable Markdown and MDX route discovery:
@@ -55,7 +56,7 @@ export function Counter() {
   return <button onClick={() => setCount(count() + 1)}>Count: {count()}</button>
 }
 
-# Getting started
+# Example
 
 <Counter />
 
@@ -63,6 +64,9 @@ export function Counter() {
 ```
 
 The router compiles the document to a Solid component and wraps it in a route.
+
+## Frontmatter
+
 Use YAML frontmatter to configure supported route behavior. For a dynamic page
 such as `src/pages/guide/[slug].mdx`, filters are keyed by the route parameter
 name:
@@ -74,10 +78,9 @@ info:
 matchFilters:
   slug: '/^[a-z0-9-]+$/'
 inherit: true
-draft: false
 ---
 
-# Getting started
+# Example
 ```
 
 The supported route fields are `info`, `matchFilters`, `inherit`, and `draft`.
@@ -94,14 +97,21 @@ import Article, { frontmatter } from './article.mdx'
 const title = frontmatter.title
 ```
 
-YAML frontmatter requires the optional `yaml` package:
+## Draft Routes
 
-```bash
-bun add -d yaml
+Set `draft: true` for a development-only route:
+
+```mdx
+---
+draft: true
+---
 ```
 
-Set `draft: true` for a development-only route. It is available during
-development, but excluded from production route matching and SSG output.
+It is available during development, but excluded from production route matching
+and SSG output. A draft `_app` or `_layout` also excludes its entire descendant
+subtree.
+
+## Route Constraints
 
 MDX files are leaf routes. `_app.md(x)` and `_layout.md(x)` are rejected during
 route discovery; use `_app.tsx` or `_layout.tsx` when descendant routes need a
@@ -141,9 +151,22 @@ exports the `MDXComponent` type for explicitly typed custom components.
 
 ## Configuration
 
-Pass Satteri compile options directly through `mdx`. `pagesDir` is inherited
-from the plugin unless explicitly overridden, and `filter` is relative to the
-Vite root:
+### Satteri options
+
+The `mdx` option accepts Satteri's `MdxCompileOptions`; all Satteri options are
+passed through to the compiler. `outputFormat` is controlled by the router and
+must remain `'program'`.
+
+### `solid-file-router` options
+
+The following properties are specific to `solid-file-router`:
+
+| Property   | Behavior |
+| ---------- | -------- |
+| `pagesDir` | Route directory used to derive the default MDX filter. It inherits the plugin-level `pagesDir` unless overridden. |
+| `filter`   | MDX discovery glob, relative to the Vite root. Defaults to `<pagesDir>/**/*.{md,mdx}`. |
+
+Configure these properties alongside Satteri options:
 
 ```ts
 fileRouter({
@@ -155,11 +178,9 @@ fileRouter({
 })
 ```
 
-The default filter is `<pagesDir>/**/*.{md,mdx}`. The router enforces Satteri's
-`outputFormat: 'program'` because each compiled document must be a route
-module. Router defaults set Solid-compatible JSX output, provider imports,
-attribute casing, style casing, and the source file URL; explicit supported
-Satteri options can override those defaults.
+The router supplies Solid-compatible defaults for JSX output, provider imports,
+attribute casing, style casing, and the source file URL. Explicit Satteri
+options can override those defaults, except for the required `outputFormat`.
 
 ## Combining Route Inputs
 

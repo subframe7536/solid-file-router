@@ -191,7 +191,7 @@ export function generatePath<T extends keyof FileRoutePath & string>(
 export function createClientEntry(
   component: Parameters<typeof render>[0],
   mount: Parameters<typeof render>[1],
-) {
+): void {
   if (import.meta.env.DEV) {
     render(component, mount)
   } else if ('_$HY' in window) {

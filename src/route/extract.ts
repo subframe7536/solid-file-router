@@ -33,7 +33,11 @@ function validateCallExpression(callExpr: any, ctx: TransformContext): void {
   }
 }
 
-function isRouteCall(callExpr: Babel.types.CallExpression, state: State, t: typeof Babel.types) {
+function isRouteCall(
+  callExpr: Babel.types.CallExpression,
+  state: State,
+  t: typeof Babel.types,
+): boolean {
   if (!t.isIdentifier(callExpr.callee)) {
     return false
   }
@@ -203,7 +207,7 @@ export function getAstCacheKey(id: string, code: string, ssr: boolean): string {
   return `${id}?ssr=${ssr}&hash=${hashString(code)}`
 }
 
-async function getBabel() {
+async function getBabel(): Promise<typeof Babel> {
   babelModulePromise ??= import('@babel/core')
   return await babelModulePromise
 }
@@ -226,7 +230,7 @@ export async function extract(
   config: ExtractConfig,
   verbose = false,
   cacheKey = getAstCacheKey(id, code, false),
-) {
+): Promise<{ code: string; map: Babel.BabelFileResult['map'] } | undefined> {
   const babel = await getBabel()
 
   // Get or create AST parsing promise

@@ -37,7 +37,7 @@ export const VID_PRERENDER = `\0${ID_PRERENDER}`
 const OUTLET_MARKER = '<!--solid-file-router-outlet-->'
 const HEAD_MARKER = '<!--solid-file-router-head-->'
 
-function trimTrailingSlashes(value: string) {
+function trimTrailingSlashes(value: string): string {
   let end = value.length
   while (end > 0 && value.codePointAt(end - 1) === SLASH_CODE_POINT) {
     end -= 1
@@ -45,7 +45,7 @@ function trimTrailingSlashes(value: string) {
   return value.slice(0, end)
 }
 
-export function normalizeRoutePath(route: string) {
+export function normalizeRoutePath(route: string): string {
   const trimmedRoute = route.trim()
   if (!trimmedRoute || trimmedRoute === '/') {
     return '/'
@@ -60,7 +60,7 @@ export function normalizeRoutePath(route: string) {
   return trimTrailingSlashes(withLeadingSlash) || '/'
 }
 
-export function getPrerenderAssetFileName(route: string) {
+export function getPrerenderAssetFileName(route: string): string {
   const normalizedRoute = normalizeRoutePath(route)
   if (normalizedRoute === '/') {
     return INDEX_HTML_FILE_NAME
@@ -71,7 +71,7 @@ export function getPrerenderAssetFileName(route: string) {
   return path.posix.join(...segments, `${lastSegment}.html`)
 }
 
-export function findIndexHtmlAsset(bundle: BundleOutput) {
+export function findIndexHtmlAsset(bundle: BundleOutput): BundleAsset {
   const htmlAsset = Object.values(bundle).find(
     (item): item is BundleAsset => item.type === 'asset' && item.fileName === INDEX_HTML_FILE_NAME,
   )
@@ -81,7 +81,10 @@ export function findIndexHtmlAsset(bundle: BundleOutput) {
   return htmlAsset
 }
 
-export function findSsrEntryChunk(bundle: BundleOutput, entryModuleId: string) {
+export function findSsrEntryChunk(
+  bundle: BundleOutput,
+  entryModuleId: string,
+): BundleChunk | undefined {
   return Object.values(bundle)
     .filter((item): item is BundleChunk => item.type === 'chunk' && !!item.isEntry)
     .find((item) => normalizePath(item.facadeModuleId ?? '') === normalizePath(entryModuleId))
@@ -91,11 +94,11 @@ export async function mapWithConcurrency<T, R>(
   items: readonly T[],
   concurrency: number,
   mapper: (item: T, index: number) => Promise<R>,
-) {
+): Promise<R[]> {
   const results = new Array<R>(items.length)
   let nextIndex = 0
 
-  async function worker() {
+  async function worker(): Promise<void> {
     while (nextIndex < items.length) {
       const currentIndex = nextIndex++
       const item = items[currentIndex]
@@ -109,7 +112,10 @@ export async function mapWithConcurrency<T, R>(
   return results
 }
 
-export async function loadServerRenderer(config: ResolvedConfig, entryFileName: string) {
+export async function loadServerRenderer(
+  config: ResolvedConfig,
+  entryFileName: string,
+): Promise<any> {
   const serverOutDir = config.environments?.[ENVIRONMENT.SERVER]?.build?.outDir
   if (!serverOutDir) {
     throw new Error('Missing SSG server environment output directory')
@@ -121,7 +127,7 @@ export async function loadServerRenderer(config: ResolvedConfig, entryFileName: 
   )
 }
 
-export function renderTemplate(template: string, id: string, app: string) {
+export function renderTemplate(template: string, id: string, app: string): string {
   const markerCount = template.split(OUTLET_MARKER).length - 1
   if (markerCount > 1) {
     throw new Error(`[solid-file-router] SSG found duplicate ${OUTLET_MARKER} markers`)

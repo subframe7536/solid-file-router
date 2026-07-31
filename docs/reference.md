@@ -9,7 +9,7 @@ The project is pre-1.0; minor releases may introduce breaking changes.
 | -------------------------- | ------------------------------------------------------ |
 | `solid-file-router`        | Runtime functions and route types                      |
 | `solid-file-router/plugin` | Vite plugin, route-provider helpers, and plugin types  |
-| `solid-file-router/mdx`    | MDX provider, component hook, and component types      |
+| `solid-file-router/mdx`    | MDX provider, frontmatter type, hooks, and component types |
 | `solid-file-router/client` | Declaration for `virtual:routes`                       |
 | `virtual:routes`           | Generated router components, definitions, and metadata |
 
@@ -102,7 +102,7 @@ import { fileRouter } from 'solid-file-router/plugin'
 | `infoDts`        | `InfoTypeDefinition`    | `undefined`                | Metadata declaration shape                                  |
 | `verboseLog`     | `boolean`               | `false`                    | Additional plugin logging                                   |
 | `inheritance`    | `InheritanceConfig`     | `{ enabled: true }`        | Global component inheritance                                |
-| `ssg`            | `SsgConfig`             | `undefined`                | Enables build-time prerendering                             |
+| `ssg`            | `SsgOptions`            | `undefined`                | Enables build-time prerendering                             |
 
 Default ignores:
 
@@ -166,7 +166,7 @@ relative to `output` when using a relative module path.
 ### SSG Config
 
 ```ts
-interface SsgConfig {
+interface SsgOptions {
   serverEntry?: string
   id?: string
   routes?: readonly string[] | (() => readonly string[] | Promise<readonly string[]>)
@@ -205,7 +205,8 @@ For setup, output examples, custom entries, and troubleshooting, see the
 JSX/TSX routes. An options object accepts Satteri's `MdxCompileOptions` plus
 `filter?: string` and `pagesDir?: string`. The plugin's `pagesDir` is inherited
 unless the MDX object supplies its own. Satteri is an optional peer dependency,
-and MDX requires program output.
+and MDX requires program output. YAML frontmatter additionally requires the
+optional `yaml` peer dependency.
 
 Native Markdown/MDX routes use YAML frontmatter. Supported route fields are
 `info`, `matchFilters`, `inherit`, and `draft`; other fields are exposed through
@@ -213,14 +214,16 @@ the generated `frontmatter` export. The legacy `export const route` configuratio
 is ignored. YAML frontmatter requires the optional `yaml` peer dependency.
 
 `draft: true` routes are available in development and excluded from production
-route matching and SSG output. Their generated path types remain available.
+route matching and SSG output. A draft `_app` or `_layout` also excludes its
+entire descendant subtree. Their generated path types remain available, while
+the production `fileRoutes` and `routeInfo` exports omit draft entries.
 
 MDX files are leaf routes. `_app.md(x)` and `_layout.md(x)` are rejected during
 route discovery and layouts must use JSX/TSX files. `404.md(x)` remains a leaf
 fallback. Duplicate normalized routes across JSX/TSX and MDX remain errors.
 
-`solid-file-router/mdx` exports `MDXProvider`, `useMDXComponents`,
-`MDXComponent`, and `MDXComponents`. `MDXComponents` preserves Solid intrinsic
+`solid-file-router/mdx` exports `MdxRouteConfig`, `MDXProvider`,
+`useMDXComponents`, `MDXComponent`, and `MDXComponents`. `MDXComponents` preserves Solid intrinsic
 HTML and SVG props while accepting arbitrary authored component names, including
 `wrapper`; this typing provides compile-time assistance and does not perform
 runtime prop validation. See the [MDX guide](mdx.md) for setup and component
@@ -275,7 +278,7 @@ automatically and are not exported from the plugin entry.
 | `transformPath` | Maps a discovered source path to its logical `path`, optional `routeId`, and `data` |
 | `path`          | Logical file path controlling route conventions and layout ancestry                 |
 | `routeId`       | Optional public ID; derived from the logical path when omitted                      |
-| `sourcePath`    | Original discovered path used for source identity and HMR                           |
+| `sourcePath`    | Normalized absolute source path used for source identity and HMR                    |
 | `moduleId`      | Generated facade module identity passed to `load`                                   |
 | `data`          | In-process value passed unchanged from `transformPath` to `load`                    |
 | `watch`         | Additional files/globs that cause the provider to rescan                            |

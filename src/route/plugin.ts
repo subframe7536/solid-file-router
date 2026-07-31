@@ -28,7 +28,11 @@ export interface RoutePluginContext<TData> {
 export function createRouterPlugin<TData>(context: RoutePluginContext<TData>): Plugin {
   let lastChange: { key: string; promise: Promise<RouteRegistryChange> } | undefined
 
-  function getChange(type: 'create' | 'update' | 'delete', file: string, timestamp: number) {
+  function getChange(
+    type: 'create' | 'update' | 'delete',
+    file: string,
+    timestamp: number,
+  ): Promise<RouteRegistryChange> {
     const key = `${type}:${file}:${timestamp}`
     if (lastChange?.key === key) {
       return lastChange.promise

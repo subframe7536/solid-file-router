@@ -30,7 +30,7 @@ function isPrivateRouteInput(file: RouteInput): boolean {
   return file.routePath.split('/').some((segment) => segment.startsWith('_'))
 }
 
-export function parseParams(files: RouteInput[], routeRoot = 'src/pages') {
+export function parseParams(files: RouteInput[], routeRoot = 'src/pages'): string[] {
   const params: string[] = []
 
   for (const key of files) {

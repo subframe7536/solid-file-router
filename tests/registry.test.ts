@@ -63,7 +63,7 @@ vi.mock('../src/route/extract', async () => {
 
 const tempDirs: string[] = []
 
-function collisionPattern(message: string, ...paths: string[]) {
+function collisionPattern(message: string, ...paths: string[]): RegExp {
   const escapedPaths = paths.map((path) =>
     normalizePath(path).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
   )
@@ -82,7 +82,7 @@ async function createTempRegistry(
   customRoot = '',
   includeIndexRoute = false,
   routeRoot = 'src/pages',
-) {
+): Promise<{ registry: RouteRegistry; pagesDir: string }> {
   const workspaceRoot = realpathSync(mkdtempSync(join(tmpdir(), 'solid-file-router-registry-')))
   const root = customRoot ? join(workspaceRoot, customRoot) : workspaceRoot
   const pagesDir = join(root, routeRoot)

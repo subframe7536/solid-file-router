@@ -13,23 +13,23 @@ const REG_NOT_FOUND = /^404\.(jsx|tsx)$/
 const REG_ROUTE_EXT = /\.(jsx|tsx)$/
 const REG_UNSUPPORTED_ROUTE_EXT = /\.mdx$/
 
-function getRouteBasename(file: string) {
+function getRouteBasename(file: string): string {
   return file.slice(file.lastIndexOf('/') + 1)
 }
 
-export function isAppRoute(file: string) {
+export function isAppRoute(file: string): boolean {
   return REG_APP.test(getRouteBasename(file))
 }
 
-export function isLayoutRoute(file: string) {
+export function isLayoutRoute(file: string): boolean {
   return REG_LAYOUT.test(getRouteBasename(file))
 }
 
-export function isNotFoundRoute(file: string) {
+export function isNotFoundRoute(file: string): boolean {
   return file === '404' || file.endsWith('/404') || REG_NOT_FOUND.test(getRouteBasename(file))
 }
 
-export function hasPrivateSegment(file: string) {
+export function hasPrivateSegment(file: string): boolean {
   return file.split('/').some((segment) => segment.startsWith('_'))
 }
 

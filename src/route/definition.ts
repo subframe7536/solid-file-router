@@ -15,11 +15,11 @@ export { getRoutePath } from './path'
 const REG_GROUP = /\([\w-]+\)/
 const REG_INSERT = /^\w|\//
 
-function wrapInline(code: string) {
+function wrapInline(code: string): string {
   return `$###${code}###$`
 }
 
-function unwrapInline(str: object) {
+function unwrapInline(str: object): string {
   return JSON.stringify(str, null, 2)
     .replaceAll('"$###', '')
     .replaceAll('###$"', '')
@@ -272,7 +272,14 @@ function resolveInheritedComponents(
   return { loadExpr, errorExpr }
 }
 
-function computeGlobalContext(entries: RouteEntry[], lazy: boolean) {
+function computeGlobalContext(
+  entries: RouteEntry[],
+  lazy: boolean,
+): {
+  globalImports: string[]
+  filteredEntries: RouteEntry[]
+  routeLayoutMap: RouteLayoutMap
+} {
   const globalImports: string[] = [`import { __loader__ } from '${PACKAGE_NAME}'`]
   const layouts: LayoutInfo[] = []
 

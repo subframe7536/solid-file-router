@@ -179,6 +179,22 @@ export default createRoute({
 Use `matchFilters` for the parameter filtering behavior provided by
 `@solidjs/router`.
 
+Set `draft: true` for a route that should be visible during development only:
+
+```tsx
+// src/pages/preview.tsx
+import { createRoute } from 'solid-file-router'
+
+export default createRoute({
+  draft: true,
+  component: () => <h1>Preview</h1>,
+})
+```
+
+Draft routes are removed from production route matching and SSG output, while
+their generated path types remain available. Marking `_app.tsx` or a
+`_layout.tsx` as draft also removes that route subtree in production.
+
 ## Navigation
 
 The generated declaration narrows paths accepted by `A`, `Navigator`, and
@@ -378,8 +394,9 @@ fileRouter({ routeProviders: [provider] })
 ```
 
 `routeId` is optional and is derived from `path` when omitted. `path` controls
-file-router semantics and inheritance; the original glob path identifies the
-source for HMR; `data` is passed unchanged from `transformPath` to `load`.
+file-router semantics and inheritance; `sourcePath` is the normalized absolute
+path used for source identity and HMR; `data` is passed unchanged from
+`transformPath` to `load`.
 
 `load` must return non-empty module source for every entry. A missing value
 throws an error. For complete provider types and watcher matching rules, see

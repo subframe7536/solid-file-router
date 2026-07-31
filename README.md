@@ -31,8 +31,8 @@ Install the router and the Solid/Vite dependencies:
 ```bash
 bun add solid-file-router @solidjs/router solid-js
 bun add -d vite vite-plugin-solid
-# Optional: required only for Markdown/MDX routes
-bun add -d satteri
+# Optional: required for Markdown/MDX routes and YAML frontmatter
+bun add -d satteri yaml
 ```
 
 `@babel/core` and `tinyglobby` are already provided through
@@ -108,8 +108,10 @@ requires the optional `satteri` peer dependency. Follow the dedicated guides
 for complete, copyable setup.
 
 `routeProviders` are additive: the built-in filesystem provider runs first,
-optional MDX runs next, and the configured providers follow. See the
-[route provider guide](docs/guide.md#route-providers).
+optional MDX runs next, and the configured providers follow. Markdown/MDX
+frontmatter is optional, but using it requires the optional `yaml` peer
+dependency. See the [route provider guide](docs/guide.md#route-providers) and
+[MDX guide](docs/mdx.md) for details.
 
 ## Development
 

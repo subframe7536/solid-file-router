@@ -60,7 +60,7 @@ export function createSsgPlugin<TData>(
       if (!options || env.command !== 'build') {
         return
       }
-      function getOutDir(envName: EnvironmentName, subDir: string) {
+      function getOutDir(envName: EnvironmentName, subDir: string): string {
         return normalizePath(
           path.join(userConfig.environments?.[envName]?.build?.outDir ?? 'dist', subDir),
         )

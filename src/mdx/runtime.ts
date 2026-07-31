@@ -68,7 +68,7 @@ const intrinsicComponents = Object.fromEntries(
 const MDXContext = createContext<MDXComponents>(intrinsicComponents)
 
 /** Provides runtime component overrides to descendants rendered from MDX. */
-export function MDXProvider(props: ParentProps<{ components?: MDXComponents }>) {
+export function MDXProvider(props: ParentProps<{ components?: MDXComponents }>): JSX.Element {
   const parentComponents = useContext(MDXContext)
 
   return createComponent(MDXContext.Provider, {
