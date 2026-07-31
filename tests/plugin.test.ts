@@ -60,18 +60,30 @@ async function buildTempSsgProject(
   serverEntry?: string,
   routes: readonly string[] = ['/'],
   mdx = false,
+  includeDraft = false,
 ) {
   const root = createTempProject()
   if (mdx) {
     writeFileSync(
       join(root, 'src/pages/docs.mdx'),
-      `export const route = {
-  info: { title: 'MDX docs' },
-  preload: () => Promise.resolve(),
-  loadingComponent: () => <span>mdx-loading</span>,
-}
+      `---
+info:
+  title: MDX docs
+---
 
 # MDX descendant`,
+    )
+  }
+  if (includeDraft) {
+    writeFileSync(
+      join(root, 'src/pages/draft.tsx'),
+      `import { createRoute } from 'solid-file-router'
+
+export default createRoute({
+  draft: true,
+  component: () => <h1>draft</h1>,
+})
+`,
     )
   }
   writeFileSync(
@@ -159,6 +171,7 @@ export default createServerEntry((props) => (
     indexHtml: readFileSync(join(root, 'dist/client/index.html'), 'utf8'),
     fallbackHtml: readFileSync(join(root, 'dist/client/404.html'), 'utf8'),
     docsHtml: mdx ? readFileSync(join(root, 'dist/client/docs.html'), 'utf8') : undefined,
+    draftHtmlExists: existsSync(join(root, 'dist/client/draft.html')),
     mdxRouteQuery,
   }
 }
@@ -347,14 +360,14 @@ describe('fileRouter', () => {
     const markdownPath = join(root, 'src/pages/markdown.md')
     writeFileSync(
       mdxPath,
-      `export const route = {
-  info: { title: 'Content' },
-  preload: () => Promise.resolve(),
-  matchFilters: () => true,
-  inherit: false,
-  loadingComponent: () => null,
-  errorComponent: () => null,
-}
+      `---
+info:
+  title: Content
+matchFilters:
+  slug: '/^[a-z-]+$/'
+inherit: false
+draft: true
+---
 
 # Content`,
     )
@@ -373,11 +386,9 @@ describe('fileRouter', () => {
     expect(routeModule).toContain('export default createRoute')
     expect(routeModule).toContain('MDXContent')
     expect(routeModule).toContain('info: __sfr_mdx_route.info')
-    expect(routeModule).toContain('preload: __sfr_mdx_route.preload')
     expect(routeModule).toContain('matchFilters: __sfr_mdx_route.matchFilters')
     expect(routeModule).toContain('inherit: __sfr_mdx_route.inherit')
-    expect(routeModule).toContain('loadingComponent: __sfr_mdx_route.loadingComponent')
-    expect(routeModule).toContain('errorComponent: __sfr_mdx_route.errorComponent')
+    expect(routeModule).toContain('draft: __sfr_mdx_route.draft')
     expect(routeModule).not.toContain('...__sfr_mdx_route')
     await expect(
       (plugin as any).load.handler(normalizePath(`${markdownPath}-sfr.tsx`)),
@@ -389,7 +400,7 @@ describe('fileRouter', () => {
     async (ext) => {
       const root = createTempProject()
       const markdownPath = join(root, `src/content.${ext}`)
-      writeFileSync(markdownPath, "export const frontmatter = { title: 'Content' }\n\n# Content")
+      writeFileSync(markdownPath, '---\ntitle: Content\ntags:\n  - docs\n---\n\n# Content')
       const mdxPlugin = fileRouter({ mdx: true }).find(({ name }) => name.endsWith(':mdx'))!
 
       const result = await (mdxPlugin as any).transform.handler(
@@ -399,6 +410,9 @@ describe('fileRouter', () => {
 
       expect(result.code).toContain('function MDXContent')
       expect(result.code).toContain('export const frontmatter')
+      expect(result.frontmatter).toStrictEqual({ title: 'Content', tags: ['docs'] })
+      expect(result.code).toContain('Content')
+      expect(result.code).toContain('docs')
       expect(result.code).toContain('export default MDXContent')
     },
   )
@@ -414,15 +428,14 @@ describe('fileRouter', () => {
     const mdxPath = join(root, 'src/pages/content.mdx')
     writeFileSync(
       mdxPath,
-      `export const route = {
-  info: { title: 'Content' },
-  preload: () => Promise.resolve(),
-  matchFilters: () => true,
-  inherit: false,
-  loadingComponent: () => <span>loading</span>,
-  errorComponent: (props) => <span>{props.error.message}</span>,
-  component: () => <h1>this component must be ignored</h1>,
-}
+      `---
+info:
+  title: Content
+matchFilters:
+  slug: '/^[a-z-]+$/'
+inherit: false
+draft: true
+---
 
 # Content`,
     )
@@ -442,20 +455,20 @@ describe('fileRouter', () => {
     ).code
 
     expect(route).toContain('info: __sfr_mdx_route.info')
-    expect(route).toContain('preload: __sfr_mdx_route.preload')
     expect(route).toContain('matchFilters: __sfr_mdx_route.matchFilters')
     expect(route).toContain('inherit: __sfr_mdx_route.inherit')
-    expect(route).toContain('loadingComponent: __sfr_mdx_route.loadingComponent')
-    expect(route).toContain('errorComponent: __sfr_mdx_route.errorComponent')
+    expect(route).toContain('draft: __sfr_mdx_route.draft')
     expect(component).toContain('component: MDXContent')
-    expect(component).not.toContain('component: __sfr_mdx_route.component')
     expect(component).not.toContain('info: __sfr_mdx_route.info')
   })
 
-  it('uses a collision-safe fallback when an MDX module uses the reserved name', async () => {
+  it('ignores the legacy route export in an MDX module', async () => {
     const root = createTempProject()
     const mdxPath = join(root, 'src/pages/content.mdx')
-    writeFileSync(mdxPath, 'export const __sfr_mdx_route = {}\n\n# Content')
+    writeFileSync(
+      mdxPath,
+      '---\ninfo:\n  title: Frontmatter\n---\n\nexport const route = { info: { title: "Ignored" } }\n\n# Content',
+    )
     const plugins = fileRouter({ mdx: true, lazy: false })
     const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
     const plugin = plugins.find(({ name }) => name.endsWith(':router'))!
@@ -463,9 +476,15 @@ describe('fileRouter', () => {
     await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
 
     const routeModule = await (plugin as any).load.handler(normalizePath(`${mdxPath}-sfr.tsx`))
+    const route = (
+      await (plugin as any).transform.handler(
+        routeModule,
+        `${normalizePath(`${mdxPath}-sfr.tsx`)}?route`,
+      )
+    ).code
 
-    expect(routeModule).toContain("const __sfr_mdx_route_1 = typeof route === 'undefined'")
-    expect(routeModule).not.toContain("const __sfr_mdx_route = typeof route === 'undefined'")
+    expect(routeModule).toContain('"title": "Frontmatter"')
+    expect(route).toContain('info: __sfr_mdx_route.info')
   })
 
   it.each(['_app.md', '_app.mdx', 'nested/_layout.md', 'nested/_layout.mdx'])(
@@ -575,7 +594,7 @@ export default createRoute({ component: () => <h1>missing</h1> })
     expect(module).toContain(`${buttonModuleId}?comp`)
     expect(module).toContain('"id": "/button"')
     expect(module).toContain('"/button":')
-    expect(module).toContain('"/404": __404_route.info')
+    expect(module).toContain('"/404": { info: __404_route.info, draft: __404_route.draft }')
 
     const routeModule = await (plugin as any).load.handler(buttonModuleId)
     expect(routeModule).toContain('title')
@@ -744,8 +763,14 @@ export default createRoute({ component: () => <h1>missing</h1> })
     expect(output.docsHtml).toContain('MDX descendant')
     expect(output.mdxRouteQuery).toContain('MDX docs')
     expect(output.mdxRouteQuery).toContain('info: __sfr_mdx_route.info')
-    expect(output.mdxRouteQuery).toContain('preload: __sfr_mdx_route.preload')
-    expect(output.mdxRouteQuery).toContain('loadingComponent: __sfr_mdx_route.loadingComponent')
+    expect(output.mdxRouteQuery).toContain('draft: __sfr_mdx_route.draft')
+  })
+
+  it('skips draft routes from SSG output', async () => {
+    const output = await buildTempSsgProject(undefined, ['/', '/draft'], false, true)
+
+    expect(output.indexHtml).toContain('>home</h1>')
+    expect(output.draftHtmlExists).toBe(false)
   })
 
   it('uses a custom SSG server entry when configured', async () => {

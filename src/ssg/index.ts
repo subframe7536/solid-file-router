@@ -154,8 +154,14 @@ export default ({ url }) => renderToStringAsync(() => createComponent(StaticRout
             : Buffer.from(indexHtmlAsset.source).toString('utf-8')
         const configuredRoutes =
           typeof config.routes === 'function' ? await config.routes() : config.routes
+        const requestedRoutes = configuredRoutes ?? (await registry.getStaticRoutes())
         const routes = Array.from(
-          new Set((configuredRoutes ?? registry.getStaticRoutes()).map(normalizeRoutePath)),
+          new Set(
+            (configuredRoutes
+              ? await registry.filterDraftRoutes(requestedRoutes)
+              : requestedRoutes
+            ).map(normalizeRoutePath),
+          ),
         ).filter((route) => route !== '/404')
         const renderer = await loadServerRenderer(this.environment.config, serverEntryFileName)
 

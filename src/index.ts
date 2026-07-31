@@ -114,6 +114,8 @@ export type RouteConfig<T = unknown> = Pick<
   'matchFilters' | 'preload'
 > & {
   info?: FileRouteInfo
+  /** Whether this route is only available during development. */
+  draft?: boolean
   component: Component<RouteSectionProps<T>>
   errorComponent?: Component<ErrorComponentProps>
   loadingComponent?: Component<RouteSectionProps<T>>

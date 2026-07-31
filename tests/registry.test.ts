@@ -194,6 +194,36 @@ export default createRoute({
     expect(generateRouteTypesMock).toHaveBeenCalledTimes(1)
   })
 
+  it('filters draft route subtrees from static route manifests', async () => {
+    const { registry, pagesDir } = await createTempRegistry(undefined, true)
+    const docsDir = join(pagesDir, 'docs')
+    mkdirSync(docsDir, { recursive: true })
+    writeFileSync(
+      join(docsDir, '_layout.tsx'),
+      `import { createRoute } from 'solid-file-router'
+
+export default createRoute({
+  draft: true,
+  component: (props) => props.children,
+})
+`,
+    )
+    writeFileSync(
+      join(docsDir, 'child.tsx'),
+      `import { createRoute } from 'solid-file-router'
+
+export default createRoute({
+  component: () => null,
+})
+`,
+    )
+    await registry.initialize(join(pagesDir, '../..'))
+
+    await expect(
+      registry.filterDraftRoutes(['/', '/docs', '/docs/child', '/public']),
+    ).resolves.toEqual(['/', '/public'])
+  })
+
   it('keeps topology cache intact on route edits', async () => {
     const generateDefinitionMock = vi.mocked(generateDefinition)
     const generateRouteTypesMock = vi.mocked(generateRouteTypes)

@@ -67,7 +67,8 @@
     "typescript": "^7.0.2",
     "vite": "^8.1.5",
     "vite-plugin-solid": "^2.11.13",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "yaml": "^2.9.0"
   },
   "peerDependencies": {
     "@babel/core": "^7.29.7",
@@ -75,10 +76,14 @@
     "satteri": "^0.9.5",
     "solid-js": "^1.9.14",
     "tinyglobby": "0.2.17",
-    "vite": "^8.1.5"
+    "vite": "^8.1.5",
+    "yaml": "^2.9.0"
   },
   "peerDependenciesMeta": {
     "satteri": {
+      "optional": true
+    },
+    "yaml": {
       "optional": true
     }
   }

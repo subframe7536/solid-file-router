@@ -63,27 +63,45 @@ export function Counter() {
 ```
 
 The router compiles the document to a Solid component and wraps it in a route.
-Export the reserved `route` object to configure supported route behavior:
-For a dynamic page such as `src/pages/guide/[slug].mdx`, filters are keyed by
-the route parameter name:
+Use YAML frontmatter to configure supported route behavior. For a dynamic page
+such as `src/pages/guide/[slug].mdx`, filters are keyed by the route parameter
+name:
 
 ```mdx
-export const route = {
-  info: { title: 'Getting started' },
-  preload: () => loadGuide(),
-  matchFilters: { slug: /^[a-z0-9-]+$/ },
-  inherit: true,
-  loadingComponent: () => <p>Loading guide...</p>,
-  errorComponent: (props) => <p>{props.error.message}</p>,
-}
+---
+info:
+  title: Getting started
+matchFilters:
+  slug: '/^[a-z0-9-]+$/'
+inherit: true
+draft: false
+---
 
 # Getting started
 ```
 
-The supported fields are `info`, `preload`, `matchFilters`, `inherit`,
-`loadingComponent`, and `errorComponent`. The `component` field is ignored so
-the compiled MDX document remains the route component. Route configuration is
-executable MDX ESM; it is not read from YAML or TOML frontmatter.
+The supported route fields are `info`, `matchFilters`, `inherit`, and `draft`.
+Other YAML fields remain available through the generated `frontmatter` export
+but are not passed to the router. `matchFilters` strings are compiled as regular
+expressions; `/pattern/flags` also supports flags. The legacy `export const route`
+configuration is ignored.
+
+`frontmatter` is also available when importing a Markdown or MDX document:
+
+```tsx
+import Article, { frontmatter } from './article.mdx'
+
+const title = frontmatter.title
+```
+
+YAML frontmatter requires the optional `yaml` package:
+
+```bash
+bun add -d yaml
+```
+
+Set `draft: true` for a development-only route. It is available during
+development, but excluded from production route matching and SSG output.
 
 MDX files are leaf routes. `_app.md(x)` and `_layout.md(x)` are rejected during
 route discovery; use `_app.tsx` or `_layout.tsx` when descendant routes need a

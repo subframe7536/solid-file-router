@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 
 import { glob } from 'tinyglobby'
 import { createFilter, normalizePath } from 'vite'
@@ -7,7 +8,8 @@ import { logger } from '../const'
 
 import { assembleDefinition, generateDefinition } from './definition'
 import type { InheritanceConfig, NormalizedRouteEntry, RouteEntry, RouteInput } from './definition'
-import { invalidateCache } from './extract'
+import { extract, invalidateCache } from './extract'
+import type { ExtractConfig } from './extract'
 import { getRoutePath } from './path'
 import { resolveFromRoot, RouteProviderManager } from './provider'
 import type { RouteProvider } from './provider'
@@ -37,6 +39,11 @@ const noChange = (): RouteRegistryChange => ({
   changedModuleIds: [],
   changedFiles: [],
 })
+
+const DRAFT_EXTRACT_CONFIG: ExtractConfig = {
+  entryFn: 'createRoute',
+  pick: ['draft'],
+}
 
 export class RouteRegistry<TData = unknown> {
   private root = ''
@@ -147,14 +154,22 @@ export class RouteRegistry<TData = unknown> {
     return this.providerManager.enabled ? this.providerManager.getWatchFiles() : []
   }
 
-  getStaticRoutes(): string[] {
-    return this.getEntries()
+  async getStaticRoutes(): Promise<string[]> {
+    const routes = this.getEntries()
       .map((entry) => getRoutePath(entry.routeId, this.pagesDir))
       .filter(
         (route): route is string =>
           !!route && route !== '/404' && !route.includes(':') && !route.includes('*'),
       )
-      .sort()
+    return await this.filterDraftRoutes(routes)
+  }
+
+  async filterDraftRoutes(routes: readonly string[]): Promise<string[]> {
+    const draftPaths = await this.getDraftRoutePaths()
+    return routes.filter((route) => {
+      const normalized = normalizeStaticRoute(route)
+      return ![...draftPaths].some((draftPath) => isWithinDraftScope(normalized, draftPath))
+    })
   }
 
   async loadRouteProviderModule(id: string): Promise<string | undefined> {
@@ -211,6 +226,76 @@ export class RouteRegistry<TData = unknown> {
       this.routeFileFilter(file.slice(this.pagesDir.length + 1))
     )
   }
+
+  private async getDraftRoutePaths(): Promise<Set<string>> {
+    const entries = this.getEntries().filter((entry) => {
+      const route = getRouteScopePath(entry.routeId, this.pagesDir)
+      return !!route && route !== '/404'
+    })
+    const draftPaths = await Promise.all(
+      entries.map(async (entry) => {
+        const code = this.providerManager.enabled
+          ? await this.loadRouteProviderModule(entry.moduleId)
+          : await readFile(entry.moduleId, 'utf8')
+        const extracted = code
+          ? await extract(code, entry.moduleId, DRAFT_EXTRACT_CONFIG)
+          : undefined
+        const isDraft = !!extracted?.code && /\bdraft\s*:\s*true\b/.test(extracted.code)
+        return isDraft ? getRouteScopePath(entry.routeId, this.pagesDir) : undefined
+      }),
+    )
+    return new Set(draftPaths.filter((path): path is string => !!path).map(normalizeStaticRoute))
+  }
+}
+
+function getRouteScopePath(routeId: string, routeRoot: string): string | undefined {
+  const route = getRoutePath(routeId, routeRoot)
+  if (route) {
+    return route
+  }
+
+  const layoutRouteId = routeId.replace(/(^|\/)(?:_app|_layout)\.(?:jsx|tsx)$/i, '$1index.tsx')
+  return getRoutePath(layoutRouteId, routeRoot)
+}
+
+function normalizeStaticRoute(route: string): string {
+  const normalized = route.replace(/^\/+|\/+$/g, '')
+  return normalized ? `/${normalized}` : '/'
+}
+
+function isWithinDraftScope(route: string, draftPath: string): boolean {
+  if (draftPath === '/') {
+    return true
+  }
+
+  const routeSegments = route.split('/').filter(Boolean)
+  const draftSegments = draftPath.split('/').filter(Boolean)
+  let routeIndex = 0
+
+  for (const draftSegment of draftSegments) {
+    if (draftSegment === '*') {
+      return true
+    }
+    if (draftSegment.startsWith(':') && draftSegment.endsWith('?')) {
+      if (routeIndex < routeSegments.length) {
+        routeIndex++
+      }
+      continue
+    }
+    if (routeIndex >= routeSegments.length) {
+      return false
+    }
+    if (draftSegment.startsWith(':')) {
+      routeIndex++
+      continue
+    }
+    if (draftSegment !== routeSegments[routeIndex]) {
+      return false
+    }
+    routeIndex++
+  }
+
+  return true
 }
 
 function change(

@@ -94,9 +94,25 @@ describe('generateDefinition', () => {
     )
     expect(module).toContain(`...${getRouteImportName(`${root}/src/pages/(group)/data.tsx`)}`)
     expect(module).toContain("import __404_route from '/root/project/src/pages/404.tsx?route'")
-    expect(module).toContain('export const routeInfo = {')
-    expect(module).toContain(`"/": ${getRouteImportName(`${root}/src/pages/index.tsx`)}.info`)
-    expect(module).toContain('"/404": __404_route.info')
+    expect(module).toContain('export const routeInfo = __filterDraftInfo({')
+    expect(module).toContain(
+      `"/": { info: ${getRouteImportName(`${root}/src/pages/index.tsx`)}.info, draft: ${getRouteImportName(`${root}/src/pages/index.tsx`)}.draft }`,
+    )
+    expect(module).toContain('"/404": { info: __404_route.info, draft: __404_route.draft }')
+    expect(module).toContain('"/": [__app_route.draft]')
+  })
+
+  it('adds production filters for draft routes and route metadata', async () => {
+    const module = await buildDefinition([
+      `${root}/src/pages/_app.tsx`,
+      `${root}/src/pages/index.tsx`,
+      `${root}/src/pages/draft.tsx`,
+      `${root}/src/pages/404.tsx`,
+    ])
+
+    expect(module).toContain('if (route.draft === true)')
+    expect(module).toContain('export const fileRoutes = __filterDraftRoutes(')
+    expect(module).toContain('export const routeInfo = __filterDraftInfo(')
   })
 
   it('only treats exact special basenames as conventions', async () => {
@@ -135,9 +151,15 @@ describe('generateDefinition', () => {
     )
     expect(module).toContain(`import __404_route from '${root}/src/pages/404.tsx?route'`)
     expect(module).not.toContain(`import __404_route from '${about404File}?route'`)
-    expect(module).toContain(`"/my_app": ${getRouteImportName(myAppFile)}.info`)
-    expect(module).toContain(`"/foo_layout": ${getRouteImportName(fooLayoutFile)}.info`)
-    expect(module).toContain(`"/about404": ${getRouteImportName(about404File)}.info`)
+    expect(module).toContain(
+      `"/my_app": { info: ${getRouteImportName(myAppFile)}.info, draft: ${getRouteImportName(myAppFile)}.draft }`,
+    )
+    expect(module).toContain(
+      `"/foo_layout": { info: ${getRouteImportName(fooLayoutFile)}.info, draft: ${getRouteImportName(fooLayoutFile)}.draft }`,
+    )
+    expect(module).toContain(
+      `"/about404": { info: ${getRouteImportName(about404File)}.info, draft: ${getRouteImportName(about404File)}.draft }`,
+    )
   })
 
   it('recognizes JSX special basenames', async () => {
@@ -158,9 +180,15 @@ describe('generateDefinition', () => {
     expect(module).not.toContain(`import __app_route from '${myAppFile}?route'`)
     expect(module).toContain(`import __404_route from '${root}/src/pages/404.jsx?route'`)
     expect(module).not.toContain(`import __404_route from '${about404File}?route'`)
-    expect(module).toContain(`"/my_app": ${getRouteImportName(myAppFile)}.info`)
-    expect(module).toContain(`"/foo_layout": ${getRouteImportName(fooLayoutFile)}.info`)
-    expect(module).toContain(`"/about404": ${getRouteImportName(about404File)}.info`)
+    expect(module).toContain(
+      `"/my_app": { info: ${getRouteImportName(myAppFile)}.info, draft: ${getRouteImportName(myAppFile)}.draft }`,
+    )
+    expect(module).toContain(
+      `"/foo_layout": { info: ${getRouteImportName(fooLayoutFile)}.info, draft: ${getRouteImportName(fooLayoutFile)}.draft }`,
+    )
+    expect(module).toContain(
+      `"/about404": { info: ${getRouteImportName(about404File)}.info, draft: ${getRouteImportName(about404File)}.draft }`,
+    )
   })
 
   it('generates client routes with lazy route components', async () => {
@@ -191,18 +219,20 @@ describe('generateDefinition', () => {
 
   it('includes routeInfo in generated module', async () => {
     const module = await buildDefinition(files)
-    expect(module).toContain(`"/next": ${getRouteImportName(`${root}/src/pages/next.tsx`)}.info`)
     expect(module).toContain(
-      `"/t/e/s/t": ${getRouteImportName(`${root}/src/pages/t.e.s.t.tsx`)}.info`,
+      `"/next": { info: ${getRouteImportName(`${root}/src/pages/next.tsx`)}.info, draft: ${getRouteImportName(`${root}/src/pages/next.tsx`)}.draft }`,
     )
     expect(module).toContain(
-      `"/data": ${getRouteImportName(`${root}/src/pages/(group)/data.tsx`)}.info`,
+      `"/t/e/s/t": { info: ${getRouteImportName(`${root}/src/pages/t.e.s.t.tsx`)}.info, draft: ${getRouteImportName(`${root}/src/pages/t.e.s.t.tsx`)}.draft }`,
     )
     expect(module).toContain(
-      `"/nest": ${getRouteImportName(`${root}/src/pages/nest/index.tsx`)}.info`,
+      `"/data": { info: ${getRouteImportName(`${root}/src/pages/(group)/data.tsx`)}.info, draft: ${getRouteImportName(`${root}/src/pages/(group)/data.tsx`)}.draft }`,
     )
     expect(module).toContain(
-      `"/nest/:id": ${getRouteImportName(`${root}/src/pages/nest/[id].tsx`)}.info`,
+      `"/nest": { info: ${getRouteImportName(`${root}/src/pages/nest/index.tsx`)}.info, draft: ${getRouteImportName(`${root}/src/pages/nest/index.tsx`)}.draft }`,
+    )
+    expect(module).toContain(
+      `"/nest/:id": { info: ${getRouteImportName(`${root}/src/pages/nest/[id].tsx`)}.info, draft: ${getRouteImportName(`${root}/src/pages/nest/[id].tsx`)}.draft }`,
     )
   })
 
@@ -213,9 +243,11 @@ describe('generateDefinition', () => {
       `import ${getRouteImportName(`${customRouteRoot}/index.tsx`)} from '${customRouteRoot}/index.tsx?route'`,
     )
     expect(module).toContain(`...${getRouteImportName(`${customRouteRoot}/blog/[slug].tsx`)}`)
-    expect(module).toContain(`"/": ${getRouteImportName(`${customRouteRoot}/index.tsx`)}.info`)
     expect(module).toContain(
-      `"/blog/:slug": ${getRouteImportName(`${customRouteRoot}/blog/[slug].tsx`)}.info`,
+      `"/": { info: ${getRouteImportName(`${customRouteRoot}/index.tsx`)}.info, draft: ${getRouteImportName(`${customRouteRoot}/index.tsx`)}.draft }`,
+    )
+    expect(module).toContain(
+      `"/blog/:slug": { info: ${getRouteImportName(`${customRouteRoot}/blog/[slug].tsx`)}.info, draft: ${getRouteImportName(`${customRouteRoot}/blog/[slug].tsx`)}.draft }`,
     )
   })
 
@@ -250,7 +282,9 @@ describe('generateDefinition', () => {
     expect(module).toContain(`"path": "docs"`)
     expect(module).toContain(`"path": "button"`)
     expect(module).toContain(`"id": "/docs/button"`)
-    expect(module).toContain(`"/docs/button": ${getRouteImportName(moduleId)}.info`)
+    expect(module).toContain(
+      `"/docs/button": { info: ${getRouteImportName(moduleId)}.info, draft: ${getRouteImportName(moduleId)}.draft }`,
+    )
   })
 
   it('orders ancestor layouts by proximity and skips self inheritance', async () => {
@@ -435,10 +469,16 @@ describe('generateDefinition', () => {
     generateDefinition(nextFiles, cache)
     const after = assembleDefinition(nextFiles, cache, true)
 
-    expect(before).toContain(`"/": ${getRouteImportName(`${root}/src/pages/index.tsx`)}.info`)
-    expect(after).toContain(`"/": ${getRouteImportName(`${root}/src/pages/index.tsx`)}.info`)
+    expect(before).toContain(
+      `"/": { info: ${getRouteImportName(`${root}/src/pages/index.tsx`)}.info, draft: ${getRouteImportName(`${root}/src/pages/index.tsx`)}.draft }`,
+    )
+    expect(after).toContain(
+      `"/": { info: ${getRouteImportName(`${root}/src/pages/index.tsx`)}.info, draft: ${getRouteImportName(`${root}/src/pages/index.tsx`)}.draft }`,
+    )
     expect(after).toContain(`import ${getRouteImportName(addedFile)} from '${addedFile}?route'`)
-    expect(after).toContain(`"/about": ${getRouteImportName(addedFile)}.info`)
+    expect(after).toContain(
+      `"/about": { info: ${getRouteImportName(addedFile)}.info, draft: ${getRouteImportName(addedFile)}.draft }`,
+    )
   })
 
   it('updates descendant inheritance when a nested layout is added', async () => {

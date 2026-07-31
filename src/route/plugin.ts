@@ -9,7 +9,10 @@ import type { RouteRegistry, RouteRegistryChange } from './registry'
 const REG_ROUTE_QUERY = /\?(route|comp)$/
 const REG_ROUTE_PROVIDER_MODULE_ID = /-sfr\.tsx(?:\?.*)?$/
 const routeProperties = new Map<string, string[]>([
-  ['route', ['info', 'preload', 'matchFilters', 'inherit', 'loadingComponent', 'errorComponent']],
+  [
+    'route',
+    ['info', 'preload', 'matchFilters', 'inherit', 'draft', 'loadingComponent', 'errorComponent'],
+  ],
   ['comp', ['component']],
 ])
 

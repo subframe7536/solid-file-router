@@ -73,6 +73,7 @@ selected properties at build time.
 | `preload`          | `RouteDefinition['preload']`                        | no       | Router data preload function  |
 | `matchFilters`     | `RouteDefinition['matchFilters']`                   | no       | Router parameter filters      |
 | `info`             | `FileRouteInfo`                                     | no       | Generated route metadata      |
+| `draft`            | `boolean`                                           | no       | Development-only route        |
 | `loadingComponent` | `Component<RouteSectionProps<T>>`                   | no       | Suspense fallback             |
 | `errorComponent`   | `Component<{ error: Error; reset: VoidFunction }>`  | no       | Error fallback                |
 | `inherit`          | `boolean \| { loading?: boolean; error?: boolean }` | no       | Per-route inheritance control |
@@ -206,11 +207,13 @@ JSX/TSX routes. An options object accepts Satteri's `MdxCompileOptions` plus
 unless the MDX object supplies its own. Satteri is an optional peer dependency,
 and MDX requires program output.
 
-Native MDX route modules may export `export const route = { ... }` with
-`info`, `preload`, `matchFilters`, `inherit`, `loadingComponent`, and
-`errorComponent`. The `component` field is ignored because the compiled MDX
-document is always the route component. This is executable MDX ESM, not YAML or
-TOML frontmatter configuration.
+Native Markdown/MDX routes use YAML frontmatter. Supported route fields are
+`info`, `matchFilters`, `inherit`, and `draft`; other fields are exposed through
+the generated `frontmatter` export. The legacy `export const route` configuration
+is ignored. YAML frontmatter requires the optional `yaml` peer dependency.
+
+`draft: true` routes are available in development and excluded from production
+route matching and SSG output. Their generated path types remain available.
 
 MDX files are leaf routes. `_app.md(x)` and `_layout.md(x)` are rejected during
 route discovery and layouts must use JSX/TSX files. `404.md(x)` remains a leaf

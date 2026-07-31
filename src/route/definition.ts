@@ -45,6 +45,8 @@ interface LayoutInfo {
   loadImportName?: string
   /** Import name for the layout's errorComponent (e.g., '__app_error.errorComponent') */
   errorImportName?: string
+  /** Import name used to determine whether the layout's route subtree is draft-only. */
+  draftImportName?: string
 }
 
 /**
@@ -57,6 +59,7 @@ interface RouteLayoutMap {
 
 interface RouteInfoModuleEntry {
   importName: string
+  moduleId: string
   path: string
 }
 
@@ -281,6 +284,7 @@ function computeGlobalContext(entries: RouteEntry[], lazy: boolean) {
       path: appEntry.routePath,
       loadImportName: '__app_route.loadingComponent',
       errorImportName: '__app_route.errorComponent',
+      draftImportName: '__app_route',
     })
   } else {
     logger.warn('No `_app.jsx` or `_app.tsx` found, fallback to parent component', {
@@ -305,6 +309,7 @@ function computeGlobalContext(entries: RouteEntry[], lazy: boolean) {
       path: layoutEntry.routePath,
       loadImportName: `${layoutImportName}.loadingComponent`,
       errorImportName: `${layoutImportName}.errorComponent`,
+      draftImportName: layoutImportName,
     })
   })
 
@@ -535,22 +540,63 @@ export function assembleDefinition(
       }
 
       if (isNotFoundRoute(entry.routePath)) {
-        return { path, importName: '__404_route' }
+        return { path, importName: '__404_route', moduleId: entry.moduleId }
       }
 
       if (!isGeneratedRouteFile(entry)) {
         return undefined
       }
 
-      return { path, importName: getRouteImportName(entry.moduleId) }
+      return { path, importName: getRouteImportName(entry.moduleId), moduleId: entry.moduleId }
     })
     .filter((entry): entry is RouteInfoModuleEntry => !!entry)
 
-  const routeInfo = unwrapInline(
-    Object.fromEntries(
-      routeInfoEntries.map((entry) => [entry.path, wrapInline(`${entry.importName}.info`)]),
-    ),
-  )
+  const routeInfoManifest = `{ ${routeInfoEntries
+    .map(
+      (entry) =>
+        `${JSON.stringify(entry.path)}: { info: ${entry.importName}.info, draft: ${entry.importName}.draft }`,
+    )
+    .join(', ')} }`
+  const draftRouteInfoManifest = `{ ${routeInfoEntries
+    .map((entry) => {
+      const draftImports = [
+        ...routeInfoEntries
+          .filter(
+            (parent) =>
+              parent.moduleId !== entry.moduleId && isRoutePathAncestor(parent.path, entry.path),
+          )
+          .map((parent) => `${parent.importName}.draft`),
+        ...(routeLayoutMap[entry.moduleId] ?? [])
+          .map((layout) => layout.draftImportName)
+          .filter((name): name is string => !!name)
+          .map((name) => `${name}.draft`),
+      ]
+      return `${JSON.stringify(entry.path)}: [${draftImports.join(', ')}]`
+    })
+    .join(', ')} }`
+  const draftHelpers = `const __filterDraftRoutes = (routes, parentDraft = false) => {
+  if (import.meta.env.DEV) {
+    return routes
+  }
+  if (parentDraft) {
+    return []
+  }
+  return routes.flatMap((route) => {
+    if (route.draft === true) {
+      return []
+    }
+    if (!route.children) {
+      return [route]
+    }
+    return [{ ...route, children: __filterDraftRoutes(route.children) }]
+  })
+}
+const __filterDraftInfo = (routes, draftManifest) => Object.fromEntries(
+  Object.entries(routes)
+    .filter(([path, route]) => import.meta.env.DEV || (route.draft !== true && !draftManifest[path]?.includes(true)))
+    .map(([path, route]) => [path, route.info]),
+)
+`
 
   // Loading strategy must never select the router runtime. FileRouter is always
   // browser-capable; build-time prerendering has its own private virtual entry.
@@ -567,8 +613,10 @@ ${routeImports.join('\n')}
 
 ${rootExpr}
 
-export const fileRoutes = ${unwrapInline(regularRoutes)}
-export const routeInfo = ${routeInfo}
+${draftHelpers}
+
+export const fileRoutes = __filterDraftRoutes(${unwrapInline(regularRoutes)}, __app_route.draft === true)
+export const routeInfo = __filterDraftInfo(${routeInfoManifest}, ${draftRouteInfoManifest})
 export const FileRouter = (props) => createComponent(
   Router,
   mergeProps(
@@ -584,4 +632,8 @@ export const FileRouter = (props) => createComponent(
   )
 )
 `
+}
+
+function isRoutePathAncestor(parent: string, child: string): boolean {
+  return parent === '/' ? child !== '/' : child.startsWith(`${parent}/`)
 }

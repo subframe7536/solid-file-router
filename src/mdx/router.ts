@@ -3,9 +3,11 @@ import { pathToFileURL } from 'node:url'
 
 import type { MdxCompileOptions } from 'satteri'
 
-import type { RouteConfig } from '../index'
 import { defineRouteProvider } from '../route/provider'
 import type { RouteProvider } from '../route/provider'
+
+import { parseMdxFrontmatter, serializeJavaScriptValue } from './frontmatter'
+import type { MdxFrontmatterBlock } from './frontmatter'
 
 export interface MdxOptions extends MdxCompileOptions {
   /**
@@ -20,8 +22,8 @@ export interface MdxOptions extends MdxCompileOptions {
   pagesDir?: string
 }
 
-/** Route configuration exported from a native Markdown/MDX document. */
-export type MdxRouteConfig<T = unknown> = Omit<RouteConfig<T>, 'component'>
+/** Route configuration read from a native Markdown/MDX document's frontmatter. */
+export type { MdxRouteConfig } from './frontmatter'
 
 const REG_MDX = /\.(md|mdx)$/i
 const REG_MDX_DEFAULT_EXPORT = /\n?export default MDXContent;\s*/
@@ -39,6 +41,17 @@ function getRouteConfigName(code: string) {
   }
 
   return name
+}
+
+function hasFrontmatterExport(code: string) {
+  return /\bexport\s+(?:const|let|var|function|class)\s+frontmatter\b/.test(code)
+}
+
+function addFrontmatterExport(code: string, frontmatter: Record<string, unknown>) {
+  if (hasFrontmatterExport(code)) {
+    return code
+  }
+  return `${code}\nexport const frontmatter = ${serializeJavaScriptValue(frontmatter)}\n`
 }
 
 async function getSatteri() {
@@ -70,10 +83,25 @@ function getCompileOptions(options: MdxOptions, sourcePath: string) {
   } as const
 }
 
+async function compileMdxDocument(source: string, sourcePath: string, options: MdxOptions = {}) {
+  const { mdxToJs } = await getSatteri()
+  const result = await mdxToJs(source, getCompileOptions(options, sourcePath))
+  const parsed = await parseMdxFrontmatter(
+    (result.frontmatter as MdxFrontmatterBlock | null | undefined) ?? null,
+  )
+  return {
+    ...result,
+    code: addFrontmatterExport(result.code, parsed.data),
+    frontmatter: parsed.data,
+    routeConfig: parsed.routeConfig,
+  }
+}
+
 /** Compiles an MDX document for direct consumption by Vite. */
 export async function compileMdx(source: string, sourcePath: string, options: MdxOptions = {}) {
-  const { mdxToJs } = await getSatteri()
-  return mdxToJs(source, getCompileOptions(options, sourcePath))
+  const result = await compileMdxDocument(source, sourcePath, options)
+  const { routeConfig: _routeConfig, ...compiled } = result
+  return compiled
 }
 
 /**
@@ -99,7 +127,7 @@ export const mdxRouteProvider = <TData = unknown>(
     },
     async load({ sourcePath }) {
       const source = await readFile(sourcePath, 'utf8')
-      const result = await compileMdx(source, sourcePath, options)
+      const result = await compileMdxDocument(source, sourcePath, options)
 
       const routeConfigName = getRouteConfigName(result.code)
       return [
@@ -107,15 +135,13 @@ export const mdxRouteProvider = <TData = unknown>(
         '',
         result.code.replace(REG_MDX_DEFAULT_EXPORT, ''),
         '',
-        `const ${routeConfigName} = typeof route === 'undefined' ? {} : route`,
+        `const ${routeConfigName} = ${serializeJavaScriptValue(result.routeConfig)}`,
         '',
         'export default createRoute({',
         `  info: ${routeConfigName}.info,`,
-        `  preload: ${routeConfigName}.preload,`,
         `  matchFilters: ${routeConfigName}.matchFilters,`,
         `  inherit: ${routeConfigName}.inherit,`,
-        `  loadingComponent: ${routeConfigName}.loadingComponent,`,
-        `  errorComponent: ${routeConfigName}.errorComponent,`,
+        `  draft: ${routeConfigName}.draft,`,
         '  component: MDXContent,',
         '})',
         '',
