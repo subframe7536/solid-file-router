@@ -10,7 +10,6 @@ export type MDXComponents = {
   [Name in keyof JSX.IntrinsicElements]?: MDXComponent<JSX.IntrinsicElements[Name]>
 } & {
   [name: string]: MDXComponent<any> | undefined
-  RouteOutlet?: MDXComponent<ParentProps>
   wrapper?: MDXComponent<ParentProps>
 }
 

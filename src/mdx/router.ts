@@ -25,7 +25,7 @@ export type MdxRouteConfig<T = unknown> = Omit<RouteConfig<T>, 'component'>
 
 const REG_MDX = /\.(md|mdx)$/i
 const REG_MDX_DEFAULT_EXPORT = /\n?export default MDXContent;\s*/
-const REG_MDX_LAYOUT = /\/(?:_app|_layout)\.(?:md|mdx)$/i
+const REG_MDX_LAYOUT = /(?:^|\/)(?:_app|_layout)\.(?:md|mdx)$/i
 const SATTERI_PACKAGE = 'satteri'
 let satteriPromise: Promise<typeof import('satteri')> | undefined
 
@@ -90,6 +90,11 @@ export const mdxRouteProvider = <TData = unknown>(
     filter,
     transformPath(file) {
       const relative = file.startsWith(prefix) ? file.slice(prefix.length) : file
+      if (REG_MDX_LAYOUT.test(relative)) {
+        throw new Error(
+          `[solid-file-router] Markdown/MDX files cannot be used as layouts: ${file}. Use a JSX/TSX _app or _layout route instead.`,
+        )
+      }
       return { path: relative.replace(REG_MDX, '.tsx') }
     },
     async load({ sourcePath }) {
@@ -97,13 +102,7 @@ export const mdxRouteProvider = <TData = unknown>(
       const result = await compileMdx(source, sourcePath, options)
 
       const routeConfigName = getRouteConfigName(result.code)
-      const isLayout = REG_MDX_LAYOUT.test(sourcePath.replaceAll('\\', '/'))
-      const component = isLayout
-        ? `(props) => createComponent(MDXContent, mergeProps(props, {\n    get components() {\n      return { RouteOutlet: () => props.children }\n    },\n  }))`
-        : 'MDXContent'
-
       return [
-        ...(isLayout ? [`import { createComponent, mergeProps } from 'solid-js'`] : []),
         "import { createRoute } from 'solid-file-router'",
         '',
         result.code.replace(REG_MDX_DEFAULT_EXPORT, ''),
@@ -117,7 +116,7 @@ export const mdxRouteProvider = <TData = unknown>(
         `  inherit: ${routeConfigName}.inherit,`,
         `  loadingComponent: ${routeConfigName}.loadingComponent,`,
         `  errorComponent: ${routeConfigName}.errorComponent,`,
-        `  component: ${component},`,
+        '  component: MDXContent,',
         '})',
         '',
       ].join('\n')

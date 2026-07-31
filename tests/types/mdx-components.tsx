@@ -5,7 +5,6 @@ const components: MDXComponents = {
   a: (props) => <a class="content-link" href={props.href} {...props} />,
   Callout: (props: { tone: 'info' | 'warning' }) => <aside>{props.tone}</aside>,
   wrapper: (props) => <div>{props.children}</div>,
-  RouteOutlet: (props) => <>{props.children}</>,
 }
 
 const callout: MDXComponent<{ tone: 'info' }> = (props) => <aside>{props.tone}</aside>

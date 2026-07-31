@@ -85,18 +85,10 @@ The supported fields are `info`, `preload`, `matchFilters`, `inherit`,
 the compiled MDX document remains the route component. Route configuration is
 executable MDX ESM; it is not read from YAML or TOML frontmatter.
 
-MDX `_app.mdx` and `_layout.mdx` files receive a reserved `RouteOutlet`
-component. Place `<RouteOutlet />` where descendant routes should render:
-
-```mdx
-# Documentation
-
-<RouteOutlet />
-```
-
-The outlet is provided only for these special layout routes. `404.mdx` remains
-a normal leaf fallback and does not receive an outlet. JSX/TSX and MDX routes
-are additive, and duplicate normalized routes across them remain errors.
+MDX files are leaf routes. `_app.md(x)` and `_layout.md(x)` are rejected during
+route discovery; use `_app.tsx` or `_layout.tsx` when descendant routes need a
+layout. `404.md(x)` remains a normal leaf fallback. JSX/TSX and MDX routes are
+additive, and duplicate normalized routes across them remain errors.
 
 ## Component Overrides
 

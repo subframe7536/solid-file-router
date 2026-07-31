@@ -212,17 +212,16 @@ Native MDX route modules may export `export const route = { ... }` with
 document is always the route component. This is executable MDX ESM, not YAML or
 TOML frontmatter configuration.
 
-`_app.mdx` and `_layout.mdx` expose a reserved `<RouteOutlet />` component for
-rendering descendants at the chosen position. `404.mdx` is a leaf fallback and
-does not receive an outlet. Duplicate normalized routes across JSX/TSX and MDX
-remain errors.
+MDX files are leaf routes. `_app.md(x)` and `_layout.md(x)` are rejected during
+route discovery and layouts must use JSX/TSX files. `404.md(x)` remains a leaf
+fallback. Duplicate normalized routes across JSX/TSX and MDX remain errors.
 
 `solid-file-router/mdx` exports `MDXProvider`, `useMDXComponents`,
 `MDXComponent`, and `MDXComponents`. `MDXComponents` preserves Solid intrinsic
 HTML and SVG props while accepting arbitrary authored component names, including
-`wrapper` and `RouteOutlet`; this typing provides compile-time assistance and
-does not perform runtime prop validation. See the [MDX guide](mdx.md) for setup
-and component override examples.
+`wrapper`; this typing provides compile-time assistance and does not perform
+runtime prop validation. See the [MDX guide](mdx.md) for setup and component
+override examples.
 
 ## Route Provider Reference
 

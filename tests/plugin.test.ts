@@ -63,8 +63,6 @@ async function buildTempSsgProject(
 ) {
   const root = createTempProject()
   if (mdx) {
-    rmSync(join(root, 'src/pages/_app.tsx'))
-    writeFileSync(join(root, 'src/pages/_app.mdx'), '# MDX layout\n\n<RouteOutlet />')
     writeFileSync(
       join(root, 'src/pages/docs.mdx'),
       `export const route = {
@@ -470,30 +468,21 @@ describe('fileRouter', () => {
     expect(routeModule).not.toContain("const __sfr_mdx_route = typeof route === 'undefined'")
   })
 
-  it('generates an MDX layout with an explicit RouteOutlet', async () => {
-    const root = createTempProject()
-    const appPath = join(root, 'src/pages/_app.tsx')
-    const appMdxPath = join(root, 'src/pages/_app.mdx')
-    const leafMdxPath = join(root, 'src/pages/content.mdx')
-    rmSync(appPath)
-    writeFileSync(appMdxPath, '# Layout\n\n<RouteOutlet />')
-    writeFileSync(leafMdxPath, '# Content')
-    const plugins = fileRouter({ mdx: true, lazy: false })
-    const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
-    const plugin = plugins.find(({ name }) => name.endsWith(':router'))!
+  it.each(['_app.md', '_app.mdx', 'nested/_layout.md', 'nested/_layout.mdx'])(
+    'rejects MDX layout file %s',
+    async (layoutFile) => {
+      const root = createTempProject()
+      const layoutPath = join(root, 'src/pages', layoutFile)
+      mkdirSync(join(layoutPath, '..'), { recursive: true })
+      writeFileSync(layoutPath, '# Layout')
+      const plugins = fileRouter({ mdx: true, lazy: false })
+      const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
 
-    await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
-
-    const routeModule = await (plugin as any).load.handler(normalizePath(`${appMdxPath}-sfr.tsx`))
-    const leafModule = await (plugin as any).load.handler(normalizePath(`${leafMdxPath}-sfr.tsx`))
-
-    expect(routeModule).toContain('createComponent(MDXContent, mergeProps(props, {')
-    expect(routeModule).toContain('get components()')
-    expect(routeModule).toContain('RouteOutlet: () => props.children')
-    expect(routeModule).toContain('component: (props) =>')
-    expect(leafModule).toContain('component: MDXContent')
-    expect(leafModule).not.toContain('createComponent(MDXContent, mergeProps(props, {')
-  })
+      await expect(
+        (registryPlugin as any).configResolved({ build: { ssr: false }, root }),
+      ).rejects.toThrow('Markdown/MDX files cannot be used as layouts')
+    },
+  )
 
   it('uses the plugin pagesDir as the default MDX directory', async () => {
     const root = createTempProject('app/routes')
@@ -748,12 +737,10 @@ export default createRoute({ component: () => <h1>missing</h1> })
     expect(output.fallbackHtml).toContain('_$HY')
   })
 
-  it('builds mixed TSX and MDX routes with an MDX layout outlet', async () => {
+  it('builds mixed TSX and MDX routes with a TSX layout', async () => {
     const output = await buildTempSsgProject(undefined, ['/', '/docs'], true)
 
-    expect(output.indexHtml).toContain('MDX layout')
     expect(output.indexHtml).toContain('>home</h1>')
-    expect(output.docsHtml).toContain('MDX layout')
     expect(output.docsHtml).toContain('MDX descendant')
     expect(output.mdxRouteQuery).toContain('MDX docs')
     expect(output.mdxRouteQuery).toContain('info: __sfr_mdx_route.info')
