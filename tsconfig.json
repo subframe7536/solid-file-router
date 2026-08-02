@@ -1,8 +1,6 @@
 {
-  "extends": "@subf/config/tsconfig-lib",
+  "extends": "@subf/config/tsconfig-web",
   "compilerOptions": {
-    "jsx": "preserve",
-    "jsxImportSource": "solid-js",
     "types": ["bun-types", "vite/client"],
     "lib": ["DOM", "ESNext"]
   }
