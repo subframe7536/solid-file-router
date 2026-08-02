@@ -109,6 +109,26 @@ export default createRoute({
                 </div>
               </A>
             </li>
+
+            <li style={{ 'margin-bottom': '15px' }}>
+              <A
+                href="/head-assets"
+                style={{
+                  display: 'block',
+                  padding: '15px',
+                  background: '#f3e5f5',
+                  'border-radius': '8px',
+                  'text-decoration': 'none',
+                  color: '#6a1b9a',
+                }}
+              >
+                <strong>Head Asset Stability</strong>
+                <div style={{ 'font-size': '14px', color: '#666', 'margin-top': '5px' }}>
+                  Verify route metadata does not recreate the shared stylesheet during SPA
+                  navigation
+                </div>
+              </A>
+            </li>
           </ul>
         </nav>
       </div>

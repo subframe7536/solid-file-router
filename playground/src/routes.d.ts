@@ -4,19 +4,21 @@
 /* oxfmt-ignore */
 /* oxlint-disable */
 
-export {}
+
+import type { AnchorProps, NavigateOptions, RouterResponseInit, CustomResponse } from '@solidjs/router'
 
 declare module 'solid-file-router' {
   interface FileRoutePath {
     '/': never
     '/data': never
     '/dynamic': never
+    '/head-assets': never
+    '/head-assets-next': never
     '/inheritance-test': never
     '/inheritance-test/custom-loading': never
     '/inheritance-test/default': never
     '/inheritance-test/no-inheritance': never
     '/inheritance-test/selective-inheritance': never
-    '/mdx': never
     '/nest': never
     '/nest/:id': { $id: string }
     '/nest/value': never
@@ -29,27 +31,26 @@ declare module 'solid-file-router' {
 }
 
 declare module '@solidjs/router' {
-  import type { AnchorProps, NavigateOptions, RouterResponseInit, CustomResponse } from '@solidjs/router'
-
   type Paths =
     | '/'
     | '/data'
     | '/dynamic'
+    | '/head-assets'
+    | '/head-assets-next'
     | '/inheritance-test'
     | '/inheritance-test/custom-loading'
     | '/inheritance-test/default'
     | '/inheritance-test/no-inheritance'
     | '/inheritance-test/selective-inheritance'
-    | '/mdx'
     | '/nest'
     | '/nest/:id'
     | '/nest/value'
     | '/404'
 
-  export declare function A(props: Omit<AnchorProps, 'href'> & { href: Paths }): JSX.Element
+  export function A(props: Omit<AnchorProps, 'href'> & { href: Paths }): JSX.Element
   export interface Navigator {
     (to: Paths, options?: Partial<NavigateOptions>): void;
     (delta: number): void;
   }
-  export declare function redirect(url: Paths, init?: number | RouterResponseInit): CustomResponse<never>
+  export function redirect(url: Paths, init?: number | RouterResponseInit): CustomResponse<never>
 }

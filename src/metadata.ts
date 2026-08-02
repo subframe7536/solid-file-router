@@ -121,7 +121,7 @@ function replaceOrInsertElement(
     removeElements(current)
     return
   }
-  if (current.length === 1 && current[0].outerHTML === next.outerHTML) {
+  if (current.length === 1 && current[0].isEqualNode(next)) {
     return
   }
   if (first) {
@@ -137,19 +137,19 @@ function restoreElements(
   current: Element[],
   serialized: readonly string[] | undefined,
 ): void {
+  const next = (serialized ?? [])
+    .map((html) => createElementFromHtml(document, html))
+    .filter((element): element is Element => element !== undefined)
+
   if (
-    serialized &&
-    current.length === serialized.length &&
-    current.every((element, index) => element.outerHTML === serialized[index])
+    current.length === next.length &&
+    current.every((element, index) => element.isEqualNode(next[index]))
   ) {
     return
   }
   removeElements(current)
-  for (const html of serialized ?? []) {
-    const element = createElementFromHtml(document, html)
-    if (element) {
-      document.head.append(element)
-    }
+  for (const element of next) {
+    document.head.append(element)
   }
 }
 
@@ -183,7 +183,8 @@ function getRouteMetadata(matches: readonly RouteMatch[]): RouteMetadata | undef
   return (key as { metadata?: RouteMetadata }).metadata
 }
 
-class RouteMetadataManager {
+/** Manages route-owned head metadata without touching unrelated assets. */
+export class RouteMetadataManager {
   private readonly baseline: MetadataBaseline
   private readonly metaKeys = new Set<string>()
   private readonly linkKeys = new Set<string>()
@@ -228,9 +229,6 @@ class RouteMetadataManager {
         routeMeta.set(identity, tag)
       }
     }
-    for (const identity of Object.keys(this.baseline.meta)) {
-      this.metaKeys.add(identity)
-    }
     for (const identity of routeMeta.keys()) {
       this.metaKeys.add(identity)
     }
@@ -250,9 +248,6 @@ class RouteMetadataManager {
     }
     for (const link of metadata?.links ?? []) {
       routeLinks.set(`rel:${link.rel}`, link)
-    }
-    for (const identity of Object.keys(this.baseline.links)) {
-      this.linkKeys.add(identity)
     }
     for (const identity of routeLinks.keys()) {
       this.linkKeys.add(identity)

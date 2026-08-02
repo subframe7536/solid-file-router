@@ -13,7 +13,7 @@ export default defineConfig({
       },
       {
         find: 'solid-file-router',
-        replacement: fileURLToPath(new URL('../src/runtime.ts', import.meta.url)),
+        replacement: fileURLToPath(new URL('../src/index.ts', import.meta.url)),
       },
     ],
   },
@@ -26,7 +26,7 @@ export default defineConfig({
       },
       ssg: {
         serverEntry: 'src/entry-server.tsx',
-        routes: ['/', '/about'],
+        // routes: ['/', '/about'],
         concurrency: 4,
       },
     }),
