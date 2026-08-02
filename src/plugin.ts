@@ -19,7 +19,8 @@ import type { InfoTypeDefinition } from './route/type-gen'
 import { createSsgPlugin } from './ssg'
 import type { SsgOptions } from './ssg'
 
-export type { MdxOptions } from './mdx/router'
+export type { MdxLoadExtension, MdxOptions, MdxRouteDocument } from './mdx/router'
+export type { RouteMetadata, RouteMetaTag, RouteMetadataLink } from './metadata'
 export type { InfoTypeDefinition, InlineInfoTypeDefinition } from './route/type-gen'
 export {
   defineRouteProvider,
@@ -54,7 +55,7 @@ export interface FileRouterPluginOption<TData = unknown> {
    * Enable built-in Markdown/MDX route discovery and Satteri compilation.
    * @default false
    */
-  mdx?: boolean | MdxOptions
+  mdx?: boolean | MdxOptions<TData>
   /**
    * A list of glob patterns to be ignored during processing.
    *
@@ -167,7 +168,7 @@ export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TDat
   }
   return [
     createRouterPlugin(context),
-    createMdxPlugin(mdxOptions),
+    createMdxPlugin<TData>(mdxOptions),
     createSsgPlugin(ssg ?? false, registry, context),
   ]
 }

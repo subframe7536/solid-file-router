@@ -280,7 +280,9 @@ function computeGlobalContext(
   filteredEntries: RouteEntry[]
   routeLayoutMap: RouteLayoutMap
 } {
-  const globalImports: string[] = [`import { __loader__ } from '${PACKAGE_NAME}'`]
+  const globalImports: string[] = [
+    `import { __loader__, __routeMetadataRoot__ } from '${PACKAGE_NAME}'`,
+  ]
   const layouts: LayoutInfo[] = []
 
   const appEntry = entries.find((entry) => isAppRoute(entry.routePath))
@@ -535,7 +537,7 @@ export function assembleDefinition(
     id: '*',
     path: '*',
     component: wrapInline('__404_comp.component'),
-    ...(lazy ? { __: wrapInline(`...__404_route`) } : {}),
+    __: wrapInline(`...__404_route`),
   })
 
   const routeInfoEntries = entries
@@ -562,6 +564,12 @@ export function assembleDefinition(
     .map(
       (entry) =>
         `${JSON.stringify(entry.path)}: { info: ${entry.importName}.info, draft: ${entry.importName}.draft }`,
+    )
+    .join(', ')} }`
+  const routeMetadataManifest = `{ ${routeInfoEntries
+    .map(
+      (entry) =>
+        `${JSON.stringify(entry.path)}: { metadata: ${entry.importName}.metadata, draft: ${entry.importName}.draft }`,
     )
     .join(', ')} }`
   const draftRouteInfoManifest = `{ ${routeInfoEntries
@@ -603,15 +611,20 @@ const __filterDraftInfo = (routes, draftManifest) => Object.fromEntries(
     .filter(([path, route]) => import.meta.env.DEV || (route.draft !== true && !draftManifest[path]?.includes(true)))
     .map(([path, route]) => [path, route.info]),
 )
+const __filterDraftMetadata = (routes, draftManifest) => Object.fromEntries(
+  Object.entries(routes)
+    .filter(([path, route]) => import.meta.env.DEV || (route.draft !== true && !draftManifest[path]?.includes(true)))
+    .map(([path, route]) => [path, route.metadata]),
+)
 `
 
   // Loading strategy must never select the router runtime. FileRouter is always
   // browser-capable; build-time prerendering has its own private virtual entry.
-  const routerImport = `import { Router } from '@solidjs/router'`
+  const routerImport = `import { Router, useCurrentMatches } from '@solidjs/router'`
   const solidImports = lazy
     ? `import { createComponent, lazy, mergeProps } from 'solid-js'`
     : `import { createComponent, mergeProps } from 'solid-js'`
-  const rootExpr = `export const Root = __app_comp.component`
+  const rootExpr = `export const Root = __routeMetadataRoot__(__app_comp.component, useCurrentMatches)`
 
   return `${solidImports}
 ${routerImport}
@@ -624,20 +637,25 @@ ${draftHelpers}
 
 export const fileRoutes = __filterDraftRoutes(${unwrapInline(regularRoutes)}, __app_route.draft === true)
 export const routeInfo = __filterDraftInfo(${routeInfoManifest}, ${draftRouteInfoManifest})
-export const FileRouter = (props) => createComponent(
-  Router,
-  mergeProps(
-    {
-      get root() {
-        return Root
+export const routeMetadata = __filterDraftMetadata(${routeMetadataManifest}, ${draftRouteInfoManifest})
+export const FileRouter = (props) => {
+  const root = props.root ? __routeMetadataRoot__(props.root, useCurrentMatches) : Root
+  return createComponent(
+    Router,
+    mergeProps(
+      {
+        get root() {
+          return Root
+        },
+        get children() {
+          return fileRoutes
+        }
       },
-      get children() {
-        return fileRoutes
-      }
-    },
-    props
+      props,
+      { root }
+    )
   )
-)
+}
 `
 }
 

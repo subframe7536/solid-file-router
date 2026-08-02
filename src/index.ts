@@ -3,6 +3,12 @@ import type { Component } from 'solid-js'
 import { createComponent, ErrorBoundary, Suspense, untrack } from 'solid-js'
 import { hydrate, render, renderToStringAsync } from 'solid-js/web'
 
+import { __routeMetadataRoot__ } from './metadata'
+import type { RouteMetadata } from './metadata'
+
+export { __routeMetadataRoot__ }
+export type { RouteMetadata, RouteMetaTag, RouteMetadataLink } from './metadata'
+
 type AnyComp = Component<any>
 
 /** Wraps a route component with loading and error boundaries. */
@@ -36,6 +42,9 @@ export interface FileRoutePath {}
 export interface FileRouteInfo {}
 export type FileRouteInfoMap = Partial<
   Record<keyof FileRoutePath & string, FileRouteInfo | undefined>
+>
+export type FileRouteMetadataMap = Partial<
+  Record<keyof FileRoutePath & string, RouteMetadata | undefined>
 >
 /** A matched route entry returned by the Solid router. */
 export interface FileRouteMatch {
@@ -113,6 +122,8 @@ export type RouteConfig<T = unknown> = Pick<
   RouteDefinition<string, T>,
   'matchFilters' | 'preload'
 > & {
+  /** Document metadata applied during client navigation and emitted by the SSG renderer. */
+  metadata?: RouteMetadata
   info?: FileRouteInfo
   /** Whether this route is only available during development. */
   draft?: boolean

@@ -5,7 +5,7 @@ let yamlPromise: Promise<typeof import('yaml')> | undefined
 
 export type MdxRouteConfig<T = unknown> = Pick<
   RouteConfig<T>,
-  'info' | 'matchFilters' | 'inherit' | 'draft'
+  'info' | 'matchFilters' | 'inherit' | 'draft' | 'metadata'
 >
 
 export interface MdxFrontmatterBlock {
@@ -105,6 +105,7 @@ export function normalizeMdxRouteConfig<T = unknown>(
     matchFilters: parseMatchFilters(data.matchFilters),
     inherit: parseInherit(data.inherit),
     draft: parseDraft(data.draft),
+    metadata: data.metadata as MdxRouteConfig<T>['metadata'],
   }
 }
 

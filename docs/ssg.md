@@ -72,6 +72,33 @@ include:
 normal route list. Set `concurrency` to limit simultaneous renders; it defaults
 to `4` and values below `1` are clamped to `1`.
 
+## Route Metadata
+
+Attach static metadata to a route and the built-in renderer will apply it to
+that page's HTML head:
+
+```tsx
+export default createRoute({
+  metadata: {
+    title: 'About',
+    description: 'About this project.',
+    canonical: 'https://example.com/about',
+    meta: [{ property: 'og:type', content: 'article' }],
+    links: [{ rel: 'alternate', href: '/about.md' }],
+  },
+  component: () => <h1>About</h1>,
+})
+```
+
+The renderer replaces existing `title`, description, canonical, and matching
+custom tags, inserts missing tags, and HTML-escapes all attribute values. The
+same metadata is synchronized by the generated router root during client
+hydration and navigation. Missing fields restore the original template head,
+and routes without metadata remove route-only tags. When no metadata is
+supplied, the template's existing head remains unchanged. The generated route
+metadata is available to the built-in renderer for every static route,
+including the `/404` fallback.
+
 ## HTML Template
 
 A standard Vite template is enough:

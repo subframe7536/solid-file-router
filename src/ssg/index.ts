@@ -53,6 +53,7 @@ export function createSsgPlugin<TData>(
   let serverEntryFileName: string
   return {
     name: `${PACKAGE_NAME}:ssg`,
+    sharedDuringBuild: true,
     apply() {
       return !!options
     },
@@ -115,15 +116,27 @@ export function createSsgPlugin<TData>(
       filter: { id: new RegExp(`^${VID_PRERENDER}$`) },
       handler() {
         return `import { createComponent } from 'solid-js'
-import { StaticRouter } from '@solidjs/router'
+import { StaticRouter, useCurrentMatches } from '@solidjs/router'
 import { renderToStringAsync } from 'solid-js/web'
 import { Root, fileRoutes } from '${VID_EXTRACT}'
 
-export default ({ url }) => renderToStringAsync(() => createComponent(StaticRouter, {
-  url,
-  root: Root,
-  get children() { return fileRoutes }
-}))`
+export default async ({ url }) => {
+  let metadata
+  const root = (props) => {
+    const matches = useCurrentMatches()
+    const key = matches().at(-1)?.route.key
+    metadata = key && typeof key === 'object' ? key.metadata : undefined
+    return createComponent(Root, props)
+  }
+  return {
+    html: await renderToStringAsync(() => createComponent(StaticRouter, {
+      url,
+      root,
+      get children() { return fileRoutes }
+    })),
+    metadata,
+  }
+}`
       },
     },
     generateBundle: {
@@ -165,10 +178,12 @@ export default ({ url }) => renderToStringAsync(() => createComponent(StaticRout
         ).filter((route) => route !== '/404')
         const renderer = await loadServerRenderer(this.environment.config, serverEntryFileName)
 
+        const fallback = await renderer({ url: '/404' })
+        const fallbackOutput = typeof fallback === 'string' ? { html: fallback } : fallback
         this.emitFile({
           type: 'asset',
           fileName: '404.html',
-          source: renderTemplate(template, config.id, await renderer({ url: '/404' })),
+          source: renderTemplate(template, config.id, fallbackOutput.html, fallbackOutput.metadata),
         })
         if (routes.length === 0) {
           context.logger?.info(
@@ -180,10 +195,19 @@ export default ({ url }) => renderToStringAsync(() => createComponent(StaticRout
         const renderedRoutes = await mapWithConcurrency(
           routes,
           config.concurrency,
-          async (route) => ({
-            route,
-            html: renderTemplate(template, config.id, await renderer({ url: route })),
-          }),
+          async (route) => {
+            const rendered = await renderer({ url: route })
+            const renderedOutput = typeof rendered === 'string' ? { html: rendered } : rendered
+            return {
+              route,
+              html: renderTemplate(
+                template,
+                config.id,
+                renderedOutput.html,
+                renderedOutput.metadata,
+              ),
+            }
+          },
         )
         for (const route of renderedRoutes) {
           if (route.route === '/') {

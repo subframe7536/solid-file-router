@@ -8,7 +8,7 @@ import type { MdxOptions } from './router'
 const REG_MARKDOWN_MODULE_ID = /\.(?:md|mdx)(?:\?.*)?$/i
 
 /** Compiles Markdown route modules before Solid transforms run. */
-export function createMdxPlugin(options: false | MdxOptions): Plugin {
+export function createMdxPlugin<TData = unknown>(options: false | MdxOptions<TData>): Plugin {
   return {
     name: `${PACKAGE_NAME}:mdx`,
     apply: () => !!options,

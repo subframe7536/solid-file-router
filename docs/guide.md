@@ -215,7 +215,7 @@ const href = generatePath('/blog/:slug', {
 Keys prefixed with `$` replace matching `:param` segments. Other keys become
 query parameters through `URLSearchParams`.
 
-## Route Metadata
+## Route Info
 
 Add metadata through `info`:
 
@@ -269,6 +269,22 @@ const info = () => readRouteInfo(matches())
 
 For direct access by generated route pattern, import `routeInfo` from
 `virtual:routes`.
+
+Use `metadata` for document head values. The generated router applies these
+values during client hydration and navigation, and the SSG renderer applies the
+same values to prerendered HTML:
+
+```tsx
+export default createRoute({
+  metadata: {
+    title: 'Release notes',
+    description: 'Product updates and announcements.',
+    canonical: 'https://example.com/releases',
+    meta: [{ property: 'og:type', content: 'article' }],
+  },
+  component: () => <h1>Release notes</h1>,
+})
+```
 
 ## Loading and Error Inheritance
 

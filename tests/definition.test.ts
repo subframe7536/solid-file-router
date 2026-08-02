@@ -87,16 +87,24 @@ describe('generateDefinition', () => {
     expect(module).toContain(
       `import ${getRouteImportName(`${root}/src/pages/index.tsx`)} from '/root/project/src/pages/index.tsx?route'`,
     )
-    expect(module).toContain("import { __loader__ } from 'solid-file-router'")
-    expect(module).toContain('export const Root = __app_comp.component')
+    expect(module).toContain(
+      "import { __loader__, __routeMetadataRoot__ } from 'solid-file-router'",
+    )
+    expect(module).toContain(
+      'export const Root = __routeMetadataRoot__(__app_comp.component, useCurrentMatches)',
+    )
     expect(module).toContain(
       `__loader__(lazy(() => import('/root/project/src/pages/index.tsx?comp').then(mod => ({ default: mod.default.component }))), ${getRouteImportName(`${root}/src/pages/index.tsx`)}.loadingComponent || ((${getRouteImportName(`${root}/src/pages/index.tsx`)}.inherit === false || ${getRouteImportName(`${root}/src/pages/index.tsx`)}.inherit?.loading === false) ? undefined : (__app_route.loadingComponent)), ${getRouteImportName(`${root}/src/pages/index.tsx`)}.errorComponent || ((${getRouteImportName(`${root}/src/pages/index.tsx`)}.inherit === false || ${getRouteImportName(`${root}/src/pages/index.tsx`)}.inherit?.error === false) ? undefined : (__app_route.errorComponent)))`,
     )
     expect(module).toContain(`...${getRouteImportName(`${root}/src/pages/(group)/data.tsx`)}`)
     expect(module).toContain("import __404_route from '/root/project/src/pages/404.tsx?route'")
     expect(module).toContain('export const routeInfo = __filterDraftInfo({')
+    expect(module).toContain('export const routeMetadata = __filterDraftMetadata({')
     expect(module).toContain(
       `"/": { info: ${getRouteImportName(`${root}/src/pages/index.tsx`)}.info, draft: ${getRouteImportName(`${root}/src/pages/index.tsx`)}.draft }`,
+    )
+    expect(module).toContain(
+      `"/": { metadata: ${getRouteImportName(`${root}/src/pages/index.tsx`)}.metadata, draft: ${getRouteImportName(`${root}/src/pages/index.tsx`)}.draft }`,
     )
     expect(module).toContain('"/404": { info: __404_route.info, draft: __404_route.draft }')
     expect(module).toContain('"/": [__app_route.draft]')
@@ -194,10 +202,14 @@ describe('generateDefinition', () => {
   it('generates client routes with lazy route components', async () => {
     const module = await buildDefinition(files, false, undefined, true)
     expect(module).toContain("import { createComponent, lazy, mergeProps } from 'solid-js'")
-    expect(module).toContain("import { Router } from '@solidjs/router'")
+    expect(module).toContain("import { Router, useCurrentMatches } from '@solidjs/router'")
     expect(module).not.toContain("import { renderToStringAsync } from 'solid-js/web'")
-    expect(module).toContain("import { __loader__ } from 'solid-file-router'")
-    expect(module).toContain('export const Root = __app_comp.component')
+    expect(module).toContain(
+      "import { __loader__, __routeMetadataRoot__ } from 'solid-file-router'",
+    )
+    expect(module).toContain(
+      'export const Root = __routeMetadataRoot__(__app_comp.component, useCurrentMatches)',
+    )
     expect(module).toContain(
       `import ${getRouteImportName(`${root}/src/pages/index.tsx`)} from '/root/project/src/pages/index.tsx?route'`,
     )
@@ -214,7 +226,9 @@ describe('generateDefinition', () => {
     expect(module).toContain(`const __app_route = {}`)
     expect(module).toContain(`const __404_comp = { component: () => null }`)
     expect(module).toContain(`const __404_route = undefined`)
-    expect(module).toContain(`export const Root = __app_comp.component`)
+    expect(module).toContain(
+      `export const Root = __routeMetadataRoot__(__app_comp.component, useCurrentMatches)`,
+    )
   })
 
   it('includes routeInfo in generated module', async () => {
@@ -432,11 +446,15 @@ describe('generateDefinition', () => {
     const usersFile = `${root}/src/pages/dashboard/admin/users.tsx`
 
     expect(module).toContain("import { createComponent, mergeProps } from 'solid-js'")
-    expect(module).toContain("import { Router } from '@solidjs/router'")
+    expect(module).toContain("import { Router, useCurrentMatches } from '@solidjs/router'")
     expect(module).not.toContain('StaticRouter')
-    expect(module).toContain("import { __loader__ } from 'solid-file-router'")
+    expect(module).toContain(
+      "import { __loader__, __routeMetadataRoot__ } from 'solid-file-router'",
+    )
     expect(module).toContain("import __app_route from '/root/project/src/pages/_app.tsx?route'")
-    expect(module).toContain('export const Root = __app_comp.component')
+    expect(module).toContain(
+      'export const Root = __routeMetadataRoot__(__app_comp.component, useCurrentMatches)',
+    )
     expect(module).toContain(
       `import ${getComponentImportName(usersFile)} from '/root/project/src/pages/dashboard/admin/users.tsx?comp'`,
     )
@@ -538,7 +556,11 @@ describe('generateDefinition', () => {
     expect(eagerModule).toContain(
       `import ${getComponentImportName(`${root}/src/pages/dashboard/admin/users.tsx`)} from '/root/project/src/pages/dashboard/admin/users.tsx?comp'`,
     )
-    expect(lazyModule).toContain("import { __loader__ } from 'solid-file-router'")
-    expect(eagerModule).toContain("import { __loader__ } from 'solid-file-router'")
+    expect(lazyModule).toContain(
+      "import { __loader__, __routeMetadataRoot__ } from 'solid-file-router'",
+    )
+    expect(eagerModule).toContain(
+      "import { __loader__, __routeMetadataRoot__ } from 'solid-file-router'",
+    )
   })
 })

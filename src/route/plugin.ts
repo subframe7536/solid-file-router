@@ -11,7 +11,16 @@ const REG_ROUTE_PROVIDER_MODULE_ID = /-sfr\.tsx(?:\?.*)?$/
 const routeProperties = new Map<string, string[]>([
   [
     'route',
-    ['info', 'preload', 'matchFilters', 'inherit', 'draft', 'loadingComponent', 'errorComponent'],
+    [
+      'info',
+      'metadata',
+      'preload',
+      'matchFilters',
+      'inherit',
+      'draft',
+      'loadingComponent',
+      'errorComponent',
+    ],
   ],
   ['comp', ['component']],
 ])

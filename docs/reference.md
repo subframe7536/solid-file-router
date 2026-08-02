@@ -5,13 +5,13 @@ The project is pre-1.0; minor releases may introduce breaking changes.
 
 ## Package Entries
 
-| Import                     | Contents                                               |
-| -------------------------- | ------------------------------------------------------ |
-| `solid-file-router`        | Runtime functions and route types                      |
-| `solid-file-router/plugin` | Vite plugin, route-provider helpers, and plugin types  |
+| Import                     | Contents                                                   |
+| -------------------------- | ---------------------------------------------------------- |
+| `solid-file-router`        | Runtime functions and route types                          |
+| `solid-file-router/plugin` | Vite plugin, route-provider helpers, and plugin types      |
 | `solid-file-router/mdx`    | MDX provider, frontmatter type, hooks, and component types |
-| `solid-file-router/client` | Declaration for `virtual:routes`                       |
-| `virtual:routes`           | Generated router components, definitions, and metadata |
+| `solid-file-router/client` | Declaration for `virtual:routes`                           |
+| `virtual:routes`           | Generated router components, definitions, and metadata     |
 
 The package is ESM only.
 
@@ -67,20 +67,46 @@ function createRoute<T>(config: RouteConfig<T>): RouteConfig<T>
 `createRoute` returns its input unchanged at runtime. The Vite plugin extracts
 selected properties at build time.
 
-| Property           | Type                                                | Required | Behavior                      |
-| ------------------ | --------------------------------------------------- | -------- | ----------------------------- |
-| `component`        | `Component<RouteSectionProps<T>>`                   | yes      | Page or layout component      |
-| `preload`          | `RouteDefinition['preload']`                        | no       | Router data preload function  |
-| `matchFilters`     | `RouteDefinition['matchFilters']`                   | no       | Router parameter filters      |
-| `info`             | `FileRouteInfo`                                     | no       | Generated route metadata      |
-| `draft`            | `boolean`                                           | no       | Development-only route        |
-| `loadingComponent` | `Component<RouteSectionProps<T>>`                   | no       | Suspense fallback             |
-| `errorComponent`   | `Component<{ error: Error; reset: VoidFunction }>`  | no       | Error fallback                |
-| `inherit`          | `boolean \| { loading?: boolean; error?: boolean }` | no       | Per-route inheritance control |
+| Property           | Type                                                | Required | Behavior                                        |
+| ------------------ | --------------------------------------------------- | -------- | ----------------------------------------------- |
+| `component`        | `Component<RouteSectionProps<T>>`                   | yes      | Page or layout component                        |
+| `preload`          | `RouteDefinition['preload']`                        | no       | Router data preload function                    |
+| `matchFilters`     | `RouteDefinition['matchFilters']`                   | no       | Router parameter filters                        |
+| `info`             | `FileRouteInfo`                                     | no       | Generated route metadata                        |
+| `metadata`         | `RouteMetadata`                                     | no       | Document metadata for SSG and client navigation |
+| `draft`            | `boolean`                                           | no       | Development-only route                          |
+| `loadingComponent` | `Component<RouteSectionProps<T>>`                   | no       | Suspense fallback                               |
+| `errorComponent`   | `Component<{ error: Error; reset: VoidFunction }>`  | no       | Error fallback                                  |
+| `inherit`          | `boolean \| { loading?: boolean; error?: boolean }` | no       | Per-route inheritance control                   |
 
 `inherit` defaults to enabled. `false` disables both inherited channels;
 `{ loading: false }` or `{ error: false }` disables one. Components declared on
 the current route always take precedence.
+
+`RouteMetadata` contains only serializable values, so the SSG renderer can read
+it without loading the route component:
+
+```ts
+interface RouteMetadata {
+  title?: string
+  description?: string
+  canonical?: string
+  meta?: Array<{
+    name?: string
+    property?: string
+    content: string
+  }>
+  links?: Array<{
+    rel: string
+    href: string
+  }>
+}
+```
+
+During SSG and client navigation, metadata replaces matching standard head tags
+and inserts missing custom `meta` and `link` tags. Values are HTML-escaped,
+missing fields restore the template head, and the generated `routeMetadata`
+export contains draft-filtered metadata keyed by route pattern.
 
 ## Plugin Options
 
@@ -194,6 +220,10 @@ SSG behavior:
   contents of the element whose ID matches `id`.
 - Uses `<!--solid-file-router-head-->` when present; otherwise inserts Solid's
   hydration bootstrap immediately before `</head>`.
+- Applies the final route's `metadata` to the generated head, replacing standard
+  tags and inserting missing custom tags. The generated client root repeats the
+  same update during hydration and navigation; without metadata, the template
+  head is left unchanged apart from the hydration bootstrap.
 - Rejects duplicate outlet markers and missing outlet/head insertion points.
 
 For setup, output examples, custom entries, and troubleshooting, see the
@@ -203,13 +233,51 @@ For setup, output examples, custom entries, and troubleshooting, see the
 
 `mdx: true` adds `<pagesDir>/**/*.{md,mdx}` routes alongside the built-in
 JSX/TSX routes. An options object accepts Satteri's `MdxCompileOptions` plus
-`filter?: string` and `pagesDir?: string`. The plugin's `pagesDir` is inherited
-unless the MDX object supplies its own. Satteri is an optional peer dependency,
-and MDX requires program output. YAML frontmatter additionally requires the
-optional `yaml` peer dependency.
+`filter?: string`, `pagesDir?: string`, `transformPath`, and `extendLoad`. The
+plugin's `pagesDir` is inherited unless the MDX object supplies its own.
+Satteri is an optional peer dependency, and MDX requires program output. YAML
+frontmatter additionally requires the optional `yaml` peer dependency.
+
+```ts
+interface MdxOptions<TData = unknown> extends MdxCompileOptions {
+  filter?: string
+  pagesDir?: string
+  transformPath?: (
+    sourcePath: string,
+    defaultEntry: Readonly<RouteProviderEntry<TData>>,
+  ) => RouteProviderEntry<TData>
+  extendLoad?: (
+    document: Readonly<MdxRouteDocument>,
+    context: Readonly<RouteProviderLoadContext<TData>>,
+  ) => Promisable<MdxLoadExtension | undefined>
+}
+
+interface MdxRouteDocument {
+  source: string
+  code: string
+  component: string
+  frontmatter: Record<string, unknown>
+  routeConfig: MdxRouteConfig
+  data: Data
+}
+
+interface MdxLoadExtension {
+  mdxContent?: string
+  routeConfig?: Partial<MdxRouteConfig>
+}
+```
+
+`transformPath` receives the source path relative to the Vite root and the
+normalized default entry. Return a new entry to change the logical route path,
+public route ID, or provider data. `extendLoad` runs after compilation and can
+override route config or replace the generated route component with `mdxContent`.
+The expression is compiled into a wrapper whose scope contains `props`,
+`components`, and `MDXContent`; `components` comes from
+`useMDXComponents()`, so the active `MDXProvider` map is available without
+adding imports to every document.
 
 Native Markdown/MDX routes use YAML frontmatter. Supported route fields are
-`info`, `matchFilters`, `inherit`, and `draft`; other fields are exposed through
+`info`, `metadata`, `matchFilters`, `inherit`, and `draft`; other fields are exposed through
 the generated `frontmatter` export. The legacy `export const route` configuration
 is ignored. YAML frontmatter requires the optional `yaml` peer dependency.
 

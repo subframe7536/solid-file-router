@@ -75,6 +75,10 @@ name:
 ---
 info:
   title: Getting started
+metadata:
+  title: Getting started | Docs
+  description: Learn how to get started.
+  canonical: https://example.com/guide
 matchFilters:
   slug: '/^[a-z0-9-]+$/'
 inherit: true
@@ -83,11 +87,15 @@ inherit: true
 # Example
 ```
 
-The supported route fields are `info`, `matchFilters`, `inherit`, and `draft`.
+The supported route fields are `info`, `metadata`, `matchFilters`, `inherit`, and `draft`.
 Other YAML fields remain available through the generated `frontmatter` export
 but are not passed to the router. `matchFilters` strings are compiled as regular
 expressions; `/pattern/flags` also supports flags. The legacy `export const route`
 configuration is ignored.
+
+`metadata` uses the serializable `RouteMetadata` shape from the router. It is
+used by SSG to generate the page head and can also be passed through an
+`extendLoad` wrapper to client-side page components.
 
 `frontmatter` is also available when importing a Markdown or MDX document:
 
@@ -161,10 +169,10 @@ must remain `'program'`.
 
 The following properties are specific to `solid-file-router`:
 
-| Property   | Behavior |
-| ---------- | -------- |
+| Property   | Behavior                                                                                                          |
+| ---------- | ----------------------------------------------------------------------------------------------------------------- |
 | `pagesDir` | Route directory used to derive the default MDX filter. It inherits the plugin-level `pagesDir` unless overridden. |
-| `filter`   | MDX discovery glob, relative to the Vite root. Defaults to `<pagesDir>/**/*.{md,mdx}`. |
+| `filter`   | MDX discovery glob, relative to the Vite root. Defaults to `<pagesDir>/**/*.{md,mdx}`.                            |
 
 Configure these properties alongside Satteri options:
 
@@ -177,6 +185,51 @@ fileRouter({
   },
 })
 ```
+
+### Extending generated route modules
+
+Use `transformPath` when a project needs to map MDX source files into a custom
+route tree. It receives the source path relative to the Vite root and the
+default entry, so the normal MDX extension replacement can be preserved with a
+spread:
+
+```ts
+fileRouter({
+  mdx: {
+    transformPath: (sourcePath, entry) => ({
+      ...entry,
+      path: `docs/${sourcePath.replace(/^content\//, '').replace(/\.mdx$/, '.tsx')}`,
+    }),
+  },
+})
+```
+
+Use `extendLoad` to attach provider data or wrap the compiled content without
+reimplementing frontmatter parsing or Satteri compilation. The callback
+receives the immutable compiled document and the route-provider load context:
+
+```ts
+fileRouter({
+  mdx: {
+    extendLoad(document, context) {
+      return {
+        routeConfig: { info: { source: context.sourcePath } },
+        mdxContent: `
+          <components.Article {...props}>
+            <MDXContent {...props} />
+          </components.Article>
+        `,
+      }
+    },
+  },
+})
+```
+
+`mdxContent` is a JSX expression, not a second compilation entry. Its generated
+wrapper exposes `props`, `components`, and `MDXContent`; `components` is loaded
+from `useMDXComponents()`, so an ancestor `MDXProvider` can supply `Article`
+and any other custom component. This keeps document-local MDX imports separate
+from application-wide component configuration.
 
 The router supplies Solid-compatible defaults for JSX output, provider imports,
 attribute casing, style casing, and the source file URL. Explicit Satteri

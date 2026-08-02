@@ -21,6 +21,7 @@ inheritance, route metadata, route providers, and build-time SSG (Static Site Ge
 - Route `preload`, `matchFilters`, metadata, and lazy components
 - Inherited loading and error components
 - Built-in Markdown/MDX routes compiled with Satteri
+- Extensible MDX route loading with `transformPath` and `extendLoad`
 - Composable route providers for CMS or generated modules
 - Build-time static HTML generation
 
@@ -104,8 +105,10 @@ generates a pass-through root component.
 
 Enable the latest opt-in features with `fileRouter({ ssg: {} })` or
 `fileRouter({ mdx: true })`. SSG requires `solidPlugin({ ssr: true })`; MDX
-requires the optional `satteri` peer dependency. Follow the dedicated guides
-for complete, copyable setup.
+requires the optional `satteri` peer dependency. Pass an MDX options object to
+map source paths or wrap generated content with `extendLoad`; its
+`mdxContent` expression can use the active `useMDXComponents()` map. Follow the
+dedicated guides for complete, copyable setup.
 
 `routeProviders` are additive: the built-in filesystem provider runs first,
 optional MDX runs next, and the configured providers follow. Markdown/MDX

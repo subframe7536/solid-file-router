@@ -61,8 +61,51 @@ async function buildTempSsgProject(
   routes: readonly string[] = ['/'],
   mdx = false,
   includeDraft = false,
+  includeMetadata = false,
 ): Promise<any> {
   const root = createTempProject()
+  if (includeMetadata) {
+    writeFileSync(
+      join(root, 'src/pages/index.tsx'),
+      `import { createRoute } from 'solid-file-router'
+
+export default createRoute({
+  metadata: {
+    title: 'Home & Docs',
+    description: 'Home <description>',
+    canonical: 'https://example.com/home?a=1&b=2',
+    meta: [{ property: 'og:title', content: 'Home "preview"' }],
+    links: [{ rel: 'alternate', href: '/home?format=html' }],
+  },
+  component: () => <h1>home</h1>,
+})
+`,
+    )
+    writeFileSync(
+      join(root, 'src/pages/about.tsx'),
+      `import { createRoute } from 'solid-file-router'
+
+export default createRoute({
+  metadata: {
+    title: 'About',
+    description: 'About page',
+  },
+  component: () => <h1>about</h1>,
+})
+`,
+    )
+    mkdirSync(join(root, 'src/pages/blog'), { recursive: true })
+    writeFileSync(
+      join(root, 'src/pages/blog/[slug].tsx'),
+      `import { createRoute } from 'solid-file-router'
+
+export default createRoute({
+  metadata: { title: 'Dynamic page' },
+  component: () => <h1>dynamic</h1>,
+})
+`,
+    )
+  }
   if (mdx) {
     writeFileSync(
       join(root, 'src/pages/docs.mdx'),
@@ -103,6 +146,7 @@ createClientEntry(() => <FileRouter />, document.getElementById('root')!)
     `import { createRoute } from 'solid-file-router'
 
 export default createRoute({
+  ${includeMetadata ? "metadata: { title: 'Not Found' }," : ''}
   component: () => <h1>not-found-fallback</h1>,
 })
 `,
@@ -171,6 +215,14 @@ export default createServerEntry((props) => (
     indexHtml: readFileSync(join(root, 'dist/client/index.html'), 'utf8'),
     fallbackHtml: readFileSync(join(root, 'dist/client/404.html'), 'utf8'),
     docsHtml: mdx ? readFileSync(join(root, 'dist/client/docs.html'), 'utf8') : undefined,
+    aboutHtml:
+      includeMetadata && existsSync(join(root, 'dist/client/about.html'))
+        ? readFileSync(join(root, 'dist/client/about.html'), 'utf8')
+        : undefined,
+    dynamicHtml:
+      includeMetadata && existsSync(join(root, 'dist/client/blog/hello.html'))
+        ? readFileSync(join(root, 'dist/client/blog/hello.html'), 'utf8')
+        : undefined,
     draftHtmlExists: existsSync(join(root, 'dist/client/draft.html')),
     mdxRouteQuery,
   }
@@ -268,6 +320,29 @@ describe('fileRouter', () => {
     const rendered = renderTemplate(html, 'root', '<p>rendered</p>')
     expect(rendered).toContain('<p>rendered</p>')
     expect(rendered).toContain('<title>app</title>')
+    expect(rendered).not.toContain('data-solid-file-router-head-default')
+  })
+
+  it('replaces and inserts escaped route metadata in the document head', () => {
+    const rendered = renderTemplate(
+      '<html><head><title>base</title><meta name="description" content="old"><link rel="canonical" href="/old"></head><body><div id="root"></div></body></html>',
+      'root',
+      '<p>rendered</p>',
+      {
+        title: 'Page & <title>',
+        description: 'Description "quoted"',
+        canonical: 'https://example.com/a?x=1&y=2',
+        meta: [{ property: 'og:title', content: 'Preview <page>' }],
+        links: [{ rel: 'alternate', href: '/page?format=html' }],
+      },
+    )
+
+    expect(rendered).toContain('<title>Page &amp; &lt;title&gt;</title>')
+    expect(rendered).toContain('<meta name="description" content="Description &quot;quoted&quot;">')
+    expect(rendered).toContain('<link rel="canonical" href="https://example.com/a?x=1&amp;y=2">')
+    expect(rendered).toContain('<meta property="og:title" content="Preview &lt;page&gt;">')
+    expect(rendered).toContain('<link rel="alternate" href="/page?format=html">')
+    expect(rendered).toContain('data-solid-file-router-head-default')
   })
 
   it('rejects duplicate SSG outlet markers', () => {
@@ -296,7 +371,7 @@ describe('fileRouter', () => {
     const module = await plugin.load.handler()
 
     expect(module).toContain("import { createComponent, mergeProps } from 'solid-js'")
-    expect(module).toContain("import { Router } from '@solidjs/router'")
+    expect(module).toContain("import { Router, useCurrentMatches } from '@solidjs/router'")
     expect(module).not.toContain('lazy(() => import(')
   })
 
@@ -307,7 +382,7 @@ describe('fileRouter', () => {
     const module = await plugin.load.handler()
 
     expect(module).toContain("import { createComponent, lazy, mergeProps } from 'solid-js'")
-    expect(module).toContain("import { Router } from '@solidjs/router'")
+    expect(module).toContain("import { Router, useCurrentMatches } from '@solidjs/router'")
     expect(module).toContain('lazy(() => import(')
   })
 
@@ -318,10 +393,14 @@ describe('fileRouter', () => {
     const ssrModule = await plugin.load.handler(undefined, { ssr: true })
 
     expect(clientModule).toContain("import { createComponent, lazy, mergeProps } from 'solid-js'")
-    expect(clientModule).toContain("import { __loader__ } from 'solid-file-router'")
+    expect(clientModule).toContain(
+      "import { __loader__, __routeMetadataRoot__ } from 'solid-file-router'",
+    )
     expect(clientModule).toContain('__loader__(lazy(() => import(')
     expect(ssrModule).toContain("import { createComponent, mergeProps } from 'solid-js'")
-    expect(ssrModule).toContain("import { __loader__ } from 'solid-file-router'")
+    expect(ssrModule).toContain(
+      "import { __loader__, __routeMetadataRoot__ } from 'solid-file-router'",
+    )
     expect(ssrModule).toContain('__loader__(')
     expect(ssrModule).not.toContain('__loader__(lazy(() => import(')
   })
@@ -389,6 +468,7 @@ draft: true
     expect(routeModule).toContain('export default createRoute')
     expect(routeModule).toContain('MDXContent')
     expect(routeModule).toContain('info: __sfr_mdx_route.info')
+    expect(routeModule).toContain('metadata: __sfr_mdx_route.metadata')
     expect(routeModule).toContain('matchFilters: __sfr_mdx_route.matchFilters')
     expect(routeModule).toContain('inherit: __sfr_mdx_route.inherit')
     expect(routeModule).toContain('draft: __sfr_mdx_route.draft')
@@ -396,6 +476,72 @@ draft: true
     await expect(
       (plugin as any).load.handler(normalizePath(`${markdownPath}-sfr.tsx`)),
     ).resolves.toContain('MDXContent')
+  })
+
+  it('allows MDX providers to transform paths and extend generated route modules', async () => {
+    const root = createTempProject()
+    const mdxPath = join(root, 'src/pages/content.mdx')
+    writeFileSync(
+      mdxPath,
+      `---
+title: Content
+---
+
+# Content`,
+    )
+    const plugins = fileRouter({
+      mdx: {
+        transformPath(sourcePath, entry) {
+          expect(sourcePath).toBe('src/pages/content.mdx')
+          return { ...entry, path: 'docs/content.tsx', data: { section: 'docs' } }
+        },
+        extendLoad(document, context) {
+          expect(document.frontmatter).toEqual({ title: 'Content' })
+          expect(context.data).toEqual({ section: 'docs' })
+          return {
+            routeConfig: { info: { section: 'docs' } },
+            mdxContent:
+              '<components.wrapper {...props}><MDXContent {...props} /></components.wrapper>',
+          }
+        },
+      },
+      lazy: false,
+    })
+    const registryPlugin = plugins.find(({ name }) => name.endsWith(':router'))!
+    const plugin = plugins.find(({ name }) => name.endsWith(':router'))!
+
+    await (registryPlugin as any).configResolved({ build: { ssr: false }, root })
+
+    const routeModule = await (plugin as any).load.handler(normalizePath(`${mdxPath}-sfr.tsx`))
+
+    expect(routeModule).toContain('useMDXComponents as __sfr_mdx_components')
+    expect(routeModule).toContain('<components.wrapper {...props}>')
+    expect(routeModule).toContain('component: __sfr_mdx_content')
+    expect(routeModule).toContain('"section": "docs"')
+  })
+
+  it('keeps direct MDX imports independent from route extensions', async () => {
+    const root = createTempProject()
+    const markdownPath = join(root, 'src/content.mdx')
+    writeFileSync(markdownPath, '# Content')
+    let extended = false
+    const mdxPlugin = fileRouter({
+      mdx: {
+        extendLoad() {
+          extended = true
+          return { mdxContent: '<MDXContent />' }
+        },
+      },
+    }).find(({ name }) => name.endsWith(':mdx'))!
+
+    const result = await (mdxPlugin as any).transform.handler(
+      readFileSync(markdownPath, 'utf8'),
+      normalizePath(markdownPath),
+    )
+
+    expect(result.code).toContain('function MDXContent')
+    expect(result.code).not.toContain('useMDXComponents as __sfr_mdx_components')
+    expect(extended).toBe(false)
   })
 
   it.each(['md', 'mdx'])(
@@ -767,6 +913,30 @@ export default createRoute({ component: () => <h1>missing</h1> })
     expect(output.mdxRouteQuery).toContain('MDX docs')
     expect(output.mdxRouteQuery).toContain('info: __sfr_mdx_route.info')
     expect(output.mdxRouteQuery).toContain('draft: __sfr_mdx_route.draft')
+  })
+
+  it('injects route metadata for ordinary pages and the 404 fallback', async () => {
+    const output = await buildTempSsgProject(undefined, ['/', '/about'], false, false, true)
+
+    expect(output.indexHtml).toContain('<title>Home &amp; Docs</title>')
+    expect(output.indexHtml).toContain(
+      '<meta name="description" content="Home &lt;description&gt;">',
+    )
+    expect(output.indexHtml).toContain(
+      '<link rel="canonical" href="https://example.com/home?a=1&amp;b=2">',
+    )
+    expect(output.indexHtml).toContain(
+      '<meta property="og:title" content="Home &quot;preview&quot;">',
+    )
+    expect(output.indexHtml).toContain('<link rel="alternate" href="/home?format=html">')
+    expect(output.aboutHtml).toContain('<title>About</title>')
+    expect(output.fallbackHtml).toContain('<title>Not Found</title>')
+  })
+
+  it('resolves metadata for dynamic SSG routes from the final match', async () => {
+    const output = await buildTempSsgProject(undefined, ['/blog/hello'], false, false, true)
+
+    expect(output.dynamicHtml).toContain('<title>Dynamic page</title>')
   })
 
   it('skips draft routes from SSG output', async () => {

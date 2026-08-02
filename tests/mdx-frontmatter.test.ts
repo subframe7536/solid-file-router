@@ -15,6 +15,16 @@ matchFilters:
     - zh
 inherit: false
 draft: true
+metadata:
+  title: Guide | Moraine
+  description: Guide description
+  canonical: https://example.com/guide
+  meta:
+    - property: og:title
+      content: Guide
+  links:
+    - rel: alternate
+      href: /guide.md
 tags:
   - docs`,
     })
@@ -24,6 +34,13 @@ tags:
       matchFilters: { slug: '/^[a-z-]+$/i', locale: ['en', 'zh'] },
       inherit: false,
       draft: true,
+      metadata: {
+        title: 'Guide | Moraine',
+        description: 'Guide description',
+        canonical: 'https://example.com/guide',
+        meta: [{ property: 'og:title', content: 'Guide' }],
+        links: [{ rel: 'alternate', href: '/guide.md' }],
+      },
       tags: ['docs'],
     })
     expect(result.routeConfig.info).toStrictEqual({ title: 'Guide' })
@@ -33,6 +50,7 @@ tags:
     })
     expect(result.routeConfig.inherit).toBe(false)
     expect(result.routeConfig.draft).toBe(true)
+    expect(result.routeConfig.metadata).toStrictEqual(result.data.metadata)
   })
 
   it('uses an empty object when frontmatter is absent or empty', async () => {
