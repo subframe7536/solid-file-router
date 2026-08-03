@@ -10,5 +10,5 @@ export {
 export { isRouteProviderModuleId, resolveFromRoot, resolveRouteProviderModuleId } from './entry'
 export type { NormalizedRouteProviderEntry } from './entry'
 
-export { RouteProviderManager } from './manager'
+export { createNoRouteProviderChange, RouteProviderManager } from './manager'
 export type { RouteProviderChange } from './manager'

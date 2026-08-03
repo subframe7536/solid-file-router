@@ -10,6 +10,7 @@ import type {
   RouteProviderEntry,
   RouteProviderLoadContext,
 } from '../route/provider'
+import { createPagesPathResolver } from '../route/provider/pages'
 
 import { parseMdxFrontmatter, serializeJavaScriptValue } from './frontmatter'
 import type { MdxFrontmatterBlock, MdxRouteConfig } from './frontmatter'
@@ -188,20 +189,20 @@ export const mdxRouteProvider = <TData = unknown>(
   options: MdxOptions<TData> = {},
 ): RouteProvider<TData> => {
   const pagesDir = options.pagesDir ?? 'src/pages'
-  const filter = options.filter ?? `${pagesDir}/**/*.{md,mdx}`
-  const prefix = `${pagesDir.replace(/^\.\//, '').replace(/\/$/, '')}/`
+  const paths = createPagesPathResolver(pagesDir, options.filter ?? '', 'md,mdx')
 
   return defineRouteProvider<TData>({
-    filter,
+    filter: paths.filter,
+    glob: paths.glob,
     transformPath(file) {
-      const relative = file.startsWith(prefix) ? file.slice(prefix.length) : file
-      if (REG_MDX_LAYOUT.test(relative)) {
+      const routePath = paths.routePath(file)
+      if (REG_MDX_LAYOUT.test(routePath)) {
         throw new Error(
           `[solid-file-router] Markdown/MDX files cannot be used as layouts: ${file}. Use a JSX/TSX _app or _layout route instead.`,
         )
       }
-      const defaultEntry = { path: relative.replace(REG_MDX, '.tsx') }
-      return options.transformPath?.(file, defaultEntry) ?? defaultEntry
+      const defaultEntry = { path: routePath.replace(REG_MDX, '.tsx') }
+      return options.transformPath?.(paths.sourcePath(file), defaultEntry) ?? defaultEntry
     },
     async load(context) {
       const { sourcePath } = context

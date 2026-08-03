@@ -17,7 +17,7 @@ export interface RouteProviderChange {
   changedFiles: string[]
 }
 
-const noChange = (): RouteProviderChange => ({
+export const createNoRouteProviderChange = (): RouteProviderChange => ({
   matched: false,
   structureChanged: false,
   changedModuleIds: [],
@@ -98,7 +98,7 @@ export class RouteProviderManager<TData> {
     const normalized = normalizePath(file)
     const providerIndexes = this.getMatchingProviderIndexes(normalized)
     if (providerIndexes.length === 0) {
-      return noChange()
+      return createNoRouteProviderChange()
     }
 
     const previousModuleIds = this.getModuleIds()

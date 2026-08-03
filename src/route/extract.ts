@@ -156,7 +156,7 @@ export function extractPlugin({ types: t }: typeof Babel): Babel.PluginObj<State
         const { entryFn, pick, targetFn } = state.opts
 
         let callExpr = null
-        let updatePath = null
+        let updatePath: Babel.NodePath<Babel.types.Node> | null = null
 
         // Case 1: export default <functionName>(...)
         if (t.isCallExpression(path.node.declaration)) {
@@ -190,8 +190,7 @@ export function extractPlugin({ types: t }: typeof Babel): Babel.PluginObj<State
         // Update the appropriate node
         if (updatePath === path) {
           path.node.declaration = targetNode
-        } else {
-          // @ts-expect-error 🤮
+        } else if (updatePath.isVariableDeclarator()) {
           updatePath.node.init = targetNode
         }
       },

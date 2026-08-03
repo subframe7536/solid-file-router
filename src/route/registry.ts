@@ -10,9 +10,9 @@ import { assembleDefinition, generateDefinition } from './definition'
 import type { InheritanceConfig, NormalizedRouteEntry, RouteEntry, RouteInput } from './definition'
 import { extract, invalidateCache } from './extract'
 import type { ExtractConfig } from './extract'
-import { getRoutePath } from './path'
-import { resolveFromRoot, RouteProviderManager } from './provider'
-import type { RouteProvider } from './provider'
+import { getRoutePath, hasPrivateSegment, isAppRoute, isLayoutRoute } from './path'
+import { createNoRouteProviderChange, resolveFromRoot, RouteProviderManager } from './provider'
+import type { RouteProvider, RouteProviderChange } from './provider'
 import type { InfoTypeDefinition } from './type-gen'
 import { generateRouteTypes } from './type-gen'
 
@@ -26,23 +26,16 @@ interface RouteRegistryOption<TData> {
   routeProviders?: readonly RouteProvider<TData>[]
 }
 
-export interface RouteRegistryChange {
-  matched: boolean
-  structureChanged: boolean
-  changedModuleIds: string[]
-  changedFiles: string[]
-}
-
-const noChange = (): RouteRegistryChange => ({
-  matched: false,
-  structureChanged: false,
-  changedModuleIds: [],
-  changedFiles: [],
-})
+export type RouteRegistryChange = RouteProviderChange
 
 const DRAFT_EXTRACT_CONFIG: ExtractConfig = {
   entryFn: 'createRoute',
   pick: ['draft'],
+}
+
+interface DraftRouteScope {
+  path: string
+  subtree: boolean
 }
 
 export class RouteRegistry<TData = unknown> {
@@ -89,7 +82,7 @@ export class RouteRegistry<TData = unknown> {
     const normalized = normalizePath(file)
     if (!this.providerManager.enabled) {
       if (!this.isRouteFile(normalized)) {
-        return noChange()
+        return createNoRouteProviderChange()
       }
       invalidateCache(normalized)
       log(`Route changed: ${normalized}`)
@@ -102,7 +95,7 @@ export class RouteRegistry<TData = unknown> {
     const normalized = normalizePath(file)
     if (!this.providerManager.enabled) {
       if (!this.isRouteFile(normalized) || this.entries.has(normalized)) {
-        return noChange()
+        return createNoRouteProviderChange()
       }
       this.entries.set(normalized, {
         routeId: normalized,
@@ -122,7 +115,7 @@ export class RouteRegistry<TData = unknown> {
     const normalized = normalizePath(file)
     if (!this.providerManager.enabled) {
       if (!this.entries.delete(normalized)) {
-        return noChange()
+        return createNoRouteProviderChange()
       }
       invalidateCache(normalized)
       this.definitionCache.delete(normalized)
@@ -156,6 +149,7 @@ export class RouteRegistry<TData = unknown> {
 
   async getStaticRoutes(): Promise<string[]> {
     const routes = this.getEntries()
+      .filter((entry) => !hasPrivateSegment(entry.routePath))
       .map((entry) => getRoutePath(entry.routeId, this.pagesDir))
       .filter(
         (route): route is string =>
@@ -165,10 +159,13 @@ export class RouteRegistry<TData = unknown> {
   }
 
   async filterDraftRoutes(routes: readonly string[]): Promise<string[]> {
-    const draftPaths = await this.getDraftRoutePaths()
+    const draftScopes = await this.getDraftRoutePaths()
     return routes.filter((route) => {
       const normalized = normalizeStaticRoute(route)
-      return ![...draftPaths].some((draftPath) => isWithinDraftScope(normalized, draftPath))
+      return (
+        !hasPrivateSegment(normalized) &&
+        !draftScopes.some((scope) => isWithinDraftScope(normalized, scope))
+      )
     })
   }
 
@@ -182,7 +179,7 @@ export class RouteRegistry<TData = unknown> {
   ): Promise<RouteRegistryChange> {
     const result = await this.providerManager.handleChange(file)
     if (!result.matched) {
-      return noChange()
+      return createNoRouteProviderChange()
     }
     if (result.structureChanged) {
       this.replaceEntries(this.providerManager.getEntries())
@@ -227,9 +224,9 @@ export class RouteRegistry<TData = unknown> {
     )
   }
 
-  private async getDraftRoutePaths(): Promise<Set<string>> {
+  private async getDraftRoutePaths(): Promise<DraftRouteScope[]> {
     const entries = this.getEntries().filter((entry) => {
-      const route = getRouteScopePath(entry.routeId, this.pagesDir)
+      const route = getRouteScopePath(entry, this.pagesDir)
       return !!route && route !== '/404'
     })
     const draftPaths = await Promise.all(
@@ -241,61 +238,74 @@ export class RouteRegistry<TData = unknown> {
           ? await extract(code, entry.moduleId, DRAFT_EXTRACT_CONFIG)
           : undefined
         const isDraft = !!extracted?.code && /\bdraft\s*:\s*true\b/.test(extracted.code)
-        return isDraft ? getRouteScopePath(entry.routeId, this.pagesDir) : undefined
+        const path = isDraft ? getRouteScopePath(entry, this.pagesDir) : undefined
+        return path
+          ? {
+              path: normalizeStaticRoute(path),
+              subtree: isAppRoute(entry.routePath) || isLayoutRoute(entry.routePath),
+            }
+          : undefined
       }),
     )
-    return new Set(draftPaths.filter((path): path is string => !!path).map(normalizeStaticRoute))
+    return draftPaths.filter((scope): scope is DraftRouteScope => !!scope)
   }
 }
 
-function getRouteScopePath(routeId: string, routeRoot: string): string | undefined {
-  const route = getRoutePath(routeId, routeRoot)
-  if (route) {
-    return route
+function getRouteScopePath(entry: NormalizedRouteEntry, routeRoot: string): string | undefined {
+  if (isAppRoute(entry.routePath)) {
+    return '/'
   }
-
-  const layoutRouteId = routeId.replace(/(^|\/)(?:_app|_layout)\.(?:jsx|tsx)$/i, '$1index.tsx')
-  return getRoutePath(layoutRouteId, routeRoot)
+  if (isLayoutRoute(entry.routePath)) {
+    const indexRoutePath = entry.routePath.replace(/_layout\.(jsx|tsx)$/i, 'index.$1')
+    return getRoutePath(indexRoutePath, routeRoot)
+  }
+  return getRoutePath(entry.routeId, routeRoot)
 }
 
 function normalizeStaticRoute(route: string): string {
-  const normalized = route.replace(/^\/+|\/+$/g, '')
+  const normalized = route.trim().replace(/^\/+|\/+$/g, '')
   return normalized ? `/${normalized}` : '/'
 }
 
-function isWithinDraftScope(route: string, draftPath: string): boolean {
-  if (draftPath === '/') {
-    return true
-  }
-
+function isWithinDraftScope(route: string, scope: DraftRouteScope): boolean {
+  const { path: draftPath, subtree } = scope
   const routeSegments = route.split('/').filter(Boolean)
   const draftSegments = draftPath.split('/').filter(Boolean)
-  let routeIndex = 0
 
-  for (const draftSegment of draftSegments) {
-    if (draftSegment === '*') {
-      return true
+  function match(draftIndex: number, routeIndex: number): boolean {
+    if (draftIndex === draftSegments.length) {
+      return subtree || routeIndex === routeSegments.length
     }
-    if (draftSegment.startsWith(':') && draftSegment.endsWith('?')) {
-      if (routeIndex < routeSegments.length) {
-        routeIndex++
+
+    const draftSegment = draftSegments[draftIndex]!
+    if (draftSegment.startsWith('*')) {
+      const minimumConsumed = draftSegment.endsWith('?') ? 0 : 1
+      for (
+        let consumed = minimumConsumed;
+        routeIndex + consumed <= routeSegments.length;
+        consumed += 1
+      ) {
+        if (match(draftIndex + 1, routeIndex + consumed)) {
+          return true
+        }
       }
-      continue
+      return false
+    }
+
+    const optional = draftSegment.startsWith(':') && draftSegment.endsWith('?')
+    if (optional && match(draftIndex + 1, routeIndex)) {
+      return true
     }
     if (routeIndex >= routeSegments.length) {
       return false
     }
-    if (draftSegment.startsWith(':')) {
-      routeIndex++
-      continue
+    if (draftSegment.startsWith(':') || draftSegment === routeSegments[routeIndex]) {
+      return match(draftIndex + 1, routeIndex + 1)
     }
-    if (draftSegment !== routeSegments[routeIndex]) {
-      return false
-    }
-    routeIndex++
+    return false
   }
 
-  return true
+  return match(0, 0)
 }
 
 function change(

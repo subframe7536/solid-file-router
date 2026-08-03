@@ -231,6 +231,28 @@ describe('generateDefinition', () => {
     )
   })
 
+  it('generates the no-app fallback for eager routes as well', async () => {
+    const module = await buildDefinition([], false, undefined, false)
+    expect(module).toContain('const __app_route = {}')
+    expect(module).toContain('export const fileRoutes = __filterDraftRoutes(')
+  })
+
+  it('wraps all pages and the not-found route with a root layout', async () => {
+    const rootLayout = `${root}/src/pages/_layout.tsx`
+    const module = await buildDefinition([
+      `${root}/src/pages/_app.tsx`,
+      rootLayout,
+      `${root}/src/pages/index.tsx`,
+      `${root}/src/pages/about.tsx`,
+      `${root}/src/pages/404.tsx`,
+    ])
+
+    expect(module).toContain('"path": ""')
+    expect(module).toContain('"path": "*"')
+    expect(module).toContain(`${getRouteImportName(rootLayout)}.loadingComponent`)
+    expect(module).not.toContain('"/_layout"')
+  })
+
   it('includes routeInfo in generated module', async () => {
     const module = await buildDefinition(files)
     expect(module).toContain(

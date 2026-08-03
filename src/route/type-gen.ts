@@ -4,7 +4,7 @@ import { dirname } from 'node:path'
 import { PACKAGE_NAME } from '../const'
 
 import type { RouteInput } from './definition'
-import { getRoutePath } from './path'
+import { getRoutePath, hasPrivateSegment } from './path'
 
 export interface InlineInfoTypeDefinition {
   [key: string]: string | InlineInfoTypeDefinition
@@ -27,7 +27,15 @@ function isPrivateRouteInput(file: RouteInput): boolean {
     return false
   }
 
-  return file.routePath.split('/').some((segment) => segment.startsWith('_'))
+  return hasPrivateSegment(file.routePath)
+}
+
+function quoteRouteKey(value: string): string {
+  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
+}
+
+function quoteTypeProperty(value: string): string {
+  return /^[A-Za-z_$][\w$]*$/.test(value) ? value : quoteRouteKey(value)
 }
 
 export function parseParams(files: RouteInput[], routeRoot = 'src/pages'): string[] {
@@ -43,13 +51,17 @@ export function parseParams(files: RouteInput[], routeRoot = 'src/pages'): strin
       const param = path.split('/').filter((segment) => segment.startsWith(':'))
 
       if (param.length || path.includes('*')) {
-        const dynamic = param.length
-          ? param.map((p) => `$${p.replace(/:(.+)(\?)?/, '$1$2:')} string`)
+        const dynamic = param.map((segment) => {
+          const optional = segment.endsWith('?')
+          const name = segment.slice(1, optional ? -1 : undefined)
+          return `${quoteTypeProperty(`$${name}`)}${optional ? '?' : ''}: string`
+        })
+        const splat = path.includes('*')
+          ? [`${quoteTypeProperty('*')}${path.includes('*?') ? '?' : ''}: string`]
           : []
-        const splat = path.includes('*') ? ["'*': string"] : []
-        params.push(`'${path}': { ${[...dynamic, ...splat].join('; ')} }`)
+        params.push(`${quoteRouteKey(path)}: { ${[...dynamic, ...splat].join('; ')} }`)
       } else {
-        params.push(`'${path}': never`)
+        params.push(`${quoteRouteKey(path)}: never`)
       }
     }
   }
@@ -67,10 +79,10 @@ function generateInlineType(
   for (const [key, value] of Object.entries(obj)) {
     const innerIndent = '  '.repeat(indentLevel + 1)
     if (typeof value === 'string') {
-      result += `${innerIndent}${key}: ${value}\n`
+      result += `${innerIndent}${quoteTypeProperty(key)}: ${value}\n`
     } else if (typeof value === 'object' && value !== null) {
       const inlineType = generateInlineObjectType(value, indentLevel + 1)
-      result += `${innerIndent}${key}: ${inlineType}\n`
+      result += `${innerIndent}${quoteTypeProperty(key)}: ${inlineType}\n`
     } else {
       throw new Error(`Unsupported type descriptor for key "${key}": ${typeof value}`)
     }
@@ -87,10 +99,10 @@ function generateInlineObjectType(obj: InlineInfoTypeDefinition, indentLevel: nu
   let content = ''
   for (const [key, value] of Object.entries(obj)) {
     if (typeof value === 'string') {
-      content += `\n${innerIndent}${key}: ${value};`
+      content += `\n${innerIndent}${quoteTypeProperty(key)}: ${value};`
     } else if (typeof value === 'object' && value !== null) {
       const nestedType = generateInlineObjectType(value, indentLevel + 1)
-      content += `\n${innerIndent}${key}: ${nestedType}`
+      content += `\n${innerIndent}${quoteTypeProperty(key)}: ${nestedType}`
     } else {
       throw new Error(`Unsupported nested type descriptor for key "${key}"`)
     }
@@ -104,7 +116,7 @@ export function generateRouteTypes(
   routeRoot = 'src/pages',
 ): number {
   const params: string[] = parseParams(files, routeRoot).sort()
-  params.push("'/404': never")
+  params.push(`${quoteRouteKey('/404')}: never`)
 
   const infoImport =
     infoDts?.type === 'import'
@@ -134,7 +146,7 @@ declare module '${PACKAGE_NAME}' {
 
 declare module '@solidjs/router' {
   type Paths =
-    | ${params.map((s) => s.split(': ')[0]).join('\n    | ')}
+    | ${params.map((s) => s.slice(0, s.indexOf(': '))).join('\n    | ')}
 
   export function A(props: Omit<AnchorProps, 'href'> & { href: Paths }): JSX.Element
   export interface Navigator {

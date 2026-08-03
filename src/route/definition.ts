@@ -8,6 +8,7 @@ import {
   isLayoutRoute,
   isLogicalUrlRoutePath,
   isNotFoundRoute,
+  isRootLayoutRoute,
   patterns,
 } from './path'
 export { getRoutePath } from './path'
@@ -32,6 +33,7 @@ interface BaseRoute {
   children?: BaseRoute[]
   component?: string
   __?: string
+  __sfrDraftSubtree?: string
 }
 
 /**
@@ -173,7 +175,11 @@ function getRouteTreeKey(routeId: string, routeRoot: string): string {
  * //   ]
  * // }
  */
-function buildRouteLayoutMap(routeFiles: RouteEntry[], layouts: LayoutInfo[]): RouteLayoutMap {
+function buildRouteLayoutMap(
+  routeFiles: RouteEntry[],
+  layouts: LayoutInfo[],
+  routeRoot: string,
+): RouteLayoutMap {
   const map: RouteLayoutMap = {}
 
   for (const route of routeFiles) {
@@ -182,11 +188,12 @@ function buildRouteLayoutMap(routeFiles: RouteEntry[], layouts: LayoutInfo[]): R
     // Find layouts in ancestor directories
     for (const layout of layouts) {
       const layoutDir = layout.path.substring(0, layout.path.lastIndexOf('/'))
+      const rootLayout = isRootLayoutRoute(layout.path, routeRoot)
 
       // Check if layout is an ancestor of this route
       if (
         layout.path !== route.routePath &&
-        (isAppRoute(layout.path) || route.routePath.startsWith(`${layoutDir}/`))
+        (isAppRoute(layout.path) || rootLayout || route.routePath.startsWith(`${layoutDir}/`))
       ) {
         // Layout is in an ancestor directory
         ancestorLayouts.push(layout)
@@ -275,6 +282,7 @@ function resolveInheritedComponents(
 function computeGlobalContext(
   entries: RouteEntry[],
   lazy: boolean,
+  routeRoot: string,
 ): {
   globalImports: string[]
   filteredEntries: RouteEntry[]
@@ -307,6 +315,7 @@ function computeGlobalContext(
       )
     } else {
       globalImports.push(`const __app_comp = { component: (props) => props.children }`)
+      globalImports.push(`const __app_route = {}`)
     }
   }
 
@@ -323,7 +332,7 @@ function computeGlobalContext(
   })
 
   const filteredEntries = entries.filter(isGeneratedRouteFile)
-  const routeLayoutMap = buildRouteLayoutMap(filteredEntries, layouts)
+  const routeLayoutMap = buildRouteLayoutMap(filteredEntries, layouts, routeRoot)
 
   const notFoundEntry = entries.find((entry) => isNotFoundRoute(entry.routePath))
   if (notFoundEntry) {
@@ -460,11 +469,16 @@ export function assembleDefinition(
   const entries = files.map(
     (file) => cache.get(getEntryModuleId(file)) ?? createRouteEntry(file, routeRoot),
   )
-  const { globalImports, filteredEntries, routeLayoutMap } = computeGlobalContext(entries, lazy)
+  const { globalImports, filteredEntries, routeLayoutMap } = computeGlobalContext(
+    entries,
+    lazy,
+    routeRoot,
+  )
 
   const routeImports: string[] = []
   const regularRoutes: BaseRoute[] = []
   const inheritanceLogRows: RouteInheritanceLogRow[] = []
+  let rootLayoutRoute: BaseRoute | undefined
 
   for (const entry of filteredEntries) {
     const ancestorLayouts = routeLayoutMap[entry.moduleId] ?? []
@@ -484,6 +498,19 @@ export function assembleDefinition(
       inheritanceLogRows.push(inheritanceLogRow)
     }
 
+    const routeWithDraftScope =
+      isAppRoute(entry.routePath) || isLayoutRoute(entry.routePath)
+        ? {
+            ...route,
+            __sfrDraftSubtree: wrapInline(`${getRouteImportName(entry.moduleId)}.draft === true`),
+          }
+        : route
+
+    if (isRootLayoutRoute(entry.routePath, routeRoot)) {
+      rootLayoutRoute = routeWithDraftScope
+      continue
+    }
+
     entry.segments.reduce((parent, segment, index) => {
       const path = segment.replace(...patterns.slash).replace(...patterns.optional)
       const root = index === 0
@@ -496,7 +523,7 @@ export function assembleDefinition(
       if (root) {
         const last = entry.segments.length === 1
         if (last) {
-          regularRoutes.push({ path, ...route })
+          regularRoutes.push({ path, ...routeWithDraftScope })
           return parent
         }
       }
@@ -512,17 +539,21 @@ export function assembleDefinition(
           return found
         }
 
-        const props = group ? (route.component ? { id: path, path: '' } : { id: path }) : { path }
+        const props = group
+          ? routeWithDraftScope.component
+            ? { id: path, path: '' }
+            : { id: path }
+          : { path }
         current?.[insert]({ ...props, children: [] })
         return current?.[insert === 'unshift' ? 0 : current.length - 1] as BaseRoute
       }
 
       if (layout) {
-        return Object.assign(parent, route)
+        return Object.assign(parent, routeWithDraftScope)
       }
 
       if (leaf) {
-        parent?.children?.[insert]({ path, ...route })
+        parent?.children?.[insert]({ path, ...routeWithDraftScope })
       }
 
       return parent
@@ -540,8 +571,22 @@ export function assembleDefinition(
     __: wrapInline(`...__404_route`),
   })
 
+  if (rootLayoutRoute) {
+    const children = [...regularRoutes]
+    regularRoutes.splice(0, regularRoutes.length, {
+      path: '',
+      ...rootLayoutRoute,
+      children,
+    })
+  }
+
   const routeInfoEntries = entries
-    .filter((entry) => !entry.routePath.includes('/_'))
+    .filter(
+      (entry) =>
+        !hasPrivateSegment(entry.routePath) &&
+        !isAppRoute(entry.routePath) &&
+        !isLayoutRoute(entry.routePath),
+    )
     .map((entry) => {
       const path = getRoutePath(entry.routeId, routeRoot)
       if (!path) {
@@ -574,18 +619,10 @@ export function assembleDefinition(
     .join(', ')} }`
   const draftRouteInfoManifest = `{ ${routeInfoEntries
     .map((entry) => {
-      const draftImports = [
-        ...routeInfoEntries
-          .filter(
-            (parent) =>
-              parent.moduleId !== entry.moduleId && isRoutePathAncestor(parent.path, entry.path),
-          )
-          .map((parent) => `${parent.importName}.draft`),
-        ...(routeLayoutMap[entry.moduleId] ?? [])
-          .map((layout) => layout.draftImportName)
-          .filter((name): name is string => !!name)
-          .map((name) => `${name}.draft`),
-      ]
+      const draftImports = (routeLayoutMap[entry.moduleId] ?? [])
+        .map((layout) => layout.draftImportName)
+        .filter((name): name is string => !!name)
+        .map((name) => `${name}.draft`)
       return `${JSON.stringify(entry.path)}: [${draftImports.join(', ')}]`
     })
     .join(', ')} }`
@@ -597,13 +634,22 @@ export function assembleDefinition(
     return []
   }
   return routes.flatMap((route) => {
-    if (route.draft === true) {
+    if (route.__sfrDraftSubtree === true) {
       return []
     }
-    if (!route.children) {
-      return [route]
+    if (route.draft === true) {
+      if (!route.children) {
+        return []
+      }
+      const { component: _component, draft: _draft, __sfrDraftSubtree: _scope, ...structural } = route
+      return [{ ...structural, children: __filterDraftRoutes(route.children) }]
     }
-    return [{ ...route, children: __filterDraftRoutes(route.children) }]
+    if (!route.children) {
+      const { __sfrDraftSubtree: _scope, ...publicRoute } = route
+      return [publicRoute]
+    }
+    const { __sfrDraftSubtree: _scope, ...publicRoute } = route
+    return [{ ...publicRoute, children: __filterDraftRoutes(route.children) }]
   })
 }
 const __filterDraftInfo = (routes, draftManifest) => Object.fromEntries(
@@ -657,8 +703,4 @@ export const FileRouter = (props) => {
   )
 }
 `
-}
-
-function isRoutePathAncestor(parent: string, child: string): boolean {
-  return parent === '/' ? child !== '/' : child.startsWith(`${parent}/`)
 }

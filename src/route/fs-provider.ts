@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 
 import { defineRouteProvider } from './provider'
 import type { RouteProvider } from './provider'
+import { createPagesPathResolver } from './provider/pages'
 
 export interface FsRouteProviderOptions {
   /** Glob scanned relative to the Vite root. */
@@ -15,14 +16,13 @@ export function fsRouteProvider<TData = unknown>(
   options: FsRouteProviderOptions = {},
 ): RouteProvider<TData> {
   const pagesDir = options.pagesDir ?? 'src/pages'
-  const filter = options.filter ?? `${pagesDir}/**/*.{jsx,tsx}`
-  const prefix = `${pagesDir.replace(/^\.\//, '').replace(/\/$/, '')}/`
+  const paths = createPagesPathResolver(pagesDir, options.filter ?? '', 'jsx,tsx')
 
   return defineRouteProvider<TData>({
-    filter,
+    filter: paths.filter,
+    glob: paths.glob,
     transformPath(file) {
-      const relative = file.startsWith(prefix) ? file.slice(prefix.length) : file
-      return { path: relative.replace(/\.(jsx|tsx)$/i, '.tsx') }
+      return { path: paths.routePath(file).replace(/\.(jsx|tsx)$/i, '.tsx') }
     },
     load({ sourcePath }) {
       return readFile(sourcePath, 'utf8')

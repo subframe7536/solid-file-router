@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import { describe, it, expect } from 'vitest'
 
+import { getRoutePath } from '../src/route/path'
 import { generateRouteTypes, parseParams } from '../src/route/type-gen'
 
 const root = '/root/project'
@@ -40,6 +41,15 @@ const customRouteFiles = [
 ]
 
 describe('generateRouteTypes', () => {
+  it('keeps ordinary index-prefixed names and quotes unsafe parameter keys', () => {
+    expect(getRoutePath(`${root}/src/pages/reindex.tsx`)).toBe('/reindex')
+    expect(getRoutePath(`${root}/src/pages/indexer.tsx`)).toBe('/indexer')
+    expect(getRoutePath(`${root}/src/pages/blog/-[...post-id].tsx`)).toBe('/blog/*?')
+    expect(parseParams([`${root}/src/pages/[user-id].tsx`])).toStrictEqual([
+      "'/:user-id': { '$user-id': string }",
+    ])
+  })
+
   it('writes route type defs and returns count', () => {
     const params = parseParams(files)
     expect(params).toStrictEqual([
@@ -49,7 +59,7 @@ describe('generateRouteTypes', () => {
       "'/sso': never",
       "'/about': never",
       "'/blog/w/o/layout': never",
-      "'/blog/*?': { '*': string }",
+      "'/blog/*?': { '*'?: string }",
       "'/blog/:slug': { $slug: string }",
       "'/blog': never",
       "'/blog/tags': never",

@@ -4,7 +4,7 @@ export const patterns = {
   optional: [/^-(:?[\w-]+|\*)/, '$1?'],
   param: [/\[([^\]]+)]/g, ':$1'],
   slash: [/^index$|\./g, '/'],
-  splat: [/\[\.{3}\w+\]/g, '*'],
+  splat: [/\[\.{3}[\w-]+\]/g, '*'],
 } as const
 
 const REG_APP = /^_app\.(jsx|tsx)$/
@@ -14,7 +14,7 @@ const REG_ROUTE_EXT = /\.(jsx|tsx)$/
 const REG_UNSUPPORTED_ROUTE_EXT = /\.mdx$/
 
 function getRouteBasename(file: string): string {
-  return file.slice(file.lastIndexOf('/') + 1)
+  return normalizePath(file).slice(normalizePath(file).lastIndexOf('/') + 1)
 }
 
 export function isAppRoute(file: string): boolean {
@@ -25,12 +25,24 @@ export function isLayoutRoute(file: string): boolean {
   return REG_LAYOUT.test(getRouteBasename(file))
 }
 
+export function isRootLayoutRoute(file: string, routeRoot?: string): boolean {
+  const normalized = routeRoot ? getRouteKey(file, routeRoot) : normalizePath(file)
+  return (normalized === '_layout' || isLayoutRoute(normalized)) && !normalized.includes('/')
+}
+
 export function isNotFoundRoute(file: string): boolean {
-  return file === '404' || file.endsWith('/404') || REG_NOT_FOUND.test(getRouteBasename(file))
+  const normalized = normalizePath(file)
+  return (
+    normalized === '404' ||
+    normalized.endsWith('/404') ||
+    REG_NOT_FOUND.test(getRouteBasename(normalized))
+  )
 }
 
 export function hasPrivateSegment(file: string): boolean {
-  return file.split('/').some((segment) => segment.startsWith('_'))
+  return normalizePath(file)
+    .split('/')
+    .some((segment) => segment.startsWith('_'))
 }
 
 export function getRouteKey(file: string, routeRoot: string): string {
@@ -73,25 +85,31 @@ export function getRoutePath(key: string, routeRoot = 'src/pages'): string | und
   if (isLogicalUrlRoutePath(key, routeRoot)) {
     return key
   }
-  if (key.includes('/_') && !isNotFoundRoute(key)) {
-    return undefined
-  }
   if (isNotFoundRoute(key)) {
     return '/404'
   }
 
-  const path = getRouteKey(key, routeRoot)
-    .replace(...patterns.splat)
-    .replace(...patterns.param)
-    .replace(/(^|\/)_layout(?=\/|$)/g, '')
-    .replace(/\([\w-]+\)\//g, '')
-    .replace(/\/?index|\./g, '/')
-    .replace(/(\w)\/$/g, '$1')
-    .split('/')
-    .map((segment) => segment.replace(...patterns.optional))
-    .join('/')
-  if (!path) {
+  const routeKey = getRouteKey(key, routeRoot)
+  if (hasPrivateSegment(routeKey)) {
     return undefined
   }
-  return path.length > 1 ? `/${path}` : path
+
+  const segments: string[] = []
+  const transformedKey = routeKey.replace(...patterns.splat).replace(...patterns.param)
+  for (const rawSegment of transformedKey.split('/')) {
+    for (const dotSegment of rawSegment.split('.')) {
+      if (!dotSegment || dotSegment === 'index' || dotSegment === '_layout') {
+        continue
+      }
+      if (/^\([\w-]+\)$/.test(dotSegment)) {
+        continue
+      }
+      const normalizedSegment = dotSegment.replace(...patterns.optional)
+      if (normalizedSegment) {
+        segments.push(normalizedSegment)
+      }
+    }
+  }
+
+  return segments.length > 0 ? `/${segments.join('/')}` : '/'
 }

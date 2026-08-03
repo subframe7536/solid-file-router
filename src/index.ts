@@ -175,24 +175,44 @@ export function generatePath<T extends keyof FileRoutePath & string>(
     ? Record<string, unknown>
     : FileRoutePath[T] & Record<string, unknown>,
 ): string {
-  if (!params) {
-    return path
-  }
-  let result = path as string
-  let searchParam: URLSearchParams | undefined
-  for (const [k, v] of Object.entries(params)) {
-    if (k.startsWith('$')) {
-      result = result.replace(`:${k.slice(1)}`, v as string)
-    } else {
-      if (!searchParam) {
-        searchParam = new URLSearchParams()
+  const values = params as Record<string, unknown> | undefined
+  const usedKeys = new Set<string>()
+  const joinedPath = (path as string)
+    .split('/')
+    .flatMap((segment) => {
+      const parameter = segment.match(/^:([\w-]+)(\?)?$/)
+      const splat = segment.match(/^\*(\?)?$/)
+      const key = parameter ? `$${parameter[1]}` : splat ? '*' : undefined
+      if (!key) {
+        return [segment]
       }
-      searchParam.append(k, v as string)
+
+      const value = values?.[key]
+      if (value === undefined || value === null) {
+        if (parameter?.[2] || splat?.[1]) {
+          return []
+        }
+        throw new Error(`[solid-file-router] Missing required route parameter "${key}"`)
+      }
+      usedKeys.add(key)
+      return [String(value)]
+    })
+    .join('/')
+  const result = joinedPath || ((path as string).startsWith('/') ? '/' : '')
+
+  let searchParam: URLSearchParams | undefined
+  for (const [key, value] of Object.entries(values ?? {})) {
+    if (key.startsWith('$') || key === '*' || usedKeys.has(key)) {
+      continue
     }
+    if (!searchParam) {
+      searchParam = new URLSearchParams()
+    }
+    searchParam.append(key, value as string)
   }
 
   if (searchParam) {
-    result += `?${searchParam.toString()}`
+    return `${result}?${searchParam.toString()}`
   }
 
   return result
