@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from 'node:fs'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 
 import type { Plugin } from 'vite'
@@ -32,6 +34,110 @@ export interface SsgOptions {
 export { renderTemplate } from './utils'
 export type { PrerenderRoutesSource } from './utils'
 
+function acceptsHtml(request: { method?: string; headers: { accept?: string } }): boolean {
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return false
+  }
+
+  const accept = request.headers.accept
+  return accept === undefined || accept === '' || accept.includes('text/html')
+}
+
+function getBasePath(base: string): string {
+  const pathname = base.startsWith('/') ? base : new URL(base, 'http://localhost').pathname
+  if (pathname === '/') {
+    return '/'
+  }
+  return pathname.endsWith('/') ? pathname : `${pathname}/`
+}
+
+function getPreviewRoutePath(url: string | undefined, base: string): string | undefined {
+  if (!url) {
+    return undefined
+  }
+
+  let pathname: string
+  try {
+    pathname = decodeURIComponent(new URL(url, 'http://localhost').pathname)
+  } catch {
+    return undefined
+  }
+
+  const basePath = getBasePath(base)
+  if (basePath !== '/') {
+    if (pathname === basePath.slice(0, -1)) {
+      return '/'
+    }
+    if (!pathname.startsWith(basePath)) {
+      return undefined
+    }
+    pathname = pathname.slice(basePath.length - 1)
+  }
+
+  return pathname || '/'
+}
+
+function isInsideDirectory(directory: string, filePath: string): boolean {
+  const relative = path.relative(directory, filePath)
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+}
+
+function hasPreviewFile(outputDir: string, routePath: string): boolean {
+  const routeWithoutSlashes = routePath.replace(/^\/+|\/+$/g, '')
+  if (!routeWithoutSlashes) {
+    return existsSync(path.join(outputDir, 'index.html'))
+  }
+
+  const directFile = path.resolve(outputDir, routeWithoutSlashes)
+  if (isInsideDirectory(outputDir, directFile) && existsSync(directFile)) {
+    return true
+  }
+
+  const routeFile = path.resolve(outputDir, `${routeWithoutSlashes}.html`)
+  if (isInsideDirectory(outputDir, routeFile) && existsSync(routeFile)) {
+    return true
+  }
+
+  if (routePath.endsWith('/')) {
+    const indexFile = path.resolve(outputDir, routeWithoutSlashes, 'index.html')
+    return isInsideDirectory(outputDir, indexFile) && existsSync(indexFile)
+  }
+
+  return false
+}
+
+function createPreviewFallbackMiddleware(
+  outputDir: string,
+  base: string,
+): (request: IncomingMessage, response: ServerResponse, next: (error?: unknown) => void) => void {
+  const fallbackFile = path.join(outputDir, '404.html')
+  const basePath = getBasePath(base)
+
+  return (request, response, next) => {
+    if (!acceptsHtml(request)) {
+      next()
+      return
+    }
+
+    const routePath = getPreviewRoutePath(request.url, base)
+    if (!routePath || routePath === '/' || hasPreviewFile(outputDir, routePath)) {
+      next()
+      return
+    }
+
+    if (!existsSync(fallbackFile)) {
+      next()
+      return
+    }
+
+    const search = request.url ? new URL(request.url, 'http://localhost').search : ''
+    request.url = `${basePath}404.html${search}`
+    response.statusCode = 404
+    response.setHeader('Content-Type', 'text/html; charset=utf-8')
+    response.end(request.method === 'HEAD' ? undefined : readFileSync(fallbackFile))
+  }
+}
+
 /** Creates the complete SSG integration as a single conditionally enabled plugin. */
 export function createSsgPlugin<TData>(
   options: false | SsgOptions,
@@ -56,6 +162,10 @@ export function createSsgPlugin<TData>(
     sharedDuringBuild: true,
     apply() {
       return !!options
+    },
+    configurePreviewServer(server) {
+      const outputDir = path.resolve(server.config.root, server.config.build.outDir)
+      server.middlewares.use(createPreviewFallbackMiddleware(outputDir, server.config.base))
     },
     config(userConfig, env) {
       if (!options || env.command !== 'build') {

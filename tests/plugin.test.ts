@@ -935,6 +935,116 @@ export default createRoute({ component: () => <h1>missing</h1> })
     })
   })
 
+  it('maps unknown preview HTML requests to the generated 404 page', () => {
+    const root = createTempProject()
+    const outputDir = join(root, 'dist/client')
+    mkdirSync(join(outputDir, 'assets'), { recursive: true })
+    writeFileSync(join(outputDir, '404.html'), 'not found')
+    writeFileSync(join(outputDir, 'data.html'), 'data')
+    writeFileSync(join(outputDir, 'assets/app.js'), 'app')
+
+    const plugin = fileRouter({ ssg: {} }).find(({ name }) => name.endsWith(':ssg'))!
+    const use = vi.fn()
+    const configurePreviewServer = plugin.configurePreviewServer
+    if (!configurePreviewServer || typeof configurePreviewServer !== 'function') {
+      throw new Error('Missing SSG preview middleware')
+    }
+    configurePreviewServer.call(
+      {} as never,
+      {
+        config: { root, base: '/', build: { outDir: 'dist/client' } },
+        middlewares: { use },
+      } as never,
+    )
+
+    const middleware = use.mock.calls[0]?.[0]
+    expect(middleware).toBeTypeOf('function')
+
+    const unknownRequest = {
+      method: 'GET',
+      url: '/data1?from=preview',
+      headers: { accept: 'text/html' },
+    }
+    const unknownResponse = { statusCode: 200, setHeader: vi.fn(), end: vi.fn() }
+    const unknownNext = vi.fn()
+    middleware(unknownRequest, unknownResponse, unknownNext)
+    expect(unknownRequest.url).toBe('/404.html?from=preview')
+    expect(unknownResponse.statusCode).toBe(404)
+    expect(unknownResponse.setHeader).toHaveBeenCalledWith(
+      'Content-Type',
+      'text/html; charset=utf-8',
+    )
+    expect(unknownResponse.end).toHaveBeenCalledWith(expect.anything())
+    expect(unknownNext).not.toHaveBeenCalled()
+
+    const knownRequest = {
+      method: 'GET',
+      url: '/data',
+      headers: { accept: 'text/html' },
+    }
+    const knownResponse = { statusCode: 200 }
+    const knownNext = vi.fn()
+    middleware(knownRequest, knownResponse, knownNext)
+    expect(knownRequest.url).toBe('/data')
+    expect(knownResponse.statusCode).toBe(200)
+    expect(knownNext).toHaveBeenCalledOnce()
+
+    const rootRequest = {
+      method: 'GET',
+      url: '/',
+      headers: { accept: 'text/html' },
+    }
+    const rootResponse = { statusCode: 200 }
+    const rootNext = vi.fn()
+    middleware(rootRequest, rootResponse, rootNext)
+    expect(rootRequest.url).toBe('/')
+    expect(rootResponse.statusCode).toBe(200)
+    expect(rootNext).toHaveBeenCalledOnce()
+
+    const assetRequest = {
+      method: 'GET',
+      url: '/assets/missing.js',
+      headers: { accept: '*/*' },
+    }
+    const assetNext = vi.fn()
+    middleware(assetRequest, { statusCode: 200 }, assetNext)
+    expect(assetRequest.url).toBe('/assets/missing.js')
+    expect(assetNext).toHaveBeenCalledOnce()
+  })
+
+  it('leaves preview requests unchanged when no 404 page exists', () => {
+    const root = createTempProject()
+    const outputDir = join(root, 'dist/client')
+    mkdirSync(outputDir, { recursive: true })
+
+    const plugin = fileRouter({ ssg: {} }).find(({ name }) => name.endsWith(':ssg'))!
+    const use = vi.fn()
+    const configurePreviewServer = plugin.configurePreviewServer
+    if (!configurePreviewServer || typeof configurePreviewServer !== 'function') {
+      throw new Error('Missing SSG preview middleware')
+    }
+    configurePreviewServer.call(
+      {} as never,
+      {
+        config: { root, base: '/', build: { outDir: 'dist/client' } },
+        middlewares: { use },
+      } as never,
+    )
+
+    const middleware = use.mock.calls[0]?.[0]
+    const request = {
+      method: 'GET',
+      url: '/data1',
+      headers: { accept: 'text/html' },
+    }
+    const response = { statusCode: 200 }
+    const next = vi.fn()
+    middleware(request, response, next)
+    expect(request.url).toBe('/data1')
+    expect(response.statusCode).toBe(200)
+    expect(next).toHaveBeenCalledOnce()
+  })
+
   it('builds SSG with the internal renderer by default', async () => {
     const output = await buildTempSsgProject()
     expect(output.indexHtml).toContain('>home</h1>')

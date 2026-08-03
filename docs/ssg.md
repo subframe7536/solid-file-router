@@ -74,6 +74,10 @@ include:
 normal route list. Set `concurrency` to limit simultaneous renders; it defaults
 to `4` and values below `1` are clamped to `1`.
 
+When using `vite preview`, load the same Vite config used for the SSG build and
+serve the client output directory. The SSG plugin then maps unknown HTML paths
+to `404.html` and preserves the 404 response status.
+
 ## Route Metadata
 
 Attach static metadata to a route and the built-in renderer will apply it to
