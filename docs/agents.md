@@ -22,18 +22,18 @@ Do not duplicate those rules here.
 
 ## Consumer Task Map
 
-| Task                 | Required action                                                     | Verify                                                 |
-| -------------------- | ------------------------------------------------------------------- | ------------------------------------------------------ |
-| Install              | Add the package, Solid, Solid Router, Vite, and `vite-plugin-solid` | Dependency versions satisfy `package.json`             |
-| Configure routes     | Register `solidPlugin()` and `fileRouter()`                         | Vite starts and `src/routes.d.ts` is generated         |
-| Add a page           | Default-export `createRoute({ component })` from `.jsx` or `.tsx`   | Generated path appears in route types                  |
-| Add a layout         | Add `_layout.tsx` in the ancestor directory                         | Descendants render through it                          |
-| Add an app root      | Add optional `src/pages/_app.tsx`                                   | `Root` resolves to its component                       |
-| Navigate dynamically | Call `generatePath` with `$`-prefixed path parameters               | Result contains no unresolved `:param`                 |
-| Add metadata         | Define `info` and configure `infoDts`                               | `FileRouteInfo` and `routeInfo` are typed              |
-| Add SSG              | Enable Solid SSR, add `ssg`, and use `createClientEntry`            | Build emits `dist/client/index.html` and `404.html`    |
-| Use built-in MDX     | Install Satteri and set `mdx: true`                                 | `.md`/`.mdx` routes are generated and render           |
-| Use a CMS/provider   | Provide `provider.transformPath` and `provider.load`                | Every provider entry returns valid route module source |
+| Task                 | Required action                                                       | Verify                                                 |
+| -------------------- | --------------------------------------------------------------------- | ------------------------------------------------------ |
+| Install              | Add the package, Solid, Solid Router, Vite, and `vite-plugin-solid`   | Dependency versions satisfy `package.json`             |
+| Configure routes     | Register `solidPlugin()` and `fileRouter()`                           | Vite starts and `src/routes.d.ts` is generated         |
+| Add a page           | Default-export `createRoute({ component })` from `.jsx` or `.tsx`     | Generated path appears in route types                  |
+| Add a layout         | Add `_layout.tsx` in the ancestor directory (root is pathless global) | Descendants render through it                          |
+| Add an app root      | Add optional `src/pages/_app.tsx`                                     | `Root` resolves to its component                       |
+| Navigate dynamically | Call `generatePath` with `$`-prefixed params or `'*'` for splats      | Result contains no unresolved route placeholders       |
+| Add metadata         | Define `info` and configure `infoDts`                                 | `FileRouteInfo` and `routeInfo` are typed              |
+| Add SSG              | Enable Solid SSR, add `ssg`, and use `createClientEntry`              | Build emits `dist/client/index.html` and `404.html`    |
+| Use built-in MDX     | Install Satteri and set `mdx: true`                                   | `.md`/`.mdx` routes are generated and render           |
+| Use a CMS/provider   | Provide `provider.transformPath` and `provider.load`                  | Every provider entry returns valid route module source |
 
 Use [guide.md](guide.md) for workflows and [reference.md](reference.md) for exact
 options and types.
@@ -113,7 +113,7 @@ sites before changing an exported type or generated wire shape.
 ### Types and metadata
 
 - Generated paths exclude private and layout files and include `/404`.
-- Dynamic params use `$name`; splats use `'*'`.
+- Dynamic params use `$name`; splats use `'*'`; optional splats use an optional `'*'` property.
 - `infoDts.from` is emitted unchanged relative to the generated declaration.
 - `routeInfo` uses generated route patterns as keys.
 
@@ -123,7 +123,8 @@ sites before changing an exported type or generated wire shape.
 - The internal renderer is used unless `serverEntry` is provided.
 - Every build emits a `404.html` fallback.
 - Route rendering is deduplicated and concurrency is never below one.
-- HTML accepts exactly one outlet strategy and requires a head insertion point.
+- HTML accepts exactly one outlet strategy and requires a head insertion point. Prerender
+  routes must be pathnames without query strings, hashes, or backslashes.
 
 ### Route providers
 

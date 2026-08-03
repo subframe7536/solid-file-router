@@ -9,8 +9,6 @@ Type-safe file-based router for Solid.js. The package provides:
 - Component inheritance system for loading/error boundaries
 - Consumers configure `vite-plugin-solid` separately in app Vite configs
 
-Runtime: **Bun**. All scripts use `bun --bun`.
-
 ## Build / Lint / Test Commands
 
 ```bash
@@ -20,7 +18,7 @@ bun run test:dev       # Run vitest watch mode
 bun run lint           # Lint with oxlint
 bun run format         # Format with oxfmt
 bun run typecheck      # TypeScript type checking (tsc --noEmit)
-bun run qa             # Run lint + typecheck in parallel
+bun run qa             # Auto-fix lint, format, then typecheck
 bun run oxc            # Lint + auto-fix + format in one pass
 bun run release        # Build -> lint -> test -> bump version
 ```
@@ -121,7 +119,9 @@ src/
 - Use `describe`/`it`/`expect` pattern
 - Use `toMatchInlineSnapshot()` for complex output verification
 - Use `beforeEach` for test isolation (e.g., cache invalidation)
-- Mock file system paths with string arrays, not actual FS operations
+- Use string arrays for pure path/tree unit tests; integration tests that exercise
+  Vite, code generation, or file watching may use unique temporary directories and
+  must clean them up reliably.
 
 ## Key Patterns
 

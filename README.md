@@ -17,7 +17,7 @@ inheritance, route metadata, route providers, and build-time SSG (Static Site Ge
 
 - File routes from `src/pages/**/*.{jsx,tsx}`
 - Generated path, parameter, and metadata types
-- `_app.tsx`, nested `_layout.tsx`, and `404.tsx` conventions
+- `_app.tsx`, pathless `_layout.tsx`, and `404.tsx` conventions
 - Route `preload`, `matchFilters`, metadata, and lazy components
 - Inherited loading and error components
 - Built-in Markdown/MDX routes compiled with Satteri

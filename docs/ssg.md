@@ -53,7 +53,9 @@ fileRouter({
 When `routes` is omitted, the plugin derives every concrete static route from
 the route tree. Dynamic patterns and `/404` are not included automatically;
 provide concrete dynamic URLs such as `/posts/hello` yourself. Routes are
-normalized and deduplicated. Unsafe `.` and `..` path segments are rejected.
+normalized and deduplicated. Query strings, hashes, backslashes, control
+characters, and unsafe `.`/`..` path segments are rejected because SSG routes
+map directly to output filenames.
 
 ## Output
 
@@ -91,7 +93,8 @@ export default createRoute({
 ```
 
 The renderer replaces existing `title`, description, canonical, and matching
-custom tags, inserts missing tags, and HTML-escapes all attribute values. The
+custom tags, inserts missing tags, preserves duplicate tags with the same
+identity in input order, and HTML-escapes all attribute values. The
 same metadata is synchronized by the generated router root during client
 hydration and navigation. Missing fields restore the original template head,
 and routes without metadata remove route-only tags. When no metadata is

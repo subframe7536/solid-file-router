@@ -107,6 +107,7 @@ src/pages/
 | `blog/-[...all].tsx`     | `/blog/*?`                     | Optional splat            |
 | `(auth)/login.tsx`       | `/login`                       | Pathless group            |
 | `account.settings.tsx`   | `/account/settings`            | Dot-separated segments    |
+| `_layout.tsx`            | none                           | Pathless root layout      |
 | `blog/_layout.tsx`       | none                           | Wraps routes below `blog` |
 | `404.tsx`                | `*` route, `/404` metadata key | Not-found component       |
 
@@ -153,6 +154,10 @@ export default createRoute({
 })
 ```
 
+A root `src/pages/_layout.tsx` is a pathless layout below `_app.tsx` and wraps
+all generated pages, including the not-found route. Layout files never add a
+public URL or an SSG output file.
+
 ## Data Preloading
 
 `preload` is passed through to `@solidjs/router`. Its return value is available
@@ -191,9 +196,9 @@ export default createRoute({
 })
 ```
 
-Draft routes are removed from production route matching and SSG output, while
-their generated path types remain available. Marking `_app.tsx` or a
-`_layout.tsx` as draft also removes that route subtree in production.
+Draft leaf routes are removed from production route matching and SSG output,
+while their generated path types remain available. Marking `_app.tsx` or a
+`_layout.tsx` as draft also removes that layout's entire route subtree.
 
 ## Navigation
 
@@ -212,8 +217,10 @@ const href = generatePath('/blog/:slug', {
 // /blog/release-notes?ref=home
 ```
 
-Keys prefixed with `$` replace matching `:param` segments. Other keys become
-query parameters through `URLSearchParams`.
+Keys prefixed with `$` replace matching `:param` segments; the `'*'` key
+replaces splats. Optional parameters and splats are omitted when absent, and
+missing required parameters throw. Other keys become query parameters through
+`URLSearchParams`.
 
 ## Route Info
 

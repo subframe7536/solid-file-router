@@ -48,6 +48,8 @@ Rules:
 - Any ordinary file or directory segment starting with `_` is private.
 - `_layout.jsx` and `_layout.tsx` wrap descendant routes without adding a URL
   segment.
+- A root `_layout.jsx` or `_layout.tsx` is a pathless layout below `_app` and
+  wraps all generated pages.
 - `_app.jsx` and `_app.tsx` provide the generated root. If absent, a pass-through
   root is generated.
 - `404.jsx` or `404.tsx` supplies the catch-all component. If absent, the
@@ -104,7 +106,8 @@ interface RouteMetadata {
 ```
 
 During SSG and client navigation, metadata replaces matching standard head tags
-and inserts missing custom `meta` and `link` tags. Values are HTML-escaped,
+and inserts missing custom `meta` and `link` tags. Multiple entries with the
+same `name`, `property`, or `rel` are preserved in input order. Values are HTML-escaped,
 missing fields restore the template head, and the generated `routeMetadata`
 export contains draft-filtered metadata keyed by route pattern.
 
@@ -213,7 +216,8 @@ SSG behavior:
 - Produces client output under `<outDir>/client` and server build output under
   `<outDir>/server`.
 - Normalizes leading and trailing slashes, rejects `.` and `..` path segments,
-  deduplicates routes, and excludes `/404` from normal prerender output.
+  query strings, hashes, backslashes, and control characters, deduplicates
+  routes, and excludes `/404` from normal prerender output.
 - Emits `/` as `index.html`, other routes as their path plus `.html`, and always
   emits `404.html` using the `/404` renderer.
 - Uses `<!--solid-file-router-outlet-->` when present; otherwise replaces the
@@ -221,7 +225,8 @@ SSG behavior:
 - Uses `<!--solid-file-router-head-->` when present; otherwise inserts Solid's
   hydration bootstrap immediately before `</head>`.
 - Applies the final route's `metadata` to the generated head, replacing standard
-  tags and inserting missing custom tags. The generated client root repeats the
+  tags and inserting missing custom tags while preserving duplicate identities.
+  The generated client root repeats the
   same update during hydration and navigation; without metadata, the template
   head is left unchanged apart from the hydration bootstrap.
 - Rejects duplicate outlet markers and missing outlet/head insertion points.
@@ -339,17 +344,23 @@ File and MDX route discovery are configured through `fileRouter` with
 `pagesDir`, `mdx`, and `MdxOptions`; the built-in providers are created
 automatically and are not exported from the plugin entry.
 
-| Field           | Behavior                                                                            |
-| --------------- | ----------------------------------------------------------------------------------- |
-| `filter`        | Discovery glob relative to the Vite root                                            |
-| `glob`          | Optional discovery implementation; receives tinyglobby, filter, and root            |
-| `transformPath` | Maps a discovered source path to its logical `path`, optional `routeId`, and `data` |
-| `path`          | Logical file path controlling route conventions and layout ancestry                 |
-| `routeId`       | Optional public ID; derived from the logical path when omitted                      |
-| `sourcePath`    | Normalized absolute source path used for source identity and HMR                    |
-| `moduleId`      | Generated facade module identity passed to `load`                                   |
-| `data`          | In-process value passed unchanged from `transformPath` to `load`                    |
-| `watch`         | Additional files/globs that cause the provider to rescan                            |
+Built-in JSX/TSX and MDX providers normalize Windows separators and can scan
+relative or absolute `pagesDir` values. Their discovery glob returns absolute
+source paths for stable identity and HMR. MDX `transformPath` still receives a
+path relative to the Vite root; its load context exposes the normalized absolute
+`sourcePath`.
+
+| Field           | Behavior                                                                                  |
+| --------------- | ----------------------------------------------------------------------------------------- |
+| `filter`        | Discovery glob; built-in pages providers normalize relative or absolute `pagesDir` values |
+| `glob`          | Optional discovery implementation; receives tinyglobby, filter, and root                  |
+| `transformPath` | Maps a discovered source path to its logical `path`, optional `routeId`, and `data`       |
+| `path`          | Logical file path controlling route conventions and layout ancestry                       |
+| `routeId`       | Optional public ID; derived from the logical path when omitted                            |
+| `sourcePath`    | Normalized absolute source path used for source identity and HMR                          |
+| `moduleId`      | Generated facade module identity passed to `load`                                         |
+| `data`          | In-process value passed unchanged from `transformPath` to `load`                          |
+| `watch`         | Additional files/globs that cause the provider to rescan                                  |
 
 Normalized route IDs, logical paths, and source paths must be unique across all
 route inputs. This applies to every route, including the generated `/_app` route.
@@ -400,7 +411,8 @@ The declaration:
 - Includes `/404` even when no custom `404` module exists.
 
 Dynamic parameter keys use a `$` prefix. Optional route parameters become
-optional object properties. Splat paths use the `'*'` key.
+optional object properties. Splat paths use the `'*'` key; optional splats use
+an optional `'*'` property.
 
 ## Runtime API
 
@@ -415,8 +427,10 @@ function generatePath<T extends keyof FileRoutePath & string>(
 ): string
 ```
 
-Replaces `:name` with `$name` values. Every non-`$` key is appended as a query
-parameter with `URLSearchParams`. Values should be string-compatible.
+Replaces `:name` with `$name` values and `*` with the `'*'` value. Repeated
+parameters are all replaced. Optional parameters and splats are omitted when
+absent; missing required parameters throw. Every other key is appended as a
+query parameter with `URLSearchParams`. Values should be string-compatible.
 
 ### `readRouteInfo`
 

@@ -169,10 +169,10 @@ must remain `'program'`.
 
 The following properties are specific to `solid-file-router`:
 
-| Property   | Behavior                                                                                                          |
-| ---------- | ----------------------------------------------------------------------------------------------------------------- |
-| `pagesDir` | Route directory used to derive the default MDX filter. It inherits the plugin-level `pagesDir` unless overridden. |
-| `filter`   | MDX discovery glob, relative to the Vite root. Defaults to `<pagesDir>/**/*.{md,mdx}`.                            |
+| Property   | Behavior                                                                                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pagesDir` | Route directory used to derive the default MDX filter. It inherits the plugin-level `pagesDir` unless overridden; relative and absolute paths are supported. |
+| `filter`   | MDX discovery glob. Defaults to `<pagesDir>/**/*.{md,mdx}` and is normalized for the configured pages directory.                                             |
 
 Configure these properties alongside Satteri options:
 
@@ -203,6 +203,10 @@ fileRouter({
   },
 })
 ```
+
+The built-in MDX provider normalizes Windows separators and discovers absolute
+source paths. `transformPath` receives the source path relative to the Vite root,
+while `load` receives the normalized absolute `sourcePath`.
 
 Use `extendLoad` to attach provider data or wrap the compiled content without
 reimplementing frontmatter parsing or Satteri compilation. The callback
