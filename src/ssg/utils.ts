@@ -6,6 +6,7 @@ import type { ResolvedConfig } from 'vite'
 import { normalizePath } from 'vite'
 
 import type { RouteMetadata } from '../metadata'
+import { getLinkIdentity, getMetaIdentity, normalizeRouteMetadata } from '../metadata-shared'
 
 export type Awaitable<T> = T | Promise<T>
 /** A static route list or lazy route producer used by SSG. */
@@ -56,6 +57,16 @@ function trimTrailingSlashes(value: string): string {
 }
 
 export function normalizeRoutePath(route: string): string {
+  const hasControlCharacter = [...route].some((character) => {
+    const codePoint = character.codePointAt(0)!
+    return codePoint <= 31 || (codePoint >= 127 && codePoint <= 159)
+  })
+  if (route.includes('?') || route.includes('#') || route.includes('\\') || hasControlCharacter) {
+    throw new Error(
+      `[solid-file-router] Invalid prerender route; expected a pathname without query, hash, or backslash: ${route}`,
+    )
+  }
+
   const trimmedRoute = route.trim()
   if (!trimmedRoute || trimmedRoute === '/') {
     return '/'
@@ -162,6 +173,31 @@ function replaceOrInsertHeadTag(html: string, pattern: RegExp, replacement: stri
     : html.replace(/<\/head\s*>/i, `${replacement}\n</head>`)
 }
 
+function replaceOrInsertHeadTags(
+  html: string,
+  pattern: RegExp,
+  replacements: readonly string[],
+): string {
+  const globalPattern = new RegExp(pattern.source, `${pattern.flags.replace('g', '')}g`)
+  const matches = [...html.matchAll(globalPattern)]
+  const replacement = replacements.join('\n')
+  if (matches.length === 0) {
+    return html.replace(/<\/head\s*>/i, `${replacement}\n</head>`)
+  }
+
+  let output = ''
+  let cursor = 0
+  for (const [index, match] of matches.entries()) {
+    const start = match.index ?? 0
+    output += html.slice(cursor, start)
+    if (index === 0) {
+      output += replacement
+    }
+    cursor = start + match[0].length
+  }
+  return output + html.slice(cursor)
+}
+
 function metadataMetaPattern(attribute: 'name' | 'property', value: string): RegExp {
   return new RegExp(
     `<meta\\s+[^>]*\\b${attribute}\\s*=\\s*["']${escapeRegExp(value)}["'][^>]*>`,
@@ -217,17 +253,13 @@ function createHeadBaseline(html: string): {
     const tag = match[0]
     const name = readHtmlAttribute(tag, 'name')
     const property = readHtmlAttribute(tag, 'property')
-    appendBaselineEntry(
-      meta,
-      name ? `name:${name}` : property ? `property:${property}` : undefined,
-      tag,
-    )
+    appendBaselineEntry(meta, getMetaIdentity(name, property), tag)
   }
   const links: Record<string, string[]> = {}
   for (const match of head.matchAll(/<link\b[^>]*>/gi)) {
     const tag = match[0]
     const rel = readHtmlAttribute(tag, 'rel')
-    appendBaselineEntry(links, rel ? `rel:${rel}` : undefined, tag)
+    appendBaselineEntry(links, rel === undefined ? undefined : getLinkIdentity(rel), tag)
   }
   return { title, meta, links }
 }
@@ -249,6 +281,41 @@ function insertHeadBaseline(html: string, baseline: ReturnType<typeof createHead
   return html.replace(/<\/head\s*>/i, `${script}</head>`)
 }
 
+function replaceRootOutlet(html: string, id: string, app: string): string | undefined {
+  const escapedId = escapeRegExp(id)
+  const openingPattern = new RegExp(
+    `<([a-z][\\w:-]*)\\b([^>]*\\bid\\s*=\\s*(['"])${escapedId}\\3[^>]*)>`,
+    'i',
+  )
+  const opening = openingPattern.exec(html)
+  if (!opening) {
+    return undefined
+  }
+
+  const openingEnd = opening.index + opening[0].length
+  if (/\/\s*>$/.test(opening[0])) {
+    const attributes = opening[2].replace(/\/\s*$/, '')
+    return `${html.slice(0, opening.index)}<${opening[1]}${attributes}>${app}</${opening[1]}>${html.slice(openingEnd)}`
+  }
+
+  const tokenPattern = new RegExp(`<\\/?${escapeRegExp(opening[1])}\\b[^>]*>`, 'gi')
+  tokenPattern.lastIndex = openingEnd
+  let depth = 1
+  let token: RegExpExecArray | null
+  while ((token = tokenPattern.exec(html))) {
+    if (token[0].startsWith('</')) {
+      depth -= 1
+    } else if (!/\/\s*>$/.test(token[0])) {
+      depth += 1
+    }
+    if (depth === 0) {
+      return html.slice(0, openingEnd) + app + html.slice(token.index)
+    }
+  }
+
+  return undefined
+}
+
 export function applyRouteMetadataToHtml(html: string, metadata?: RouteMetadata): string {
   if (!metadata) {
     return html
@@ -262,44 +329,35 @@ export function applyRouteMetadataToHtml(html: string, metadata?: RouteMetadata)
       `<title>${escapeHtml(metadata.title)}</title>`,
     )
   }
-  if (metadata.description !== undefined) {
-    output = replaceOrInsertHeadTag(
-      output,
-      metadataMetaPattern('name', 'description'),
-      `<meta name="description" content="${escapeHtml(metadata.description)}">`,
-    )
-  }
-  if (metadata.canonical !== undefined) {
-    output = replaceOrInsertHeadTag(
-      output,
-      metadataLinkPattern('canonical'),
-      `<link rel="canonical" href="${escapeHtml(metadata.canonical)}">`,
-    )
-  }
-  for (const tag of metadata.meta ?? []) {
-    const attribute = tag.name !== undefined ? 'name' : 'property'
-    const value = tag.name ?? tag.property
+  const normalized = normalizeRouteMetadata(metadata)
+  for (const tags of normalized.meta.values()) {
+    const first = tags[0]
+    if (!first) {
+      continue
+    }
+    const attribute = first.name !== undefined ? 'name' : 'property'
+    const value = first.name ?? first.property
     if (value === undefined) {
       continue
     }
-    const attributes = [
-      tag.name === undefined ? undefined : `name="${escapeHtml(tag.name)}"`,
-      tag.property === undefined ? undefined : `property="${escapeHtml(tag.property)}"`,
-      `content="${escapeHtml(tag.content)}"`,
-    ]
-      .filter((item): item is string => item !== undefined)
-      .join(' ')
-    output = replaceOrInsertHeadTag(
-      output,
-      metadataMetaPattern(attribute, value),
-      `<meta ${attributes}>`,
-    )
+    const replacements = tags.map((tag) => {
+      const attributes = [
+        tag.name === undefined ? undefined : `name="${escapeHtml(tag.name)}"`,
+        tag.property === undefined ? undefined : `property="${escapeHtml(tag.property)}"`,
+        `content="${escapeHtml(tag.content)}"`,
+      ]
+        .filter((item): item is string => item !== undefined)
+        .join(' ')
+      return `<meta ${attributes}>`
+    })
+    output = replaceOrInsertHeadTags(output, metadataMetaPattern(attribute, value), replacements)
   }
-  for (const link of metadata.links ?? []) {
-    output = replaceOrInsertHeadTag(
+  for (const [identity, links] of normalized.links) {
+    const rel = identity.slice('rel:'.length)
+    output = replaceOrInsertHeadTags(
       output,
-      metadataLinkPattern(link.rel),
-      `<link rel="${escapeHtml(link.rel)}" href="${escapeHtml(link.href)}">`,
+      metadataLinkPattern(rel),
+      links.map((link) => `<link rel="${escapeHtml(link.rel)}" href="${escapeHtml(link.href)}">`),
     )
   }
   return output
@@ -320,20 +378,13 @@ export function renderTemplate(
   if (markerCount === 1) {
     rendered = rendered.replace(OUTLET_MARKER, `<div id="${id}">${app}</div>`)
   } else {
-    const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const rootPattern = new RegExp(
-      `<([a-z][\\w:-]*)\\b([^>]*\\bid\\s*=\\s*(['"])${escapedId}\\3[^>]*)>[\\s\\S]*?</\\1>`,
-      'i',
-    )
-    if (!rootPattern.test(rendered)) {
+    const replaced = replaceRootOutlet(rendered, id, app)
+    if (!replaced) {
       throw new Error(
         `[solid-file-router] SSG could not find an outlet in ${INDEX_HTML_FILE_NAME}.\nAdd ${OUTLET_MARKER} or an element with id="${id}".`,
       )
     }
-    rendered = rendered.replace(
-      rootPattern,
-      (_match, tag, attributes) => `<${tag}${attributes}>${app}</${tag}>`,
-    )
+    rendered = replaced
   }
 
   const baseline = metadata ? createHeadBaseline(rendered) : undefined

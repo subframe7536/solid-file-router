@@ -85,4 +85,26 @@ describe('RouteMetadataManager', () => {
 
     expect(document.head.querySelector('meta[name="viewport"]')).toBe(restoredViewport)
   })
+
+  it('preserves duplicate metadata tags by identity', () => {
+    setHead()
+    const manager = new RouteMetadataManager(document)
+    manager.apply({
+      meta: [
+        { property: 'og:image', content: '/one.png' },
+        { property: 'og:image', content: '/two.png' },
+      ],
+      links: [
+        { rel: 'alternate', href: '/one' },
+        { rel: 'alternate', href: '/two' },
+      ],
+    })
+
+    expect(document.head.querySelectorAll('meta[property="og:image"]')).toHaveLength(2)
+    expect(document.head.querySelectorAll('link[rel="alternate"]')).toHaveLength(2)
+
+    manager.restore()
+    expect(document.head.querySelectorAll('meta[property="og:image"]')).toHaveLength(0)
+    expect(document.head.querySelectorAll('link[rel="alternate"]')).toHaveLength(1)
+  })
 })

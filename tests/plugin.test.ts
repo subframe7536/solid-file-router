@@ -17,6 +17,7 @@ import solidPlugin from 'vite-plugin-solid'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { defineRouteProvider, fileRouter, renderTemplate } from '../src/plugin'
+import { normalizeRoutePath } from '../src/ssg/utils'
 
 const tempDirs: string[] = []
 
@@ -323,6 +324,16 @@ describe('fileRouter', () => {
     expect(rendered).not.toContain('data-solid-file-router-head-default')
   })
 
+  it('replaces a nested root element without leaving unmatched tags', () => {
+    const rendered = renderTemplate(
+      '<html><head></head><body><div id="root"><div>Loading</div></div></body></html>',
+      'root',
+      '<main>rendered</main>',
+    )
+    expect(rendered).toContain('<div id="root"><main>rendered</main></div></body>')
+    expect(rendered).not.toContain('</div></div></body>')
+  })
+
   it('replaces and inserts escaped route metadata in the document head', () => {
     const rendered = renderTemplate(
       '<html><head><title>base</title><meta name="description" content="old"><link rel="canonical" href="/old"></head><body><div id="root"></div></body></html>',
@@ -343,6 +354,32 @@ describe('fileRouter', () => {
     expect(rendered).toContain('<meta property="og:title" content="Preview &lt;page&gt;">')
     expect(rendered).toContain('<link rel="alternate" href="/page?format=html">')
     expect(rendered).toContain('data-solid-file-router-head-default')
+  })
+
+  it('preserves duplicate SSG metadata tags', () => {
+    const rendered = renderTemplate(
+      '<html><head></head><body><div id="root"></div></body></html>',
+      'root',
+      '<p>rendered</p>',
+      {
+        meta: [
+          { property: 'og:image', content: '/one.png' },
+          { property: 'og:image', content: '/two.png' },
+        ],
+        links: [
+          { rel: 'alternate', href: '/one' },
+          { rel: 'alternate', href: '/two' },
+        ],
+      },
+    )
+    expect(rendered.match(/property="og:image"/g)).toHaveLength(2)
+    expect(rendered.match(/rel="alternate"/g)).toHaveLength(2)
+  })
+
+  it('rejects non-pathname prerender routes', () => {
+    for (const route of ['/search?q=x', '/search#section', '\\..\\escape', '\n/search']) {
+      expect(() => normalizeRoutePath(route)).toThrow('expected a pathname')
+    }
   })
 
   it('rejects duplicate SSG outlet markers', () => {

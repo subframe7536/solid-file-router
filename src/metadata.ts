@@ -2,6 +2,12 @@ import type { RouteMatch, RouteSectionProps } from '@solidjs/router'
 import { createComponent, createEffect, onCleanup } from 'solid-js'
 import type { Component } from 'solid-js'
 
+import {
+  getLinkIdentity as getSharedLinkIdentity,
+  getMetaIdentity as getSharedMetaIdentity,
+  normalizeRouteMetadata,
+} from './metadata-shared'
+
 /** Metadata attached to a route and applied during SSG and client navigation. */
 export interface RouteMetadata {
   title?: string
@@ -34,16 +40,13 @@ const BASELINE_SELECTOR = 'script[data-solid-file-router-head-default]'
 
 function getMetaIdentity(element: Element): string | undefined {
   const name = element.getAttribute('name')
-  if (name !== null) {
-    return `name:${name}`
-  }
   const property = element.getAttribute('property')
-  return property === null ? undefined : `property:${property}`
+  return getSharedMetaIdentity(name ?? undefined, property ?? undefined)
 }
 
 function getLinkIdentity(element: Element): string | undefined {
   const rel = element.getAttribute('rel')
-  return rel === null ? undefined : `rel:${rel}`
+  return rel === null ? undefined : getSharedLinkIdentity(rel)
 }
 
 function collectBaseline(document: Document): MetadataBaseline {
@@ -111,24 +114,25 @@ function removeElements(elements: readonly Element[]): void {
   }
 }
 
-function replaceOrInsertElement(
-  document: Document,
-  current: Element[],
-  next: Element | undefined,
-): void {
-  const first = current[0]
-  if (!next) {
+function replaceOrInsertElements(document: Document, current: Element[], next: Element[]): void {
+  if (next.length === 0) {
     removeElements(current)
     return
   }
-  if (current.length === 1 && current[0].isEqualNode(next)) {
+  if (
+    current.length === next.length &&
+    current.every((element, index) => element.isEqualNode(next[index]))
+  ) {
     return
   }
+  const first = current[0]
   if (first) {
-    first.replaceWith(next)
+    first.replaceWith(...next)
     removeElements(current.slice(1))
   } else {
-    document.head.append(next)
+    for (const element of next) {
+      document.head.append(element)
+    }
   }
 }
 
@@ -168,11 +172,21 @@ function createMetaElement(document: Document, tag: RouteMetaTag): Element | und
   return element
 }
 
+function createMetaElements(document: Document, tags: readonly RouteMetaTag[]): Element[] {
+  return tags
+    .map((tag) => createMetaElement(document, tag))
+    .filter((element): element is Element => element !== undefined)
+}
+
 function createLinkElement(document: Document, link: RouteMetadataLink): Element {
   const element = document.createElement('link')
   element.setAttribute('rel', link.rel)
   element.setAttribute('href', link.href)
   return element
+}
+
+function createLinkElements(document: Document, links: readonly RouteMetadataLink[]): Element[] {
+  return links.map((link) => createLinkElement(document, link))
 }
 
 function getRouteMetadata(matches: readonly RouteMatch[]): RouteMetadata | undefined {
@@ -211,52 +225,28 @@ export class RouteMetadataManager {
       )
     }
 
-    const routeMeta = new Map<string, RouteMetaTag>()
-    if (metadata?.description !== undefined) {
-      routeMeta.set('name:description', {
-        name: 'description',
-        content: metadata.description,
-      })
-    }
-    for (const tag of metadata?.meta ?? []) {
-      const identity =
-        tag.name !== undefined
-          ? `name:${tag.name}`
-          : tag.property !== undefined
-            ? `property:${tag.property}`
-            : undefined
-      if (identity) {
-        routeMeta.set(identity, tag)
-      }
-    }
-    for (const identity of routeMeta.keys()) {
+    const routeMetadata = normalizeRouteMetadata(metadata)
+    for (const identity of routeMetadata.meta.keys()) {
       this.metaKeys.add(identity)
     }
     for (const identity of this.metaKeys) {
-      const tag = routeMeta.get(identity)
+      const tags = routeMetadata.meta.get(identity) ?? []
       const current = findMetaElements(this.document, identity)
-      if (tag) {
-        replaceOrInsertElement(this.document, current, createMetaElement(this.document, tag))
+      if (tags.length > 0) {
+        replaceOrInsertElements(this.document, current, createMetaElements(this.document, tags))
       } else {
         restoreElements(this.document, current, this.baseline.meta[identity])
       }
     }
 
-    const routeLinks = new Map<string, RouteMetadataLink>()
-    if (metadata?.canonical !== undefined) {
-      routeLinks.set('rel:canonical', { rel: 'canonical', href: metadata.canonical })
-    }
-    for (const link of metadata?.links ?? []) {
-      routeLinks.set(`rel:${link.rel}`, link)
-    }
-    for (const identity of routeLinks.keys()) {
+    for (const identity of routeMetadata.links.keys()) {
       this.linkKeys.add(identity)
     }
     for (const identity of this.linkKeys) {
-      const link = routeLinks.get(identity)
+      const links = routeMetadata.links.get(identity) ?? []
       const current = findLinkElements(this.document, identity)
-      if (link) {
-        replaceOrInsertElement(this.document, current, createLinkElement(this.document, link))
+      if (links.length > 0) {
+        replaceOrInsertElements(this.document, current, createLinkElements(this.document, links))
       } else {
         restoreElements(this.document, current, this.baseline.links[identity])
       }
