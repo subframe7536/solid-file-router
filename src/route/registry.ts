@@ -234,7 +234,9 @@ export class RouteRegistry<TData = unknown> {
         const module = this.providerManager.enabled
           ? await this.loadRouteProviderModule(entry.moduleId)
           : undefined
-        const code = module?.code ?? (this.providerManager.enabled ? undefined : await readFile(entry.moduleId, 'utf8'))
+        const code =
+          module?.code ??
+          (this.providerManager.enabled ? undefined : await readFile(entry.moduleId, 'utf8'))
         const extracted = code
           ? await extract(code, entry.moduleId, DRAFT_EXTRACT_CONFIG)
           : undefined
