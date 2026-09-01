@@ -229,6 +229,7 @@ export async function extract(
   config: ExtractConfig,
   verbose = false,
   cacheKey = getAstCacheKey(id, code, false),
+  sourcePath?: string,
 ): Promise<{ code: string; map: Babel.BabelFileResult['map'] } | undefined> {
   const babel = await getBabel()
 
@@ -268,6 +269,7 @@ export async function extract(
     const transformed = await babel.transformFromAstAsync(ast, code, {
       plugins: [[extractPlugin, config]],
       filename: id,
+      sourceFileName: sourcePath,
       sourceMaps: true,
       configFile: false,
       babelrc: false,

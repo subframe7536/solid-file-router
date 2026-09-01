@@ -27,6 +27,7 @@ const routeProperties = new Map<string, string[]>([
 
 export interface RoutePluginContext<TData> {
   registry: RouteRegistry<TData>
+  root?: string
   lazy?: boolean
   reloadOnChange: boolean
   verboseLog?: boolean
@@ -36,6 +37,10 @@ export interface RoutePluginContext<TData> {
 /** Owns route discovery, virtual modules, transforms, watching, and HMR. */
 export function createRouterPlugin<TData>(context: RoutePluginContext<TData>): Plugin {
   let lastChange: { key: string; promise: Promise<RouteRegistryChange> } | undefined
+  // Caches the real source file path for each virtual module ID (-sfr.tsx).
+  // Populated in load() and read in transform() so Babel can set sourceFileName
+  // on the output sourcemap, making sources point to an existing file on disk.
+  const sourcePathCache = new Map<string, string>()
 
   function getChange(
     type: 'create' | 'update' | 'delete',
@@ -62,6 +67,7 @@ export function createRouterPlugin<TData>(context: RoutePluginContext<TData>): P
     sharedDuringBuild: true,
     async configResolved(config) {
       context.logger = config.logger
+      context.root = config.root
       await context.registry.initialize(config.root)
     },
     configureServer(server) {
@@ -104,7 +110,9 @@ export function createRouterPlugin<TData>(context: RoutePluginContext<TData>): P
     resolveId: {
       filter: { id: new RegExp(`^${VID_EXTRACT}$|${REG_ROUTE_PROVIDER_MODULE_ID.source}`) },
       handler(id) {
-        return id === VID_EXTRACT ? VID_EXTRACT_RESOLVED : resolveRouteProviderModuleId(id)
+        return id === VID_EXTRACT
+          ? VID_EXTRACT_RESOLVED
+          : resolveRouteProviderModuleId(id, context.root)
       },
     },
     load: {
@@ -113,7 +121,13 @@ export function createRouterPlugin<TData>(context: RoutePluginContext<TData>): P
       },
       async handler(id, options) {
         if (id && isRouteProviderModuleId(id)) {
-          return await context.registry.loadRouteProviderModule(id)
+          const module = await context.registry.loadRouteProviderModule(id)
+          if (!module) {
+            return undefined
+          }
+          // Cache sourcePath so transform() can retrieve it for Babel's sourceFileName.
+          sourcePathCache.set(id.replace(/\?.*$/, ''), module.sourcePath)
+          return { code: module.code, map: module.map }
         }
         return context.registry.getDefinition(context.lazy ?? !options?.ssr)
       },
@@ -126,12 +140,16 @@ export function createRouterPlugin<TData>(context: RoutePluginContext<TData>): P
         if (!id || !pick) {
           return
         }
+        // Retrieve the real source file path stored during load(), so that
+        // Babel sets sourceFileName correctly on the output sourcemap.
+        const sourcePath = sourcePathCache.get(id)
         return await extract(
           code,
           id,
           { entryFn: 'createRoute', pick },
           context.verboseLog,
           getAstCacheKey(id, code, options?.ssr === true),
+          sourcePath,
         )
       },
     },

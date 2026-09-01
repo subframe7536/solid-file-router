@@ -17,6 +17,17 @@ export interface RouteProviderChange {
   changedFiles: string[]
 }
 
+export interface RouteProviderModule {
+  code: string
+  sourcePath: string
+  map: {
+    version: 3
+    sources: string[]
+    sourcesContent: string[]
+    mappings: string
+  }
+}
+
 export const createNoRouteProviderChange = (): RouteProviderChange => ({
   matched: false,
   structureChanged: false,
@@ -80,7 +91,7 @@ export class RouteProviderManager<TData> {
     return [...new Set([...roots, ...uncovered])]
   }
 
-  async loadModule(id: string): Promise<string | undefined> {
+  async loadModule(id: string): Promise<RouteProviderModule | undefined> {
     const module = this.modules.get(normalizePath(id).replace(/\?.*$/, ''))
     if (!module) {
       return undefined
@@ -91,7 +102,20 @@ export class RouteProviderManager<TData> {
         `[solid-file-router] routeProvider.load returned no code for routeId: ${module.context.routeId}`,
       )
     }
-    return code
+    const { sourcePath } = module.context
+    return {
+      code,
+      sourcePath,
+      // Identity sourcemap: points sources back to the real author file on disk.
+      // This prevents Vite from trying to read the non-existent `-sfr.tsx` path
+      // when it validates sourcemaps in `injectSourcesContent`.
+      map: {
+        version: 3 as const,
+        sources: [sourcePath],
+        sourcesContent: [code],
+        mappings: 'AAAA',
+      },
+    }
   }
 
   async handleChange(file: string): Promise<RouteProviderChange> {

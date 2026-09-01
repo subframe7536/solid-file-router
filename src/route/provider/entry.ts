@@ -18,8 +18,19 @@ export function resolveFromRoot(root: string, path: string): string {
   return normalizePath(resolve(root, path || '.'))
 }
 
-export function resolveRouteProviderModuleId(id: string): string | undefined {
-  return isRouteProviderModuleId(id) ? normalizePath(id) : undefined
+export function resolveRouteProviderModuleId(id: string, root?: string): string | undefined {
+  const normalized = normalizePath(id)
+  if (!isRouteProviderModuleId(normalized)) {
+    return undefined
+  }
+  // When Vite's import-analysis rewrites absolute paths that lie within root into
+  // root-relative URLs (e.g. /routes/_app.tsx-sfr.tsx?route), the leading slash
+  // makes the path look relative and non-existent on disk. Resolve it against root
+  // so downstream lookup in the module registry uses the same absolute form.
+  if (root && !normalized.startsWith(root) && /^\/[^/]/.test(normalized)) {
+    return normalizePath(resolve(root, `.${normalized}`))
+  }
+  return normalized
 }
 
 export function isRouteProviderModuleId(id: string): boolean {

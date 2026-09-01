@@ -207,7 +207,7 @@ export default createServerEntry((props) => (
   const mdxRouteQuery = mdx
     ? (
         await (routeTransformPlugin as any).transform.handler(
-          mdxRouteModule,
+          mdxRouteModule?.code,
           `${mdxRouteModuleId}?route`,
         )
       ).code
@@ -502,17 +502,17 @@ draft: true
     const routeModule = await (plugin as any).load.handler(routeModuleId)
 
     expect(module).toContain(`${routeModuleId}?comp`)
-    expect(routeModule).toContain('export default createRoute')
-    expect(routeModule).toContain('MDXContent')
-    expect(routeModule).toContain('info: __sfr_mdx_route.info')
-    expect(routeModule).toContain('metadata: __sfr_mdx_route.metadata')
-    expect(routeModule).toContain('matchFilters: __sfr_mdx_route.matchFilters')
-    expect(routeModule).toContain('inherit: __sfr_mdx_route.inherit')
-    expect(routeModule).toContain('draft: __sfr_mdx_route.draft')
-    expect(routeModule).not.toContain('...__sfr_mdx_route')
+    expect(routeModule.code).toContain('export default createRoute')
+    expect(routeModule.code).toContain('MDXContent')
+    expect(routeModule.code).toContain('info: __sfr_mdx_route.info')
+    expect(routeModule.code).toContain('metadata: __sfr_mdx_route.metadata')
+    expect(routeModule.code).toContain('matchFilters: __sfr_mdx_route.matchFilters')
+    expect(routeModule.code).toContain('inherit: __sfr_mdx_route.inherit')
+    expect(routeModule.code).toContain('draft: __sfr_mdx_route.draft')
+    expect(routeModule.code).not.toContain('...__sfr_mdx_route')
     await expect(
       (plugin as any).load.handler(normalizePath(`${markdownPath}-sfr.tsx`)),
-    ).resolves.toContain('MDXContent')
+    ).resolves.toMatchObject({ code: expect.stringContaining('MDXContent') })
   })
 
   it('allows MDX providers to transform paths and extend generated route modules', async () => {
@@ -551,10 +551,10 @@ title: Content
 
     const routeModule = await (plugin as any).load.handler(normalizePath(`${mdxPath}-sfr.tsx`))
 
-    expect(routeModule).toContain('useMDXComponents as __sfr_mdx_components')
-    expect(routeModule).toContain('<components.wrapper {...props}>')
-    expect(routeModule).toContain('component: __sfr_mdx_content')
-    expect(routeModule).toContain('"section": "docs"')
+    expect(routeModule.code).toContain('useMDXComponents as __sfr_mdx_components')
+    expect(routeModule.code).toContain('<components.wrapper {...props}>')
+    expect(routeModule.code).toContain('component: __sfr_mdx_content')
+    expect(routeModule.code).toContain('"section": "docs"')
   })
 
   it('keeps direct MDX imports independent from route extensions', async () => {
@@ -634,10 +634,10 @@ draft: true
     const routeModule = await (plugin as any).load.handler(moduleId)
 
     const route = (
-      await (transformPlugin as any).transform.handler(routeModule, `${moduleId}?route`)
+      await (transformPlugin as any).transform.handler(routeModule.code, `${moduleId}?route`)
     ).code
     const component = (
-      await (transformPlugin as any).transform.handler(routeModule, `${moduleId}?comp`)
+      await (transformPlugin as any).transform.handler(routeModule.code, `${moduleId}?comp`)
     ).code
 
     expect(route).toContain('info: __sfr_mdx_route.info')
@@ -664,12 +664,12 @@ draft: true
     const routeModule = await (plugin as any).load.handler(normalizePath(`${mdxPath}-sfr.tsx`))
     const route = (
       await (plugin as any).transform.handler(
-        routeModule,
+        routeModule.code,
         `${normalizePath(`${mdxPath}-sfr.tsx`)}?route`,
       )
     ).code
 
-    expect(routeModule).toContain('"title": "Frontmatter"')
+    expect(routeModule.code).toContain('"title": "Frontmatter"')
     expect(route).toContain('info: __sfr_mdx_route.info')
   })
 
@@ -783,7 +783,7 @@ export default createRoute({ component: () => <h1>missing</h1> })
     expect(module).toContain('"/404": { info: __404_route.info, draft: __404_route.draft }')
 
     const routeModule = await (plugin as any).load.handler(buttonModuleId)
-    expect(routeModule).toContain('title')
+    expect(routeModule.code).toContain('title')
   })
 
   it('returns generated route provider modules from the Vite hot update hook', async () => {
@@ -899,7 +899,9 @@ export default createRoute({ component: () => <h1>missing</h1> })
     })
 
     const moduleId = normalizePath(join(root, 'docs/button.mdx-sfr.tsx'))
-    await expect((plugin as any).load.handler(moduleId)).resolves.toContain("title: 'Button'")
+    await expect((plugin as any).load.handler(moduleId)).resolves.toMatchObject({
+      code: expect.stringContaining("title: 'Button'"),
+    })
   })
 
   it('does not inject ssg config unless explicitly enabled', () => {

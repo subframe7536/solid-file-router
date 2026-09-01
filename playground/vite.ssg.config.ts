@@ -24,6 +24,7 @@ export default defineConfig({
         name: 'string',
         role: 'string',
       },
+      mdx: true,
       ssg: {
         serverEntry: 'src/entry-server.tsx',
         // routes: ['/', '/about'],

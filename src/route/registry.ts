@@ -12,7 +12,7 @@ import { extract, invalidateCache } from './extract'
 import type { ExtractConfig } from './extract'
 import { getRoutePath, hasPrivateSegment, isAppRoute, isLayoutRoute } from './path'
 import { createNoRouteProviderChange, resolveFromRoot, RouteProviderManager } from './provider'
-import type { RouteProvider, RouteProviderChange } from './provider'
+import type { RouteProvider, RouteProviderChange, RouteProviderModule } from './provider'
 import type { InfoTypeDefinition } from './type-gen'
 import { generateRouteTypes } from './type-gen'
 
@@ -169,7 +169,7 @@ export class RouteRegistry<TData = unknown> {
     })
   }
 
-  async loadRouteProviderModule(id: string): Promise<string | undefined> {
+  async loadRouteProviderModule(id: string): Promise<RouteProviderModule | undefined> {
     return this.providerManager.enabled ? this.providerManager.loadModule(id) : undefined
   }
 
@@ -231,9 +231,10 @@ export class RouteRegistry<TData = unknown> {
     })
     const draftPaths = await Promise.all(
       entries.map(async (entry) => {
-        const code = this.providerManager.enabled
+        const module = this.providerManager.enabled
           ? await this.loadRouteProviderModule(entry.moduleId)
-          : await readFile(entry.moduleId, 'utf8')
+          : undefined
+        const code = module?.code ?? (this.providerManager.enabled ? undefined : await readFile(entry.moduleId, 'utf8'))
         const extracted = code
           ? await extract(code, entry.moduleId, DRAFT_EXTRACT_CONFIG)
           : undefined
