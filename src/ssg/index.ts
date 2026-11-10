@@ -1,7 +1,9 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import { runPrerender } from 'prerender-crawler'
+import type { PrerenderOptions } from 'prerender-crawler'
 import { normalizePath } from 'vite'
 import type { Plugin } from 'vite'
 
@@ -11,10 +13,18 @@ export type PrerenderRoutesSource =
   | readonly string[]
   | ((routes: readonly string[]) => readonly string[] | Promise<readonly string[]>)
 
-export interface SsgOptions {
+/**
+ * SSG configuration: the seed source and server entry are this package's own
+ * options; every other field is passed through to the official
+ * `prerender-crawler` engine (`crawlLinks`, `filter`, `retries`,
+ * `integrations`, `emitPages`, ...). `autoSubfolderIndex` is fixed to keep the
+ * flat `/x` → `x.html` naming convention the preview fallback serves.
+ */
+export interface SsgOptions extends Omit<PrerenderOptions, 'pages' | 'autoSubfolderIndex'> {
   /**
    * Routes to prerender. Defaults to all static manifest routes (no `:param`
-   * or `*splat` segments).
+   * or `*splat` segments); discovered links still extend the crawl unless
+   * `crawlLinks` is disabled.
    */
   routes?: PrerenderRoutesSource
   /**
@@ -76,24 +86,8 @@ export function staticPathsOf(manifestPaths: readonly string[]): string[] {
   return [...paths].sort()
 }
 
-async function mapWithConcurrency<T>(
-  items: readonly T[],
-  concurrency: number,
-  fn: (item: T) => Promise<void>,
-): Promise<void> {
-  const queue = [...items]
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
-      for (let item = queue.shift(); item !== undefined; item = queue.shift()) {
-        await fn(item)
-      }
-    }),
-  )
-}
-
 async function resolveHandler(options: SsgOptions, outDir: string): Promise<RequestHandler> {
-  const entry =
-    options.serverEntry ?? join(dirname(outDir), 'server/server.js')
+  const entry = options.serverEntry ?? join(dirname(outDir), 'server/server.js')
   const specifier = `${pathToFileURL(entry).href}?t=${Date.now()}`
   const mod = (await import(/* @vite-ignore */ specifier)) as {
     handleRequest?: RequestHandler
@@ -110,7 +104,17 @@ async function resolveHandler(options: SsgOptions, outDir: string): Promise<Requ
 }
 
 /** Preview fallback: serves prerendered pages and `404.html` for misses. */
-export function createPreviewFallbackMiddleware(outDir: string): (req: { url?: string; headers: Record<string, string | string[] | undefined> }, res: { setHeader: (name: string, value: string) => void; statusCode: number; end: (body?: string) => void }, next: () => void) => Promise<void> {
+export function createPreviewFallbackMiddleware(
+  outDir: string,
+): (
+  req: { url?: string; headers: Record<string, string | string[] | undefined> },
+  res: {
+    setHeader: (name: string, value: string) => void
+    statusCode: number
+    end: (body?: string) => void
+  },
+  next: () => void,
+) => Promise<void> {
   return async (
     req: { url?: string; headers: Record<string, string | string[] | undefined> },
     res: {
@@ -146,8 +150,9 @@ export function createPreviewFallbackMiddleware(outDir: string): (req: { url?: s
 }
 
 /**
- * Thin SSG prerenderer: walks the manifest's static routes through the start
- * handler (`handleRequest`) and writes one HTML file per route.
+ * SSG prerenderer over the official `prerender-crawler` engine: seeds the
+ * manifest's static routes, dispatches through the start handler
+ * (`handleRequest`) in-process, and lets the crawl discover linked pages.
  */
 export function createSsgPlugin(
   options: SsgOptions | false | undefined,
@@ -186,17 +191,35 @@ export function createSsgPlugin(
         routes.push('/404')
       }
       const handler = await resolveHandler(options, outDir)
-      let emitted = 0
-      await mapWithConcurrency(routes, options.concurrency ?? 4, async (route) => {
-        const normalized = normalizeRoutePath(route)
-        const response = await handler(new Request(`http://local${normalized}`))
-        const html = typeof response === 'string' ? response : await response.text()
-        const file = join(outDir, getPrerenderAssetFileName(normalized))
-        await mkdir(dirname(file), { recursive: true })
-        await writeFile(file, html)
-        emitted++
+      const {
+        routes: _routes,
+        concurrency,
+        serverEntry: _serverEntry,
+        outDir: _outDir,
+        ...engineOptions
+      } = options
+      const result = await runPrerender({
+        ...engineOptions,
+        transport: {
+          fetch: async (request) => {
+            const response = await handler(request)
+            return typeof response === 'string'
+              ? new Response(response, { headers: { 'content-type': 'text/html' } })
+              : response
+          },
+        },
+        outDir,
+        pages: routes.map(normalizeRoutePath),
+        concurrency: concurrency ?? 4,
+        autoSubfolderIndex: false,
       })
+      const emitted = result.pages.filter((page) => page.emitted).length
       logger.info(`prerendered ${emitted} routes to ${normalizePath(outDir)}`)
+      if (result.skipped.length > 0) {
+        logger.warn(
+          `skipped ${result.skipped.length} routes: ${result.skipped.map((page) => page.path).join(', ')}`,
+        )
+      }
     },
     configurePreviewServer(server) {
       if (!options) {
