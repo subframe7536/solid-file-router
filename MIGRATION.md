@@ -6,7 +6,7 @@ were removed; `filesystem-routing`, `@solidjs/router`, `@solidjs/web`, and
 `@solidjs/vite-plugin` now provide that foundation. This package keeps only the
 features the official stack does not have: filename conventions, inherited
 loading/error components, declarative `metadata`, `draft` routes, MDX routes,
-route providers, and SSG prerendering.
+and SSG prerendering.
 
 ## Requirements
 
@@ -49,30 +49,24 @@ export default defineConfig({
 
 ### Option mapping
 
-| v0.7                                                                                            | v1                                                 |
-| ----------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `pagesDir`                                                                                      | same                                               |
-| `ignore`                                                                                        | same (appended to the built-in ignore list)        |
-| `output`                                                                                        | same (now produces a `routes.d.ts` via upstream)   |
-| `lazy`                                                                                          | same (`false` disables code splitting)             |
-| `mdx`                                                                                           | same                                               |
-| `ssg`                                                                                           | same shape, new implementation (below)             |
-| `routeProviders`                                                                                | same (experimental)                                |
-| `router` / `routers`                                                                            | now take official `BaseFileSystemRouter` instances |
-| `convention`                                                                                    | **new** — filename-convention adapter (see below)  |
-| `toPath` / `toRoute`                                                                            | same official seams                                |
-| `reloadOnChange`, `infoDts`, `inheritance`, `serverEntry` (top level), `renderTemplate`, `meta` | **removed**                                        |
+| v0.7                                                                                            | v1                                                                       |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `pagesDir`                                                                                      | same                                                                     |
+| `ignore`                                                                                        | **changed** — no built-in defaults; globs match relative to `pagesDir`   |
+| `output`                                                                                        | same (now produces a `routes.d.ts` via upstream)                         |
+| `lazy`                                                                                          | same (`false` disables code splitting)                                   |
+| `mdx`                                                                                           | same                                                                     |
+| `ssg`                                                                                           | same shape, new implementation (below)                                   |
+| `router`                                                                                        | escape hatch — takes a `BaseFileSystemRouter`, replaces the built-in one |
+| `convention`, `routers`, `toPath`/`toRoute`, `moduleId`, `verboseLog`, `routeProviders`         | **removed**                                                              |
+| `reloadOnChange`, `infoDts`, `inheritance`, `serverEntry` (top level), `renderTemplate`, `meta` | **removed**                                                              |
 
-`convention`, `router`, and `routers` are **mutually exclusive**.
-
-```ts
-fileRouter({
-  convention: defaultConvention, // this package's old conventions (default)
-  // solidStartConvention,          // stock SolidStart-style conventions
-  // flatConvention,                // official flat router
-  // (config) => new MyRouter(config),
-})
-```
+One built-in convention only — `DefaultFileSystemRouter`. For custom
+filename rules, pass a router: `fileRouter({ router: new MyRouter(config) })`
+(or subclass `DefaultFileSystemRouter` with `toPath`/`toRoute` overrides).
+`ignore` was previously appended to `['**/components/**', '**/node_modules/**',
+'**/dist/**']` — files under `components/` are now routes unless ignored or
+`_`-prefixed.
 
 `pagesDir` is resolved relative to the Vite **root**, not cwd.
 
@@ -139,9 +133,9 @@ that renders `createFileRouter()`.
 
 ## Filename conventions
 
-`defaultConvention` reproduces the v0.7 filename table (`_app`/`_layout`/
+`DefaultFileSystemRouter` reproduces the v0.7 filename table (`_app`/`_layout`/
 `index`/`*404`/`-[x]` optional/`[...x]` splats/`(group)`/dot separators/private
-`_x`/`components/`).
+`_x`) — except `components/` is no longer ignored by default.
 
 Difference: old `-` optional segments and `[...all]` now emit official `*name`
 splats. `*all` matches `/blog`, `/blog/`, and `/blog/a/b` — the same reachable
@@ -178,7 +172,7 @@ removed — `<head>` content is owned by `useHead`.
   the convention router; `$$route` is served by a virtual module so route
   configs never eagerly bundle the component.
 - `extendLoad` still works; `filter`/`pagesDir`/`transformPath` MDX options were
-  removed (use plugin-level `ignore`/`pagesDir`/`toPath`).
+  removed (use plugin-level `ignore`/`pagesDir`, or a custom `router`).
 
 ## Removed / replaced API
 
@@ -191,7 +185,8 @@ removed — `<head>` content is owned by `useHead`.
 | `readRouteInfo` / `routeInfo` virtual export                  | `Router.routeInfo`                                                 |
 | `RouteMetadataManager`, `__routeMetadataRoot__`, head markers | `useHead`                                                          |
 | `reloadOnChange`                                              | upstream HMR                                                       |
-| `infoDts`                                                     | upstream `types` (`output`)                                        |
+| `infoDts`                                                     | `declare module 'solid-file-router' { interface RouteInfo {...} }` |
+| `routeProviders` / `mdxRouteProvider`                         | dynamic routes + `ssg.routes` / `crawlLinks` discovery             |
 | `inheritance` option                                          | per-route `inherit`                                                |
 | `serverEntry` + `renderTemplate` (plugin)                     | `ssg.serverEntry` + start handler                                  |
 | `route/path.ts` helpers                                       | `routePathFromFile` export                                         |

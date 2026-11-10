@@ -2,9 +2,8 @@ import { createRouter } from '@solidjs/router'
 import { fileRoutes } from '@solidjs/router/fs'
 import { pageRoutes } from 'virtual:routes'
 
-import type { RouteMetadata } from './metadata'
-import { adaptFileRoutes } from './route/adapter'
-import type { RouteEntry } from './route/adapter'
+import { adaptFileRoutes } from './route'
+import type { RouteEntry, RouteInfo, RouteMetadata } from './route'
 
 export {
   adaptFileRoutes,
@@ -14,8 +13,9 @@ export {
   type RouteConfig,
   type SfrRouteConfig,
   type RouteEntry,
-} from './route/adapter'
-export type { RouteMetadata, RouteMetaTag, RouteMetadataLink } from './metadata'
+  type RouteInfo,
+} from './route'
+export type { RouteMetadata, RouteMetaTag, RouteMetadataLink } from './route'
 
 export interface FileRouterOptions {
   /** Manifest tree injection point — defaults to the `virtual:routes` module. */
@@ -28,7 +28,7 @@ export interface FileRouter extends ReturnType<typeof createRouter> {
   /** The adapted route-definition tree passed to `createRouter`. */
   fileRoutes: RouteEntry[]
   /** Collected route `info` keyed by group-stripped path. */
-  routeInfo: Record<string, unknown>
+  routeInfo: Record<string, RouteInfo>
   /** Collected route `metadata` keyed by group-stripped path. */
   routeMetadata: Record<string, RouteMetadata>
 }

@@ -7,11 +7,10 @@ Type-safe file-based router for Solid 2 — a thin preset over the official stac
 The package provides:
 
 - `fileRouter()` Vite preset wrapping `filesystem-routing/vite` (`fileRoutes`)
-- `DefaultFileSystemRouter` + convention adapters (`defaultConvention`,
-  `solidStartConvention`, `flatConvention`)
+- `DefaultFileSystemRouter` — the single built-in filename convention;
+  custom scanning via the `router` option
 - `createFileRouter()` runtime adapter: inherited loading/error components,
-  `useHead` metadata, draft routes
-- Experimental `routeProviders` for non-file route sources (virtual `?pick=` modules)
+  `useHead` metadata, draft routes, augmentable `RouteInfo`
 - MDX routes via Satteri (`export const route` + default component)
 - SSG prerendering through the start `handleRequest`
 - Consumers configure `@solidjs/vite-plugin` separately in app Vite configs
@@ -111,15 +110,13 @@ pnpm play:preview   # Preview playground build
 
 ```
 src/
-  index.ts          # Public runtime entry (createFileRouter, defineRoute)
+  index.ts          # Public runtime entry (createFileRouter, defineRoute/definePage)
   plugin.ts         # Vite preset orchestration (fileRouter -> fileRoutes)
-  const.ts          # Shared constants and logger
+  const.ts          # Shared constants, Promisable, and logger
+  convention.ts     # DefaultFileSystemRouter — filename table + ignore globs
+  route.ts          # adaptFileRoutes + route config types + RouteMetadata/RouteInfo
   mdx/              # MDX runtime, Satteri compilation, and Vite plugin
-  route/
-    adapter.ts      # adaptFileRoutes: inheritance, useHead metadata, draft
-    convention.ts   # DefaultFileSystemRouter + convention adapters
-    provider/       # Experimental route-provider contract + virtual-module runtime
-  ssg/              # Prerender plugin over the start handleRequest
+  ssg.ts            # Prerender plugin over prerender-crawler + preview fallback
 ```
 
 ## Testing Conventions
@@ -137,8 +134,8 @@ src/
 
 ### Virtual Modules
 
-- `virtual:routes` - official `filesystem-routing` manifest module (`moduleId`
-  option, default `virtual:routes`); exports default flat manifest + `pageRoutes` tree
+- `virtual:routes` - official `filesystem-routing` manifest module (fixed id);
+  exports default flat manifest + `pageRoutes` tree
 
 ### Route adaptation
 

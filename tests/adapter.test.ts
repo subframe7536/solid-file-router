@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js'
 import { describe, expect, it } from 'vitest'
 
-import { adaptFileRoutes, defineRoute } from '../src/route/adapter'
+import { adaptFileRoutes, defineRoute } from '../src/route'
 
 const comp = (name: string): Component => {
   const c = (): null => null

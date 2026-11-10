@@ -9,6 +9,8 @@ export const VID_EXTRACT_RESOLVED = `\0${VID_EXTRACT}`
 
 export const logger = createLogger('info', { prefix: `[${name}]` })
 
+export type Promisable<T> = T | Promise<T>
+
 /** FNV-1a hash for stable route import names. */
 export function hashString(value: string): string {
   let hash = 2166136261

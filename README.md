@@ -6,7 +6,7 @@ Type-safe file-based routing for Solid and Vite.
 `filesystem-routing` scans route modules, `@solidjs/router` handles matching,
 and `createFileRouter()` adapts the generated route tree with inherited
 loading/error boundaries, `useHead` metadata, and draft routes. It also
-supports nested layouts, route providers, and build-time SSG (Static Site
+supports nested layouts and build-time SSG (Static Site
 Generation).
 
 > [!WARNING]
@@ -24,9 +24,8 @@ Generation).
 - Route `preload`, `matchFilters`, metadata, and lazy components
 - Inherited loading and error components (`Loading`/`Errored`)
 - `defineRoute`/`definePage` helpers for fully typed route modules
-- Convention adapters: `defaultConvention`, `solidStartConvention`, `flatConvention`
+- Single filename convention; custom scanning via the `router` escape hatch
 - Built-in Markdown/MDX routes compiled with Satteri
-- Experimental route providers for CMS or generated modules
 - Build-time static HTML generation through the start handler
 
 ## Install
@@ -103,7 +102,7 @@ generates a pass-through root component.
 
 | Document                       | Use it for                                                              |
 | ------------------------------ | ----------------------------------------------------------------------- |
-| [Guide](docs/guide.md)         | Routes, layouts, data, navigation, metadata, and route providers        |
+| [Guide](docs/guide.md)         | Routes, layouts, data, navigation, and metadata                         |
 | [SSG Guide](docs/ssg.md)       | Prerender setup, route selection, output, templates, and server entries |
 | [MDX Guide](docs/mdx.md)       | Satteri setup, Markdown routes, component overrides, and HMR            |
 | [Reference](docs/reference.md) | Exact plugin options, generated modules, types, and runtime APIs        |
@@ -116,11 +115,8 @@ map source paths or wrap generated content with `extendLoad`; its
 `mdxContent` expression can use the active `useMDXComponents()` map. Follow the
 dedicated guides for complete, copyable setup.
 
-`routeProviders` are additive: configured providers add virtual `?pick=`
-modules on top of the file scan. Markdown/MDX frontmatter is optional, but
-using it requires the optional `yaml` peer dependency. See the
-[route provider guide](docs/guide.md#route-providers-experimental) and
-[MDX guide](docs/mdx.md) for details.
+Markdown/MDX frontmatter is optional, but using it requires the optional
+`yaml` peer dependency. See the [MDX guide](docs/mdx.md) for details.
 
 ## Development
 

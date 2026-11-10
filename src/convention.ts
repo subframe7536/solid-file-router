@@ -1,20 +1,9 @@
-import { cleanPath, FlatFileSystemRouter, PageFileSystemRouter } from 'filesystem-routing'
-import type {
-  BaseFileSystemRouter,
-  FileSystemRouterConfig,
-  PageFileSystemRouterConfig,
-  RouteManifestEntry,
-} from 'filesystem-routing'
+import { cleanPath, PageFileSystemRouter } from 'filesystem-routing'
+import type { PageFileSystemRouterConfig, RouteManifestEntry } from 'filesystem-routing'
 
 const REG_GROUP = /^\([\w-]+\)$/
 const REG_PARAM = /\[([^\]]+)\]/g
 const REG_SPLAT = /\[\.{3}([\w-]+)\]/g
-
-/**
- * Default ignore globs applied on top of the route directory scan. `toPath`
- * conventions still see every matched file; these only filter scan results.
- */
-export const DEFAULT_IGNORES = ['**/components/**', '**/node_modules/**', '**/dist/**'] as const
 
 function globToRegExp(glob: string): RegExp {
   let source = ''
@@ -59,7 +48,7 @@ function globToRegExp(glob: string): RegExp {
 
 /**
  * Creates a matcher over `**`/`*`/`?`/`{a,b}` glob patterns. Used internally
- * for ignore lists and provider watch filters; not a full micromatch clone.
+ * for ignore lists; not a full micromatch clone.
  */
 export function createGlobMatcher(globs: readonly string[]): (src: string) => boolean {
   const patterns = globs.map(globToRegExp)
@@ -144,21 +133,40 @@ export function routePathFromFile(routeFile: string): string | undefined {
 }
 
 export interface DefaultFileSystemRouterConfig extends PageFileSystemRouterConfig {
-  /** Extra ignore globs appended to {@link DEFAULT_IGNORES}. */
+  /**
+   * Globs matched against the file path relative to `dir` (e.g.
+   * `hooks/**`, `**\/*.test.tsx`). Matched files are not routes. Files under
+   * a `_`-prefixed segment are already skipped by the filename convention —
+   * use `ignore` for everything else.
+   */
   ignore?: readonly string[]
 }
 
 /**
- * File-system router carrying this package's filename conventions
- * (`_app`/`_layout`/`404`/`-[param]`/`-[...splat]`/`(group)`/`.` segments/`_` private)
- * on top of the official scanning and module-convention machinery.
+ * The file-system router — the package's only built-in convention.
+ *
+ * | File                       | Route path           |
+ * | -------------------------- | -------------------- |
+ * | `index.tsx`                | `/`                  |
+ * | `about.tsx`                | `/about`             |
+ * | `blog/index.tsx`           | `/blog/`             |
+ * | `blog/[id].tsx`            | `/blog/:id`          |
+ * | `docs/-[lang]/index.tsx`   | `/docs/:lang?/`      |
+ * | `blog/[...all].tsx`        | `/blog/*all`         |
+ * | `(auth)/login.tsx`         | `/login` (group)     |
+ * | `blog/_layout.tsx`         | layout of `/blog/*`  |
+ * | `_app.tsx` / `_layout.tsx` | root layout          |
+ * | `404.tsx`                  | `*404` fallback      |
+ * | `account.settings.tsx`     | `/account/settings`  |
+ * | `foo.index.tsx`            | `/foo`               |
+ * | `_x.tsx`, `x/_y/index.tsx` | private, not a route |
  */
 export class DefaultFileSystemRouter extends PageFileSystemRouter {
   private isIgnored: (src: string) => boolean
 
   constructor(config: DefaultFileSystemRouterConfig) {
     super(config)
-    this.isIgnored = createGlobMatcher([...DEFAULT_IGNORES, ...(config.ignore ?? [])])
+    this.isIgnored = createGlobMatcher(config.ignore ?? [])
   }
 
   override toPath(src: string): string | undefined {
@@ -169,7 +177,9 @@ export class DefaultFileSystemRouter extends PageFileSystemRouter {
   }
 
   override isRoute(src: string): boolean {
-    return super.isRoute(src) && !this.isIgnored(src)
+    // `src` is absolute; ignore globs are matched relative to `dir`.
+    const relative = src.slice(this.config.dir.length).replace(/^\/+/, '')
+    return super.isRoute(src) && !this.isIgnored(relative)
   }
 
   override toRoute(src: string): RouteManifestEntry | undefined {
@@ -194,23 +204,3 @@ export class DefaultFileSystemRouter extends PageFileSystemRouter {
     return super.toRoute(src)
   }
 }
-
-/**
- * A convention adapter: produces a `BaseFileSystemRouter` for a given scan
- * config. Passed as a value to `fileRouter({ convention })` — mutually
- * exclusive with `router`/`routers`.
- */
-export type FileRouterConvention = (
-  config: FileSystemRouterConfig & { ignore?: readonly string[] },
-) => BaseFileSystemRouter
-
-/** This package's filename conventions — the default. */
-export const defaultConvention: FileRouterConvention = (config) =>
-  new DefaultFileSystemRouter(config as DefaultFileSystemRouterConfig)
-
-/** The stock SolidStart convention (`index`, `[param]`, `[[param]]`, `[...rest]`). */
-export const solidStartConvention: FileRouterConvention = (config) =>
-  new PageFileSystemRouter(config)
-
-/** The flat convention (`+page`-style leaf routes, no nesting). */
-export const flatConvention: FileRouterConvention = (config) => new FlatFileSystemRouter(config)

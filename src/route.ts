@@ -4,8 +4,40 @@ import type { HeadTag } from '@solidjs/web'
 import type { Component } from 'solid-js'
 import { createComponent, DEV, Errored, Loading, untrack } from 'solid-js'
 
-import type { RouteMetadata } from '../metadata'
-export type { RouteMetadata, RouteMetaTag, RouteMetadataLink } from '../metadata'
+/** Metadata attached to a route and applied through `useHead`. */
+export interface RouteMetadata {
+  title?: string
+  description?: string
+  canonical?: string
+  meta?: Array<RouteMetaTag>
+  links?: Array<RouteMetadataLink>
+}
+
+export interface RouteMetaTag {
+  name?: string
+  property?: string
+  content: string
+}
+
+export interface RouteMetadataLink {
+  rel: string
+  href: string
+}
+
+/**
+ * Per-route application data carried on `route.info` and collected onto
+ * `Router.routeInfo`. Augment it to type the `info` field everywhere:
+ *
+ * ```ts
+ * declare module 'solid-file-router' {
+ *   interface RouteInfo {
+ *     title: string
+ *     order?: number
+ *   }
+ * }
+ * ```
+ */
+export interface RouteInfo {}
 
 export interface ErrorComponentProps {
   error: unknown
@@ -36,7 +68,7 @@ export interface SfrRouteConfig<T = unknown> {
  */
 export type RouteConfig<T = unknown> = SfrRouteConfig<T> & {
   preload?: (args: unknown) => T
-  info?: Record<string, unknown>
+  info?: RouteInfo
   matchFilters?: Record<string, unknown>
   [key: string]: unknown
 }
@@ -171,7 +203,7 @@ function wrapRouteComponent(
 
 interface AdaptResult {
   routes: RouteEntry[]
-  routeInfo: Record<string, unknown>
+  routeInfo: Record<string, RouteInfo>
   routeMetadata: Record<string, RouteMetadata>
 }
 
@@ -181,7 +213,7 @@ interface AdaptResult {
  * production draft filtering.
  */
 export function adaptFileRoutes(entries: readonly RouteEntry[]): AdaptResult {
-  const routeInfo: Record<string, unknown> = {}
+  const routeInfo: Record<string, RouteInfo> = {}
   const routeMetadata: Record<string, RouteMetadata> = {}
 
   const visit = (
@@ -200,7 +232,7 @@ export function adaptFileRoutes(entries: readonly RouteEntry[]): AdaptResult {
       : entry.errorComponent
     const childPath = typeof entry.path === 'string' ? entry.path : ''
     const path = (parentPath.endsWith('/') ? parentPath.slice(0, -1) : parentPath) + childPath
-    const info = entry.info as Record<string, unknown> | undefined
+    const info = entry.info as RouteInfo | undefined
     if (info) {
       routeInfo[path || '/'] = info
     }

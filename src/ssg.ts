@@ -7,7 +7,7 @@ import type { PrerenderOptions } from 'prerender-crawler'
 import { normalizePath } from 'vite'
 import type { Plugin } from 'vite'
 
-import { logger } from '../const'
+import { logger } from './const'
 
 export type PrerenderRoutesSource =
   | readonly string[]
@@ -104,9 +104,7 @@ async function resolveHandler(options: SsgOptions, outDir: string): Promise<Requ
 }
 
 /** Preview fallback: serves prerendered pages and `404.html` for misses. */
-export function createPreviewFallbackMiddleware(
-  outDir: string,
-): (
+export function createPreviewFallbackMiddleware(outDir: string): (
   req: { url?: string; headers: Record<string, string | string[] | undefined> },
   res: {
     setHeader: (name: string, value: string) => void

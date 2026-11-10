@@ -14,17 +14,16 @@ Do not duplicate those rules here.
    This package does not configure it.
 4. Import runtime APIs from `solid-file-router`, plugin APIs from
    `solid-file-router/plugin`, MDX runtime from `solid-file-router/mdx`, and
-   the manifest from `virtual:routes` (default id, overridable via `moduleId`).
+   the manifest from `virtual:routes` (fixed id).
 5. Enable `solid-file-router/client` types before importing `virtual:routes`.
-6. `route`, `router`, `routers`, and `convention` are the seams — prefer
-   changing conventions over patching generated output.
-7. `convention`, `router`, and `routers` are mutually exclusive plugin
-   options.
-8. `pagesDir` is resolved against the Vite **root** in the `config` hook —
+6. Route modules (`route` export) and the `router` option are the seams —
+   prefer changing the route module or the router over patching generated
+   output.
+7. `pagesDir` is resolved against the Vite **root** in the `config` hook —
    `BaseFileSystemRouter` otherwise eagerly resolves `dir` against cwd, and
    upstream calls `router.getRoutes()` from `configEnvironment` before
    `configResolved` runs.
-9. This is v1 on the Solid 2 **prerelease** stack — pin upstream versions.
+8. This is v1 on the Solid 2 **prerelease** stack — pin upstream versions.
 
 ## Consumer Task Map
 
@@ -39,7 +38,8 @@ Do not duplicate those rules here.
 | Add metadata         | `route.metadata` — rendered through `useHead`                                                | `data-dh` tags appear in SSR/client head              |
 | Add SSG              | `solid({ start: true, ssr: true })` + `fileRouter({ ssg: {} })` + `src/App.tsx`              | Build emits `dist/client/*.html` and `404.html`       |
 | Use built-in MDX     | Install Satteri and set `mdx: true`                                                          | `.md`/`.mdx` routes are generated and render          |
-| Use a CMS/provider   | `routeProviders` with `glob`/`load`                                                          | Provider entries appear as `?pick=` virtual modules   |
+| Type route info      | `declare module 'solid-file-router' { interface RouteInfo {...} }`                           | `route.info` and `Router.routeInfo` are typed         |
+| Custom scan rules    | `fileRouter({ router: new MyRouter(...) })`                                                  | Manifest reflects the custom convention               |
 
 Use [guide.md](guide.md) for workflows and [reference.md](reference.md) for exact
 options and types.
@@ -69,17 +69,16 @@ expressions in the initializer are fine. Both helpers are identity functions.
 
 ## Repository Source Map
 
-| Concern                                                                       | Primary source                         | Primary tests                   |
-| ----------------------------------------------------------------------------- | -------------------------------------- | ------------------------------- |
-| Vite preset, options, router wiring                                           | `src/plugin.ts`                        | `tests/convention.test.ts`      |
-| Filename conventions + `DefaultFileSystemRouter`                              | `src/route/convention.ts`              | `tests/convention.test.ts`      |
-| `createFileRouter`, `definePage`/`defineRoute`, inheritance, `useHead`, draft | `src/index.ts`, `src/route/adapter.ts` | `tests/adapter.test.ts`         |
-| Route-provider contract + virtual-module runtime                              | `src/route/provider/`                  | `tests/convention.test.ts`      |
-| SSG prerender + preview fallback                                              | `src/ssg/index.ts`                     | `tests/ssg.test.ts`             |
-| MDX compile (route/frontmatter exports)                                       | `src/mdx/router.ts`                    | `tests/mdx-module.test.ts`      |
-| MDX frontmatter parsing                                                       | `src/mdx/frontmatter.ts`               | `tests/mdx-frontmatter.test.ts` |
-| MDX Solid 2 runtime + jsx-runtime                                             | `src/mdx/runtime.ts`                   | —                               |
-| `virtual:routes` + `*.mdx` declarations                                       | `client.d.ts`                          | `tests/` (indirect)             |
+| Concern                                                                       | Primary source                 | Primary tests                   |
+| ----------------------------------------------------------------------------- | ------------------------------ | ------------------------------- |
+| Vite preset, options, router wiring                                           | `src/plugin.ts`                | `tests/convention.test.ts`      |
+| Filename convention + `DefaultFileSystemRouter`                               | `src/convention.ts`            | `tests/convention.test.ts`      |
+| `createFileRouter`, `definePage`/`defineRoute`, inheritance, `useHead`, draft | `src/index.ts`, `src/route.ts` | `tests/adapter.test.ts`         |
+| SSG prerender + preview fallback                                              | `src/ssg.ts`                   | `tests/ssg.test.ts`             |
+| MDX compile (route/frontmatter exports)                                       | `src/mdx/router.ts`            | `tests/mdx-module.test.ts`      |
+| MDX frontmatter parsing                                                       | `src/mdx/frontmatter.ts`       | `tests/mdx-frontmatter.test.ts` |
+| MDX Solid 2 runtime + jsx-runtime                                             | `src/mdx/runtime.ts`           | —                               |
+| `virtual:routes` + `*.mdx` declarations                                       | `client.d.ts`                  | `tests/` (indirect)             |
 
 ## Behavioral Invariants
 
@@ -89,8 +88,8 @@ expressions in the initializer are fine. Both helpers are identity functions.
   (`js/jsx/ts/tsx` plus `md/mdx` when `mdx` is enabled).
 - `/(app)` is the root group; group segments appear in manifest paths and are
   stripped in route-tree paths.
-- Private `_` segments, `components/`, `node_modules`, and `dist` never
-  generate pages.
+- `_`-prefixed segments never generate pages; `ignore` globs match paths
+  relative to `pagesDir` and have no built-in defaults.
 - `404.tsx` maps to `*404`; `[id]` → `:id`; `-[x]`/`[...x]` → `*x` splats.
 - `?pick=` narrows module exports — never bypass it for config reads.
 
@@ -129,14 +128,6 @@ expressions in the initializer are fine. Both helpers are identity functions.
   `route`/`frontmatter` exports so the component never lands in the manifest
   chunk.
 
-### Route providers
-
-- Provider modules use non-`\0` virtual ids under
-  `node_modules/.sfr-virtual/` — `\0` ids skip Solid compilation.
-- Entries land in the router via `_addRoute` + `reload` on the shared
-  `BaseFileSystemRouter`.
-- Rescans union across all environment routers before removing stale entries.
-
 ## Change-to-Test Matrix
 
 | Change                           | Narrow verification                                                   |
@@ -159,8 +150,8 @@ pnpm play:build && pnpm play:ssg:build
 
 Before changing documentation, verify claims in this order:
 
-1. Public types in `src/index.ts`, `src/plugin.ts`, `src/route/adapter.ts`,
-   `src/route/convention.ts`, `client.d.ts`
+1. Public types in `src/index.ts`, `src/plugin.ts`, `src/route.ts`,
+   `src/convention.ts`, `client.d.ts`
 2. Defaults and generated behavior in implementation
 3. Expected edge cases in tests
 4. Runnable configuration in `playground`

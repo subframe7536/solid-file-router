@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url'
 
 import type { Data, MdxCompileOptions, MdxToJsResult } from 'satteri'
 
-import type { Promisable } from '../route/provider'
+import type { Promisable } from '../const'
 
 import { parseMdxFrontmatter, serializeJavaScriptValue } from './frontmatter'
 import type { MdxFrontmatterBlock, MdxRouteConfig } from './frontmatter'

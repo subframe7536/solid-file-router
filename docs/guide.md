@@ -1,49 +1,46 @@
 # Guide
 
-Routes, layouts, data, navigation, metadata, and route providers on the
-Solid 2 official stack.
+Routes, layouts, data, navigation, and metadata on the Solid 2 official stack.
 
 ## File conventions
 
 Route files live under `pagesDir` (`src/pages` by default). The built-in
-`defaultConvention` maps filenames to paths:
+convention maps filenames to paths:
 
-| File                         | Path                               |
-| ---------------------------- | ---------------------------------- |
-| `_app.tsx`                   | root layout                        |
-| `index.tsx`                  | `/`                                |
-| `about.tsx`                  | `/about`                           |
-| `blog/index.tsx`             | `/blog/`                           |
-| `blog/_layout.tsx`           | `/blog` (pathless layout)          |
-| `blog/[id].tsx`              | `/blog/:id`                        |
-| `blog/-[id].tsx`             | `/blog/*id` (optional splat)       |
-| `blog/[...all].tsx`          | `/blog/*all`                       |
-| `docs/-[lang]/index.tsx`     | `/docs/*lang`                      |
-| `(auth)/login.tsx`           | `/login` (group stripped from URL) |
-| `account.settings.tsx`       | `/account/settings`                |
-| `404.tsx`                    | `*404` catch-all                   |
-| `_util.tsx`, `components/**` | not routes                         |
+| File                          | Path                               |
+| ----------------------------- | ---------------------------------- |
+| `_app.tsx`                    | root layout                        |
+| `index.tsx`                   | `/`                                |
+| `about.tsx`                   | `/about`                           |
+| `blog/index.tsx`              | `/blog/`                           |
+| `blog/_layout.tsx`            | `/blog` (pathless layout)          |
+| `blog/[id].tsx`               | `/blog/:id`                        |
+| `blog/-[id].tsx`              | `/blog/*id` (optional splat)       |
+| `blog/[...all].tsx`           | `/blog/*all`                       |
+| `docs/-[lang]/index.tsx`      | `/docs/*lang`                      |
+| `(auth)/login.tsx`            | `/login` (group stripped from URL) |
+| `account.settings.tsx`        | `/account/settings`                |
+| `404.tsx`                     | `*404` catch-all                   |
+| `_util.tsx`, `x/_y/index.tsx` | not routes (`_`-prefixed)          |
 
 `-(group)` segments appear in the neutral manifest path (`/(app)/...`) and
 are stripped by route-tree emission. Layouts and `_app` nest children through
 `props.children`.
 
-Swap or build a convention with `fileRouter({ convention })`:
+Files that are not routes use a `_` prefix (`components/` is a normal
+directory — rename it `_components/` or list it in `ignore`). `ignore`
+globs match paths **relative to `pagesDir`**, with no built-in defaults:
 
 ```ts
-import {
-  fileRouter,
-  defaultConvention,
-  solidStartConvention,
-  flatConvention,
-} from 'solid-file-router/plugin'
-
-fileRouter({ convention: flatConvention })
-// or fully custom — mutually exclusive with router/routers
-fileRouter({ convention: (config) => new MyRouter(config) })
+fileRouter({ ignore: ['components/**', '**/*.test.tsx'] })
 ```
 
-`ignore` adds glob patterns on top of `['**/components/**', '**/node_modules/**', '**/dist/**']`.
+For a fully custom scan (different filename rules, `toPath`/`toRoute`),
+pass a router instance — it replaces the built-in one:
+
+```ts
+fileRouter({ router: new MyRouter({ dir: 'src/pages', extensions: ['tsx'] }) })
+```
 
 ## Route modules
 
@@ -144,31 +141,17 @@ export const route = {
 ```
 
 `Router.routeInfo` and `Router.routeMetadata` collect every route's `info` /
-`metadata` keyed by stripped path.
-
-## Route providers (experimental)
-
-`routeProviders` inject non-file route sources (CMS, generated pages) as
-virtual modules on the official manifest:
+`metadata` keyed by stripped path. Type `info` once by augmenting
+`RouteInfo`:
 
 ```ts
-import { fileRouter, defineRouteProvider } from 'solid-file-router/plugin'
-
-fileRouter({
-  routeProviders: [
-    defineRouteProvider({
-      name: 'cms',
-      glob: (filter, root) => fetchCmsRoutes(),
-      watch: 'cms/**',
-      transformPath: (path) => `/${path}`,
-      load: async ({ path, sourcePath }) => readModule(sourcePath),
-    }),
-  ],
-})
+declare module 'solid-file-router' {
+  interface RouteInfo {
+    title: string
+    order?: number
+  }
+}
 ```
-
-Provider modules are served from virtual `?pick=` ids, so `route`/`default`
-narrowing and Solid compilation work exactly like file routes.
 
 ## SSG / SSR
 

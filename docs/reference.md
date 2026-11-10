@@ -11,30 +11,22 @@ import { fileRouter } from 'solid-file-router/plugin'
 fileRouter(options?)
 ```
 
-| Option               | Type                                   | Default                                                  | Notes                                                               |
-| -------------------- | -------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------- |
-| `pagesDir`           | `string`                               | `'src/pages'`                                            | Resolved against the Vite root                                      |
-| `output`             | `string`                               | `'src/routes.d.ts'`                                      | Generated route types (`types`)                                     |
-| `moduleId`           | `string`                               | `'virtual:routes'`                                       | Manifest virtual module id                                          |
-| `convention`         | `(config) => BaseFileSystemRouter`     | `defaultConvention`                                      | Filename→router adapter; mutually exclusive with `router`/`routers` |
-| `router`             | `BaseFileSystemRouter`                 | —                                                        | Custom router, passed to `fileRoutes`                               |
-| `routers`            | `Record<string, BaseFileSystemRouter>` | —                                                        | Per-environment routers                                             |
-| `toPath` / `toRoute` | upstream fns                           | —                                                        | Only when the convention builds the router                          |
-| `ignore`             | `readonly string[]`                    | `['**/components/**','**/node_modules/**','**/dist/**']` | Extra ignore globs                                                  |
-| `lazy`               | `boolean`                              | `true`                                                   | `false` disables route code splitting                               |
-| `mdx`                | `boolean \| MdxOptions`                | `false`                                                  | Satteri compile; see MDX guide                                      |
-| `ssg`                | `SsgOptions`                           | —                                                        | Start-handler prerender; see SSG guide                              |
-| `routeProviders`     | `RouteProvider[]`                      | —                                                        | Experimental CMS/virtual sources                                    |
-| `verboseLog`         | `boolean`                              | `false`                                                  | Verbose logging                                                     |
+| Option     | Type                    | Default             | Notes                                                                  |
+| ---------- | ----------------------- | ------------------- | ---------------------------------------------------------------------- |
+| `pagesDir` | `string`                | `'src/pages'`       | Resolved against the Vite root; ignored when `router` is given         |
+| `ignore`   | `readonly string[]`     | `[]`                | Globs matched relative to `pagesDir`; `_`-prefixed files never need it |
+| `output`   | `string`                | `'src/routes.d.ts'` | Generated route types (`types`)                                        |
+| `lazy`     | `boolean`               | `true`              | `false` disables route code splitting                                  |
+| `mdx`      | `boolean \| MdxOptions` | `false`             | Satteri compile; see MDX guide                                         |
+| `ssg`      | `SsgOptions`            | —                   | Start-handler prerender; see SSG guide                                 |
+| `router`   | `BaseFileSystemRouter`  | —                   | Escape hatch: replaces the built-in router (and `pagesDir`/`ignore`)   |
 
 ### Plugin re-exports
 
-`defaultConvention`, `solidStartConvention`, `flatConvention`,
-`DefaultFileSystemRouter`, `DEFAULT_IGNORES`, `routePathFromFile`,
-`defineRouteProvider`, plus types `FileRouterConvention`,
-`DefaultFileSystemRouterConfig`, `RouteProvider`, `RouteProviderEntry`,
-`RouteProviderLoadContext`, `SsgOptions`, `PrerenderRoutesSource`,
-`MdxOptions`, `RouteMetadata`, `RouteMetaTag`, `RouteMetadataLink`.
+`DefaultFileSystemRouter`, `routePathFromFile`, `createGlobMatcher`, plus
+types `DefaultFileSystemRouterConfig`, `SsgOptions`, `PrerenderRoutesSource`,
+`MdxOptions`, `RouteMetadata`, `RouteMetaTag`, `RouteMetadataLink`,
+`Promisable`.
 
 ## Runtime — `solid-file-router`
 
@@ -47,6 +39,7 @@ fileRouter(options?)
 | `RouteConfig`                                      | type                                                              | Official `route` keys + extension keys                                               |
 | `SfrRouteConfig`                                   | type                                                              | Extension keys only                                                                  |
 | `RouteMetadata`/`RouteMetaTag`/`RouteMetadataLink` | types                                                             | Declarative head config                                                              |
+| `RouteInfo`                                        | interface                                                         | `route.info` shape — augment via `declare module 'solid-file-router'`                |
 | `ErrorComponentProps`                              | `{ error: unknown; reset: () => void }`                           | `errorComponent` props                                                               |
 | `RouteEntry`                                       | type                                                              | Adapted route-definition entry                                                       |
 
@@ -62,6 +55,17 @@ Official `FileRouteConfig` keys (`preload`, `info`, `matchFilters`, `search`,
 | `inherit`          | `boolean \| { loading?: boolean; error?: boolean }` | `false`/per-key `false` blocks                        |
 | `metadata`         | `RouteMetadata`                                     | `useHead` tags                                        |
 | `draft`            | `boolean`                                           | dev-only route                                        |
+
+`info` is typed by the augmentable `RouteInfo` interface:
+
+```ts
+declare module 'solid-file-router' {
+  interface RouteInfo {
+    title: string
+    order?: number
+  }
+}
+```
 
 ### `RouteMetadata`
 
@@ -101,16 +105,20 @@ import routes, { pageRoutes } from 'virtual:routes'
 
 Subpath alias `solid-file-router/mdx/jsx-runtime` maps to the same module.
 
-## Conventions
+## Convention
 
-| Adapter                | Behavior                                                                                                                                              |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `defaultConvention`    | Filename table: `_app`, `_layout`, `index`, `[id]`→`:id`, `-[x]`/`[...x]`→`*x`, `(group)`, `x.y`→`x/y`, `404`→`*404`, `_private`/`components` skipped |
-| `solidStartConvention` | Stock `PageFileSystemRouter` (SolidStart-style)                                                                                                       |
-| `flatConvention`       | `FlatFileSystemRouter`                                                                                                                                |
+One built-in convention — `DefaultFileSystemRouter`, a `PageFileSystemRouter`
+subclass. Filename table: `_app`, `_layout`, `index`, `[id]`→`:id`,
+`-[x]`/`[...x]`→`*x`, `(group)`, `x.y`→`x/y`, `404`→`*404`, `_`-prefixed
+segments skipped. See the table in `src/convention.ts` or the guide.
 
-All produce a `BaseFileSystemRouter`; `router`/`routers` are the fully manual
-seams. `convention` and `router`/`routers` are mutually exclusive.
+To customize scanning (different filename rules, `toPath`/`toRoute`,
+per-file overrides), pass your own router:
+
+```ts
+fileRouter({ router: new MyRouter({ dir: 'src/pages', extensions }) })
+// or subclass: new DefaultFileSystemRouter({ dir, extensions, toPath })
+```
 
 ## SSG options
 
@@ -121,20 +129,11 @@ seams. `convention` and `router`/`routers` are mutually exclusive.
 | `outDir`      | `string`                               | `'dist/client'`               |
 | `serverEntry` | `string`                               | start `dist/server/server.js` |
 
-## Route provider contract (experimental)
-
-```ts
-interface RouteProvider<TData = unknown> {
-  name: string
-  glob: (filter: string, root: string) => Promisable<string[]>
-  watch?: string | readonly string[]
-  transformPath?: (path: string) => string | undefined
-  load: (entry: RouteProviderLoadContext<TData>) => Promisable<string | false | null | undefined>
-}
-```
-
-`load` returns module **source**; entries are served as virtual `?pick=`
-modules and registered via the shared router's `_addRoute`.
+All other `prerender-crawler` engine options pass through: `crawlLinks`
+(default `true` — linked pages, including dynamic ones, are discovered and
+rendered too), `filter`, `retries`, `interval`, `failOnError`, `emitPages`,
+`integrations` (`sitemap()`, `redirects()`, `report()`), `keepQuery`,
+`redirectStubs`, `mode`, `buildId`, `hintHeader`, `origin`, `onRendered`.
 
 ## ErrorComponentProps
 

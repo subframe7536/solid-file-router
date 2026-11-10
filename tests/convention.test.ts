@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { DefaultFileSystemRouter, routePathFromFile } from '../src/route/convention'
+import { DefaultFileSystemRouter, routePathFromFile } from '../src/convention'
 
 describe('routePathFromFile', () => {
   const cases: [file: string, path: string | undefined][] = [
@@ -50,24 +50,22 @@ describe('DefaultFileSystemRouter', () => {
     expect(router.toPath(`${process.cwd()}/src/pages/blog/[id].tsx`)).toBe('/(app)/blog/:id')
   })
 
-  it('ignores default ignore globs', () => {
+  it('has no default ignores — only extensions filter scan results', () => {
     const pages = `${process.cwd()}/src/pages`
     expect(router.isRoute(`${pages}/about.tsx`)).toBe(true)
-    expect(router.isRoute(`${pages}/components/Button.tsx`)).toBe(false)
-    expect(router.isRoute(`${pages}/blog/components/Card.tsx`)).toBe(false)
-    expect(router.isRoute(`${pages}/node_modules/x.tsx`)).toBe(false)
-    expect(router.isRoute(`${pages}/dist/x.tsx`)).toBe(false)
+    expect(router.isRoute(`${pages}/components/Button.tsx`)).toBe(true)
     expect(router.isRoute(`${pages}/about.md`)).toBe(false)
   })
 
-  it('appends custom ignore globs', () => {
+  it('matches ignore globs relative to dir', () => {
     const custom = new DefaultFileSystemRouter({
       dir: 'src/pages',
       extensions: ['tsx'],
-      ignore: ['**/drafts/**'],
+      ignore: ['components/**', '**/*.test.tsx'],
     })
     const pages = `${process.cwd()}/src/pages`
-    expect(custom.isRoute(`${pages}/drafts/post.tsx`)).toBe(false)
+    expect(custom.isRoute(`${pages}/components/Button.tsx`)).toBe(false)
+    expect(custom.isRoute(`${pages}/a/x.test.tsx`)).toBe(false)
     expect(custom.isRoute(`${pages}/about.tsx`)).toBe(true)
   })
 })

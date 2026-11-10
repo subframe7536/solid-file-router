@@ -1,4 +1,4 @@
-import type { RouteConfig } from '../route/adapter'
+import type { RouteConfig } from '../route'
 
 const YAML_PACKAGE = 'yaml'
 let yamlPromise: Promise<typeof import('yaml')> | undefined
