@@ -10,13 +10,13 @@ route providers, and SSG prerendering.
 
 ## Requirements
 
-| Dependency | Version |
-|---|---|
-| `solid-js` | `^2.0.0-rc` |
-| `@solidjs/web` | `^2.0.0-rc` |
-| `@solidjs/router` | `^2.0.0-next` |
-| `filesystem-routing` | `^0.5.0` |
-| `vite` | `^8` |
+| Dependency             | Version       |
+| ---------------------- | ------------- |
+| `solid-js`             | `^2.0.0-rc`   |
+| `@solidjs/web`         | `^2.0.0-rc`   |
+| `@solidjs/router`      | `^2.0.0-next` |
+| `filesystem-routing`   | `^0.5.0`      |
+| `vite`                 | `^8`          |
 | `@solidjs/vite-plugin` | `^3.0.0-next` |
 
 All upstream packages are **prereleases** — pin exact versions and expect
@@ -30,9 +30,9 @@ removed). Replace `bun run x` with `pnpm x`.
 ## Vite config
 
 ```ts
+import { fileRouter } from 'solid-file-router/plugin'
 // before
 import solidPlugin from 'vite-plugin-solid'
-import { fileRouter } from 'solid-file-router/plugin'
 
 export default defineConfig({
   plugins: [solidPlugin(), fileRouter({ mdx: true })],
@@ -43,34 +43,31 @@ import solid from '@solidjs/vite-plugin'
 import { fileRouter } from 'solid-file-router/plugin'
 
 export default defineConfig({
-  plugins: [
-    solid({ extensions: ['.jsx', '.tsx', '.mdx'] }),
-    fileRouter({ mdx: true }),
-  ],
+  plugins: [solid({ extensions: ['.jsx', '.tsx', '.mdx'] }), fileRouter({ mdx: true })],
 })
 ```
 
 ### Option mapping
 
-| v0.7 | v1 |
-|---|---|
-| `pagesDir` | same |
-| `ignore` | same (appended to the built-in ignore list) |
-| `output` | same (now produces a `routes.d.ts` via upstream) |
-| `lazy` | same (`false` disables code splitting) |
-| `mdx` | same |
-| `ssg` | same shape, new implementation (below) |
-| `routeProviders` | same (experimental) |
-| `router` / `routers` | now take official `BaseFileSystemRouter` instances |
-| `convention` | **new** — filename-convention adapter (see below) |
-| `toPath` / `toRoute` | same official seams |
-| `reloadOnChange`, `infoDts`, `inheritance`, `serverEntry` (top level), `renderTemplate`, `meta` | **removed** |
+| v0.7                                                                                            | v1                                                 |
+| ----------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `pagesDir`                                                                                      | same                                               |
+| `ignore`                                                                                        | same (appended to the built-in ignore list)        |
+| `output`                                                                                        | same (now produces a `routes.d.ts` via upstream)   |
+| `lazy`                                                                                          | same (`false` disables code splitting)             |
+| `mdx`                                                                                           | same                                               |
+| `ssg`                                                                                           | same shape, new implementation (below)             |
+| `routeProviders`                                                                                | same (experimental)                                |
+| `router` / `routers`                                                                            | now take official `BaseFileSystemRouter` instances |
+| `convention`                                                                                    | **new** — filename-convention adapter (see below)  |
+| `toPath` / `toRoute`                                                                            | same official seams                                |
+| `reloadOnChange`, `infoDts`, `inheritance`, `serverEntry` (top level), `renderTemplate`, `meta` | **removed**                                        |
 
 `convention`, `router`, and `routers` are **mutually exclusive**.
 
 ```ts
 fileRouter({
-  convention: defaultConvention,    // this package's old conventions (default)
+  convention: defaultConvention, // this package's old conventions (default)
   // solidStartConvention,          // stock SolidStart-style conventions
   // flatConvention,                // official flat router
   // (config) => new MyRouter(config),
@@ -185,18 +182,18 @@ removed — `<head>` content is owned by `useHead`.
 
 ## Removed / replaced API
 
-| v0.7 | v1 |
-|---|---|
-| `createRoute` | `export const route` + `defineRoute` + `definePage` default export |
-| `generatePath` | `Router.paths` |
-| `createClientEntry` / `createServerEntry` | `render` / start `App.tsx` |
-| `FileRouter` (virtual export) | `createFileRouter()` |
-| `readRouteInfo` / `routeInfo` virtual export | `Router.routeInfo` |
-| `RouteMetadataManager`, `__routeMetadataRoot__`, head markers | `useHead` |
-| `reloadOnChange` | upstream HMR |
-| `infoDts` | upstream `types` (`output`) |
-| `inheritance` option | per-route `inherit` |
-| `serverEntry` + `renderTemplate` (plugin) | `ssg.serverEntry` + start handler |
-| `route/path.ts` helpers | `routePathFromFile` export |
-| `A` component | `<a>` |
-| `createResource` | Solid 2 async signals / `query` |
+| v0.7                                                          | v1                                                                 |
+| ------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `createRoute`                                                 | `export const route` + `defineRoute` + `definePage` default export |
+| `generatePath`                                                | `Router.paths`                                                     |
+| `createClientEntry` / `createServerEntry`                     | `render` / start `App.tsx`                                         |
+| `FileRouter` (virtual export)                                 | `createFileRouter()`                                               |
+| `readRouteInfo` / `routeInfo` virtual export                  | `Router.routeInfo`                                                 |
+| `RouteMetadataManager`, `__routeMetadataRoot__`, head markers | `useHead`                                                          |
+| `reloadOnChange`                                              | upstream HMR                                                       |
+| `infoDts`                                                     | upstream `types` (`output`)                                        |
+| `inheritance` option                                          | per-route `inherit`                                                |
+| `serverEntry` + `renderTemplate` (plugin)                     | `ssg.serverEntry` + start handler                                  |
+| `route/path.ts` helpers                                       | `routePathFromFile` export                                         |
+| `A` component                                                 | `<a>`                                                              |
+| `createResource`                                              | Solid 2 async signals / `query`                                    |

@@ -17,10 +17,7 @@ import { fileRouter } from 'solid-file-router/plugin'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [
-    solid({ extensions: ['.jsx', '.tsx', '.mdx'] }),
-    fileRouter({ mdx: true }),
-  ],
+  plugins: [solid({ extensions: ['.jsx', '.tsx', '.mdx'] }), fileRouter({ mdx: true })],
 })
 ```
 
@@ -76,9 +73,7 @@ local overrides:
 import { MDXProvider } from 'solid-file-router/mdx'
 
 export default definePage((props) => (
-  <MDXProvider components={{ h1: CustomH1 }}>
-    {props.children}
-  </MDXProvider>
+  <MDXProvider components={{ h1: CustomH1 }}>{props.children}</MDXProvider>
 ))
 ```
 
@@ -104,7 +99,6 @@ fileRouter({
 
 `mdxContent` is a JSX expression evaluated by the generated route component;
 `routeConfig` shallow-overrides the frontmatter-derived config.
-
 
 ## SSR note
 

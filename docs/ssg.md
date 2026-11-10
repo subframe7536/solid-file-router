@@ -40,11 +40,11 @@ static manifest routes, calls the built `dist/server/server.js`'s
 
 ## Output mapping
 
-| Route | File |
-|---|---|
-| `/` | `index.html` |
-| `/about` | `about.html` |
-| `/docs/` | `docs/index.html` |
+| Route       | File                        |
+| ----------- | --------------------------- |
+| `/`         | `index.html`                |
+| `/about`    | `about.html`                |
+| `/docs/`    | `docs/index.html`           |
 | (unmatched) | `404.html` — always emitted |
 
 Dynamic (`:param`) and splat (`*x`) routes are skipped automatically; emit them
@@ -57,8 +57,8 @@ fileRouter({
   ssg: {
     // all static routes by default; array or (routes) => routes
     routes: ['/', '/about'],
-    concurrency: 4,           // default 4
-    outDir: 'dist/client',    // default
+    concurrency: 4, // default 4
+    outDir: 'dist/client', // default
     serverEntry: 'custom/entry.tsx', // Request→Response handler, non-start setups
   },
 })

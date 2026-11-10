@@ -8,21 +8,21 @@ Solid 2 official stack.
 Route files live under `pagesDir` (`src/pages` by default). The built-in
 `defaultConvention` maps filenames to paths:
 
-| File | Path |
-|---|---|
-| `_app.tsx` | root layout |
-| `index.tsx` | `/` |
-| `about.tsx` | `/about` |
-| `blog/index.tsx` | `/blog/` |
-| `blog/_layout.tsx` | `/blog` (pathless layout) |
-| `blog/[id].tsx` | `/blog/:id` |
-| `blog/-[id].tsx` | `/blog/*id` (optional splat) |
-| `blog/[...all].tsx` | `/blog/*all` |
-| `docs/-[lang]/index.tsx` | `/docs/*lang` |
-| `(auth)/login.tsx` | `/login` (group stripped from URL) |
-| `account.settings.tsx` | `/account/settings` |
-| `404.tsx` | `*404` catch-all |
-| `_util.tsx`, `components/**` | not routes |
+| File                         | Path                               |
+| ---------------------------- | ---------------------------------- |
+| `_app.tsx`                   | root layout                        |
+| `index.tsx`                  | `/`                                |
+| `about.tsx`                  | `/about`                           |
+| `blog/index.tsx`             | `/blog/`                           |
+| `blog/_layout.tsx`           | `/blog` (pathless layout)          |
+| `blog/[id].tsx`              | `/blog/:id`                        |
+| `blog/-[id].tsx`             | `/blog/*id` (optional splat)       |
+| `blog/[...all].tsx`          | `/blog/*all`                       |
+| `docs/-[lang]/index.tsx`     | `/docs/*lang`                      |
+| `(auth)/login.tsx`           | `/login` (group stripped from URL) |
+| `account.settings.tsx`       | `/account/settings`                |
+| `404.tsx`                    | `*404` catch-all                   |
+| `_util.tsx`, `components/**` | not routes                         |
 
 `-(group)` segments appear in the neutral manifest path (`/(app)/...`) and
 are stripped by route-tree emission. Layouts and `_app` nest children through
@@ -31,7 +31,12 @@ are stripped by route-tree emission. Layouts and `_app` nest children through
 Swap or build a convention with `fileRouter({ convention })`:
 
 ```ts
-import { fileRouter, defaultConvention, solidStartConvention, flatConvention } from 'solid-file-router/plugin'
+import {
+  fileRouter,
+  defaultConvention,
+  solidStartConvention,
+  flatConvention,
+} from 'solid-file-router/plugin'
 
 fileRouter({ convention: flatConvention })
 // or fully custom — mutually exclusive with router/routers
@@ -68,13 +73,13 @@ not affect extraction.
 
 ### Extension keys
 
-| Key | Type | Effect |
-|---|---|---|
-| `loadingComponent` | `Component<RouteSectionProps>` | `Loading` fallback |
-| `errorComponent` | `Component<ErrorComponentProps>` | `Errored` fallback, receives `{ error, reset }` |
-| `inherit` | `boolean \| { loading?: boolean; error?: boolean }` | block boundary inheritance |
-| `metadata` | `RouteMetadata` | declarative head tags via `useHead` |
-| `draft` | `boolean` | route only exists in development |
+| Key                | Type                                                | Effect                                          |
+| ------------------ | --------------------------------------------------- | ----------------------------------------------- |
+| `loadingComponent` | `Component<RouteSectionProps>`                      | `Loading` fallback                              |
+| `errorComponent`   | `Component<ErrorComponentProps>`                    | `Errored` fallback, receives `{ error, reset }` |
+| `inherit`          | `boolean \| { loading?: boolean; error?: boolean }` | block boundary inheritance                      |
+| `metadata`         | `RouteMetadata`                                     | declarative head tags via `useHead`             |
+| `draft`            | `boolean`                                           | route only exists in development                |
 
 ## Layouts and inheritance
 
@@ -114,9 +119,9 @@ Use plain `<a>` elements (the router intercepts internal links) and the typed
 const Router = createFileRouter()
 const navigate = useNavigate()
 
-navigate(Router.paths.blog('1'))           // -> /blog/1
-Router.paths.blog('1')()                   // the string, for href building
-Router.paths.blog('1')({ hash: 'top' })    // -> /blog/1#top
+navigate(Router.paths.blog('1')) // -> /blog/1
+Router.paths.blog('1')() // the string, for href building
+Router.paths.blog('1')({ hash: 'top' }) // -> /blog/1#top
 ```
 
 `404.tsx` handles unmatched routes; a `draft: true` route exists in dev only

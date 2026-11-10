@@ -55,7 +55,8 @@ export function createRouteProviderPlugin<TData>(
 
   const virtualRoot = (): string => posix.join(normalizePath(root), 'node_modules/.sfr-virtual')
   const srcIdFor = (routeId: string): string => `virtual:sfr/${routeId}.tsx`
-  const resolvedIdFor = (src: string): string => `${virtualRoot()}/${src.slice('virtual:sfr/'.length)}`
+  const resolvedIdFor = (src: string): string =>
+    `${virtualRoot()}/${src.slice('virtual:sfr/'.length)}`
 
   async function scanProvider(
     provider: RouteProvider<TData>,

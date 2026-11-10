@@ -212,7 +212,14 @@ export function adaptFileRoutes(entries: readonly RouteEntry[]): AdaptResult {
           .map((child) => visit(child, { loading, error }, path))
           .filter((child): child is RouteEntry => !!child)
       : undefined
-    const { loadingComponent: _l, errorComponent: _e, inherit: _i, metadata, draft: _d, ...rest } = entry
+    const {
+      loadingComponent: _l,
+      errorComponent: _e,
+      inherit: _i,
+      metadata,
+      draft: _d,
+      ...rest
+    } = entry
     return {
       ...rest,
       component:

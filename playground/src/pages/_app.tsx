@@ -1,6 +1,6 @@
 import type { JSX } from '@solidjs/web'
-import { MDXProvider } from 'solid-file-router/mdx'
 import { definePage } from 'solid-file-router'
+import { MDXProvider } from 'solid-file-router/mdx'
 
 export const route = {
   loadingComponent: () => <div>Loading...</div>,

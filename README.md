@@ -50,10 +50,10 @@ plugin in your application's Vite config.
 Configure Vite:
 
 ```ts
+import solid from '@solidjs/vite-plugin'
 // vite.config.ts
 import { fileRouter } from 'solid-file-router/plugin'
 import { defineConfig } from 'vite'
-import solid from '@solidjs/vite-plugin'
 
 export default defineConfig({
   plugins: [solid(), fileRouter()],

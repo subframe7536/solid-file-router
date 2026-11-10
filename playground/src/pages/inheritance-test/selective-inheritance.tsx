@@ -1,7 +1,7 @@
+import { definePage } from 'solid-file-router'
 import { createSignal } from 'solid-js'
 
 import { fetchMockData } from './utils'
-import { definePage } from 'solid-file-router'
 
 export const route = {
   inherit: {

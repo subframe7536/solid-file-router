@@ -28,18 +28,18 @@ Do not duplicate those rules here.
 
 ## Consumer Task Map
 
-| Task                 | Required action                                                      | Verify                                                |
-| -------------------- | -------------------------------------------------------------------- | ----------------------------------------------------- |
+| Task                 | Required action                                                                              | Verify                                                |
+| -------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
 | Install              | Add the package, `solid-js`, `@solidjs/web`, `@solidjs/router`, Vite, `@solidjs/vite-plugin` | Dependency versions satisfy `package.json`            |
-| Configure routes     | Register `solid()` and `fileRouter()`                                | Vite starts and `src/routes.d.ts` is generated        |
-| Add a page           | `export const route` + `export default` from `.jsx`/`.tsx`           | Generated path appears in route types                 |
-| Add a layout         | Add `_layout.tsx` in the ancestor directory                          | Descendants render through it                         |
-| Add an app root      | Add optional `src/pages/_app.tsx`                                    | `/(app)` wraps the route tree                         |
-| Navigate dynamically | `Router.paths.<route>(params)` from `createFileRouter()`             | Result is a `TypedPath`; call it again for the string |
-| Add metadata         | `route.metadata` — rendered through `useHead`                        | `data-dh` tags appear in SSR/client head              |
-| Add SSG              | `solid({ start: true, ssr: true })` + `fileRouter({ ssg: {} })` + `src/App.tsx` | Build emits `dist/client/*.html` and `404.html`       |
-| Use built-in MDX     | Install Satteri and set `mdx: true`                                  | `.md`/`.mdx` routes are generated and render          |
-| Use a CMS/provider   | `routeProviders` with `glob`/`load`                                  | Provider entries appear as `?pick=` virtual modules   |
+| Configure routes     | Register `solid()` and `fileRouter()`                                                        | Vite starts and `src/routes.d.ts` is generated        |
+| Add a page           | `export const route` + `export default` from `.jsx`/`.tsx`                                   | Generated path appears in route types                 |
+| Add a layout         | Add `_layout.tsx` in the ancestor directory                                                  | Descendants render through it                         |
+| Add an app root      | Add optional `src/pages/_app.tsx`                                                            | `/(app)` wraps the route tree                         |
+| Navigate dynamically | `Router.paths.<route>(params)` from `createFileRouter()`                                     | Result is a `TypedPath`; call it again for the string |
+| Add metadata         | `route.metadata` — rendered through `useHead`                                                | `data-dh` tags appear in SSR/client head              |
+| Add SSG              | `solid({ start: true, ssr: true })` + `fileRouter({ ssg: {} })` + `src/App.tsx`              | Build emits `dist/client/*.html` and `404.html`       |
+| Use built-in MDX     | Install Satteri and set `mdx: true`                                                          | `.md`/`.mdx` routes are generated and render          |
+| Use a CMS/provider   | `routeProviders` with `glob`/`load`                                                          | Provider entries appear as `?pick=` virtual modules   |
 
 Use [guide.md](guide.md) for workflows and [reference.md](reference.md) for exact
 options and types.
@@ -69,17 +69,17 @@ expressions in the initializer are fine. Both helpers are identity functions.
 
 ## Repository Source Map
 
-| Concern                                        | Primary source             | Primary tests                  |
-| ---------------------------------------------- | -------------------------- | ------------------------------ |
-| Vite preset, options, router wiring            | `src/plugin.ts`            | `tests/convention.test.ts`     |
-| Filename conventions + `DefaultFileSystemRouter` | `src/route/convention.ts` | `tests/convention.test.ts`     |
-| `createFileRouter`, `definePage`/`defineRoute`, inheritance, `useHead`, draft | `src/index.ts`, `src/route/adapter.ts` | `tests/adapter.test.ts` |
-| Route-provider contract + virtual-module runtime | `src/route/provider/`    | `tests/convention.test.ts`     |
-| SSG prerender + preview fallback               | `src/ssg/index.ts`         | `tests/ssg.test.ts`            |
-| MDX compile (route/frontmatter exports)        | `src/mdx/router.ts`        | `tests/mdx-module.test.ts`     |
-| MDX frontmatter parsing                        | `src/mdx/frontmatter.ts`   | `tests/mdx-frontmatter.test.ts` |
-| MDX Solid 2 runtime + jsx-runtime              | `src/mdx/runtime.ts`       | —                              |
-| `virtual:routes` + `*.mdx` declarations        | `client.d.ts`              | `tests/` (indirect)            |
+| Concern                                                                       | Primary source                         | Primary tests                   |
+| ----------------------------------------------------------------------------- | -------------------------------------- | ------------------------------- |
+| Vite preset, options, router wiring                                           | `src/plugin.ts`                        | `tests/convention.test.ts`      |
+| Filename conventions + `DefaultFileSystemRouter`                              | `src/route/convention.ts`              | `tests/convention.test.ts`      |
+| `createFileRouter`, `definePage`/`defineRoute`, inheritance, `useHead`, draft | `src/index.ts`, `src/route/adapter.ts` | `tests/adapter.test.ts`         |
+| Route-provider contract + virtual-module runtime                              | `src/route/provider/`                  | `tests/convention.test.ts`      |
+| SSG prerender + preview fallback                                              | `src/ssg/index.ts`                     | `tests/ssg.test.ts`             |
+| MDX compile (route/frontmatter exports)                                       | `src/mdx/router.ts`                    | `tests/mdx-module.test.ts`      |
+| MDX frontmatter parsing                                                       | `src/mdx/frontmatter.ts`               | `tests/mdx-frontmatter.test.ts` |
+| MDX Solid 2 runtime + jsx-runtime                                             | `src/mdx/runtime.ts`                   | —                               |
+| `virtual:routes` + `*.mdx` declarations                                       | `client.d.ts`                          | `tests/` (indirect)             |
 
 ## Behavioral Invariants
 
@@ -139,14 +139,14 @@ expressions in the initializer are fine. Both helpers are identity functions.
 
 ## Change-to-Test Matrix
 
-| Change                            | Narrow verification                                   |
-| --------------------------------- | ----------------------------------------------------- |
-| Filename conventions, ignores     | `pnpm test -- tests/convention.test.ts`               |
-| Inheritance, metadata, draft      | `pnpm test -- tests/adapter.test.ts`                  |
-| SSG paths, filename map, filters  | `pnpm test -- tests/ssg.test.ts`                      |
-| MDX module/frontmatter shape      | `pnpm test -- tests/mdx-module.test.ts tests/mdx-frontmatter.test.ts` |
-| Plugin/options/pipeline           | `pnpm play:build`                                     |
-| SSG end-to-end                    | `pnpm play:ssg:build`                                 |
+| Change                           | Narrow verification                                                   |
+| -------------------------------- | --------------------------------------------------------------------- |
+| Filename conventions, ignores    | `pnpm test -- tests/convention.test.ts`                               |
+| Inheritance, metadata, draft     | `pnpm test -- tests/adapter.test.ts`                                  |
+| SSG paths, filename map, filters | `pnpm test -- tests/ssg.test.ts`                                      |
+| MDX module/frontmatter shape     | `pnpm test -- tests/mdx-module.test.ts tests/mdx-frontmatter.test.ts` |
+| Plugin/options/pipeline          | `pnpm play:build`                                                     |
+| SSG end-to-end                   | `pnpm play:ssg:build`                                                 |
 
 Required full verification for production changes:
 

@@ -193,8 +193,7 @@ export function fileRouter<TData = unknown>(
     createSsgPlugin(
       options.ssg === true ? {} : options.ssg || false,
       options.ssg
-        ? () =>
-            getRouters().flatMap((r) => r.routes.map((entry) => entry.path))
+        ? () => getRouters().flatMap((r) => r.routes.map((entry) => entry.path))
         : undefined,
     ),
     ...(options.routeProviders?.length

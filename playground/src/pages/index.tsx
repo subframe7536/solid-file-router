@@ -1,5 +1,6 @@
-import { TestComponent } from '../components/test'
 import { definePage } from 'solid-file-router'
+
+import { TestComponent } from '../components/test'
 
 export default definePage(() => {
   return (

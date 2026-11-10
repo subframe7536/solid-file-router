@@ -1,5 +1,5 @@
-import { onSettled } from 'solid-js'
 import { definePage } from 'solid-file-router'
+import { onSettled } from 'solid-js'
 
 function createInfo(name: string, usr: any): { name: string; role: any } {
   return { name, role: usr.role }
