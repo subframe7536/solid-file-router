@@ -2,10 +2,12 @@
 
 Type-safe file-based routing for Solid and Vite.
 
-`solid-file-router` scans route modules, generates `@solidjs/router` route
-definitions, exposes a ready-to-render `<FileRouter />`, and writes route path
-types for navigation. It also supports nested layouts, loading and error
-inheritance, route metadata, route providers, and build-time SSG (Static Site Generation).
+`solid-file-router` is a thin preset over the official Solid 2 stack —
+`filesystem-routing` scans route modules, `@solidjs/router` handles matching,
+and `createFileRouter()` adapts the generated route tree with inherited
+loading/error boundaries, `useHead` metadata, and draft routes. It also
+supports nested layouts, route providers, and build-time SSG (Static Site
+Generation).
 
 > [!WARNING]
 > This project is under active development and is still pre-1.0. Minor releases
@@ -15,15 +17,16 @@ inheritance, route metadata, route providers, and build-time SSG (Static Site Ge
 
 ## Features
 
-- File routes from `src/pages/**/*.{jsx,tsx}`
-- Generated path, parameter, and metadata types
+- File routes from `src/pages/**/*.{jsx,tsx,md,mdx}`
+- Generated path, parameter, and metadata types (`src/routes.d.ts`)
 - `_app.tsx`, pathless `_layout.tsx`, and `404.tsx` conventions
 - Route `preload`, `matchFilters`, metadata, and lazy components
-- Inherited loading and error components
+- Inherited loading and error components (`Loading`/`Errored`)
+- `defineRoute`/`definePage` helpers for fully typed route modules
+- Convention adapters: `defaultConvention`, `solidStartConvention`, `flatConvention`
 - Built-in Markdown/MDX routes compiled with Satteri
-- Extensible MDX route loading with `transformPath` and `extendLoad`
-- Composable route providers for CMS or generated modules
-- Build-time static HTML generation
+- Experimental route providers for CMS or generated modules
+- Build-time static HTML generation through the start handler
 
 ## Install
 
@@ -36,12 +39,10 @@ pnpm add -d vite @solidjs/vite-plugin
 pnpm add -D satteri yaml
 ```
 
-`@babel/core` and `tinyglobby` are already provided through
-`@solidjs/vite-plugin` and Vite, so applications do not need to install them
-directly.
-
-This package does not configure `@solidjs/vite-plugin`; keep that plugin in your
-application's Vite config.
+Route scanning, code splitting, and type generation come from the official
+`filesystem-routing` + `@solidjs/vite-plugin` stack — no extra transforms to
+install. This package does not configure `@solidjs/vite-plugin`; keep that
+plugin in your application's Vite config.
 
 ## Quick Start
 
@@ -54,7 +55,7 @@ import { defineConfig } from 'vite'
 import solid from '@solidjs/vite-plugin'
 
 export default defineConfig({
-  plugins: [solidPlugin(), fileRouter()],
+  plugins: [solid(), fileRouter()],
 })
 ```
 
@@ -108,21 +109,21 @@ generates a pass-through root component.
 | [Agent Guide](docs/agents.md)  | Repository map, invariants, and verification workflows                  |
 
 Enable the latest opt-in features with `fileRouter({ ssg: {} })` or
-`fileRouter({ mdx: true })`. SSG requires `solidPlugin({ ssr: true })`; MDX
+`fileRouter({ mdx: true })`. SSG requires `solid({ start: true, ssr: true })`; MDX
 requires the optional `satteri` peer dependency. Pass an MDX options object to
 map source paths or wrap generated content with `extendLoad`; its
 `mdxContent` expression can use the active `useMDXComponents()` map. Follow the
 dedicated guides for complete, copyable setup.
 
-`routeProviders` are additive: the built-in filesystem provider runs first,
-optional MDX runs next, and the configured providers follow. Markdown/MDX
-frontmatter is optional, but using it requires the optional `yaml` peer
-dependency. See the [route provider guide](docs/guide.md#route-providers) and
+`routeProviders` are additive: configured providers add virtual `?pick=`
+modules on top of the file scan. Markdown/MDX frontmatter is optional, but
+using it requires the optional `yaml` peer dependency. See the
+[route provider guide](docs/guide.md#route-providers-experimental) and
 [MDX guide](docs/mdx.md) for details.
 
 ## Development
 
-This repository uses Bun:
+This repository uses pnpm:
 
 ```bash
 pnpm build

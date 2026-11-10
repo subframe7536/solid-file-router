@@ -1,173 +1,80 @@
-# Static Site Generation (SSG)
+# SSG Guide
 
-`solid-file-router` can prerender routes to HTML during `vite build`. This is a
-static build pipeline, not a runtime SSR server.
+Build-time prerendering through the Solid start request handler.
 
 ## Setup
 
-Enable Solid's SSR transform, enable the router's `ssg` option, and mount the
-client with `createClientEntry`:
+Enable start SSR mode and add `ssg` to `fileRouter`:
 
 ```ts
-// vite.config.ts
+// vite.ssg.config.ts
+import solid from '@solidjs/vite-plugin'
 import { fileRouter } from 'solid-file-router/plugin'
 import { defineConfig } from 'vite'
-import solidPlugin from 'vite-plugin-solid'
 
 export default defineConfig({
   plugins: [
-    solidPlugin({ ssr: true }),
-    fileRouter({
-      ssg: {
-        routes: ['/', '/about'],
-        concurrency: 4,
-      },
-    }),
+    solid({ start: true, ssr: true, extensions: ['.jsx', '.tsx', '.mdx'] }),
+    fileRouter({ ssg: {} }),
   ],
 })
 ```
 
-```tsx
-// src/index.tsx
-import { createClientEntry } from 'solid-file-router'
-import { FileRouter } from 'virtual:routes'
+Start mode requires an app root — `src/App.tsx` (or `start.app`):
 
-createClientEntry(() => <FileRouter />, document.getElementById('root')!)
+```tsx
+// src/App.tsx
+import { createFileRouter } from 'solid-file-router'
+
+const Router = createFileRouter()
+
+export default function App() {
+  return <Router>{(props) => <>{props.children}</>}</Router>
+}
 ```
 
-Development uses Solid's normal `render`. A production page hydrates when
-Solid's hydration state is present and otherwise renders normally.
+Build with `vite build --config vite.ssg.config.ts`. The plugin collects all
+static manifest routes, calls the built `dist/server/server.js`'s
+`handleRequest`, and writes one HTML file per route.
 
-## Selecting Routes
+## Output mapping
 
-`ssg.routes` accepts a static list or a synchronous/asynchronous producer:
+| Route | File |
+|---|---|
+| `/` | `index.html` |
+| `/about` | `about.html` |
+| `/docs/` | `docs/index.html` |
+| (unmatched) | `404.html` — always emitted |
+
+Dynamic (`:param`) and splat (`*x`) routes are skipped automatically; emit them
+explicitly through `routes`.
+
+## Options
 
 ```ts
 fileRouter({
   ssg: {
-    routes: async () => ['/', ...(await loadArticlePaths())],
+    // all static routes by default; array or (routes) => routes
+    routes: ['/', '/about'],
+    concurrency: 4,           // default 4
+    outDir: 'dist/client',    // default
+    serverEntry: 'custom/entry.tsx', // Request→Response handler, non-start setups
   },
 })
 ```
 
-When `routes` is omitted, the plugin derives every concrete static route from
-the route tree. Dynamic patterns and `/404` are not included automatically;
-provide concrete dynamic URLs such as `/posts/hello` yourself. Routes are
-normalized and deduplicated. Query strings, hashes, backslashes, control
-characters, and unsafe `.`/`..` path segments are rejected because SSG routes
-map directly to output filenames.
+`serverEntry` is the escape hatch for non-start builds — export a
+`(request: Request) => Promise<Response | string>` handler.
 
-## Output
+## Head and metadata
 
-Vite produces browser assets and pages under `<outDir>/client` and a
-server bundle under `<outDir>/server`. With Vite's default `outDir`, examples
-include:
+`route.metadata` becomes `useHead` calls — prerendered HTML already contains
+`<title>`, canonical links, and meta tags. The v0.7 `<!--ssr-head-->` template
+markers and baseline scripts are gone; head is owned by `useHead` alone.
 
-| Route         | Output                        |
-| ------------- | ----------------------------- |
-| `/`           | `dist/client/index.html`      |
-| `/about`      | `dist/client/about.html`      |
-| `/docs/start` | `dist/client/docs/start.html` |
-| `/404`        | `dist/client/404.html`        |
+## Preview fallback
 
-`404.html` is always rendered for static-host fallback, independently of the
-normal route list. Set `concurrency` to limit simultaneous renders; it defaults
-to `4` and values below `1` are clamped to `1`.
-
-When using `vite preview`, load the same Vite config used for the SSG build and
-serve the client output directory. The SSG plugin then maps unknown HTML paths
-to `404.html` and preserves the 404 response status.
-
-## Route Metadata
-
-Attach static metadata to a route and the built-in renderer will apply it to
-that page's HTML head:
-
-```tsx
-export default createRoute({
-  metadata: {
-    title: 'About',
-    description: 'About this project.',
-    canonical: 'https://example.com/about',
-    meta: [{ property: 'og:type', content: 'article' }],
-    links: [{ rel: 'alternate', href: '/about.md' }],
-  },
-  component: () => <h1>About</h1>,
-})
-```
-
-The renderer replaces existing `title`, description, canonical, and matching
-custom tags, inserts missing tags, preserves duplicate tags with the same
-identity in input order, and HTML-escapes all attribute values. The
-same metadata is synchronized by the generated router root during client
-hydration and navigation. Missing fields restore the original template head,
-and routes without metadata remove route-only tags. When no metadata is
-supplied, the template's existing head remains unchanged. The generated route
-metadata is available to the built-in renderer for every static route,
-including the `/404` fallback.
-
-## HTML Template
-
-A standard Vite template is enough:
-
-```html
-<head></head>
-<body>
-  <div id="root"></div>
-  <script type="module" src="/src/index.tsx"></script>
-</body>
-```
-
-The plugin replaces the contents of the element identified by `ssg.id`
-(`root` by default) and inserts Solid's hydration bootstrap before `</head>`.
-For explicit placement, use the markers instead:
-
-```html
-<head>
-  <!--solid-file-router-head-->
-</head>
-<body>
-  <!--solid-file-router-outlet-->
-  <script type="module" src="/src/index.tsx"></script>
-</body>
-```
-
-Use exactly one outlet strategy. The outlet marker creates the configured root
-element, so do not also include an element with the same ID. Duplicate outlet
-markers, a missing outlet/root, or a missing head insertion point fail the
-build.
-
-## Custom Server Entry
-
-The built-in renderer is sufficient for normal `FileRouter` applications. Use
-`serverEntry` when the server render needs application-specific providers or
-composition:
-
-```tsx
-// src/entry-server.tsx
-import { createServerEntry } from 'solid-file-router'
-import { FileRouter } from 'virtual:routes'
-
-export default createServerEntry((props) => <FileRouter {...props} />)
-```
-
-```ts
-fileRouter({
-  ssg: { serverEntry: 'src/entry-server.tsx' },
-})
-```
-
-`createServerEntry` requires a component and can run only in an SSR build. The
-component receives the requested `url` and Vite's `BASE_URL` as `base`.
-
-## Troubleshooting
-
-- Confirm `solidPlugin({ ssr: true })` is configured when the plugin reports
-  that SSG requires the Solid SSR transform.
-- Configure concrete values in `routes` for parameterized pages.
-- Ensure a custom server entry default-exports the promise returned by
-  `createServerEntry`.
-- Check the template for one root/outlet and a head marker or closing `head`
-  tag.
-
-See the [reference](reference.md#ssg-config) for the complete option types.
+`vite preview` serves prerendered pages and returns `404.html` with status 404
+for misses — including dynamic routes that were never prerendered. The
+middleware registers before Vite's internal fallbacks so a SSG preview behaves
+like a static host.

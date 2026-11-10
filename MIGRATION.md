@@ -104,7 +104,10 @@ export default function Page(props: RouteSectionProps) {
 }
 ```
 
-`defineRoute(config)` is available for typing the `route` export.
+`defineRoute(config)` and `definePage(component)` are identity helpers for
+typing the two exports — they add `RouteSectionProps` typing to the default
+export without `any`, and are safe with the scanner (it checks export
+presence only, so wrapping does not affect extraction).
 
 ## Entry / mount
 
@@ -184,7 +187,7 @@ removed — `<head>` content is owned by `useHead`.
 
 | v0.7 | v1 |
 |---|---|
-| `createRoute` | `export const route` + `defineRoute` + default export |
+| `createRoute` | `export const route` + `defineRoute` + `definePage` default export |
 | `generatePath` | `Router.paths` |
 | `createClientEntry` / `createServerEntry` | `render` / start `App.tsx` |
 | `FileRouter` (virtual export) | `createFileRouter()` |
