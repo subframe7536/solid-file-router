@@ -14,7 +14,7 @@ Do not duplicate those rules here.
    This package does not configure it.
 4. Import runtime APIs from `solid-file-router`, plugin APIs from
    `solid-file-router/plugin`, MDX runtime from `solid-file-router/mdx`, and
-   the manifest from `virtual:routes` (kept name; overridable via `moduleId`).
+   the manifest from `virtual:routes` (default id, overridable via `moduleId`).
 5. Enable `solid-file-router/client` types before importing `virtual:routes`.
 6. `route`, `router`, `routers`, and `convention` are the seams — prefer
    changing conventions over patching generated output.
@@ -174,7 +174,7 @@ Keep the documentation surfaces distinct:
 - `docs/ssg.md`: the end-to-end static generation workflow
 - `docs/mdx.md`: built-in Markdown/MDX setup and component customization
 - `docs/agents.md`: deterministic integration and maintenance instructions
-- `MIGRATION.md`: v0.7 → v1 breaking changes
+- `MIGRATION.md`: upgrade breaking changes
 
 Do not copy a full reference section back into the README. Link to the owning
 document and keep one canonical explanation for each behavior.

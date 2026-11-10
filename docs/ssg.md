@@ -70,8 +70,7 @@ fileRouter({
 ## Head and metadata
 
 `route.metadata` becomes `useHead` calls — prerendered HTML already contains
-`<title>`, canonical links, and meta tags. The v0.7 `<!--ssr-head-->` template
-markers and baseline scripts are gone; head is owned by `useHead` alone.
+`<title>`, canonical links, and meta tags — head content is owned by `useHead`.
 
 ## Preview fallback
 

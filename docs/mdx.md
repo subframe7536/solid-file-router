@@ -105,9 +105,6 @@ fileRouter({
 `mdxContent` is a JSX expression evaluated by the generated route component;
 `routeConfig` shallow-overrides the frontmatter-derived config.
 
-**Removed options**: `filter`, `pagesDir`, `transformPath` — use plugin-level
-`ignore`, `pagesDir`, and `toPath` instead. `mdxRouteProvider` is gone; MDX is
-a first-class extension of the convention router.
 
 ## SSR note
 

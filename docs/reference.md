@@ -105,7 +105,7 @@ Subpath alias `solid-file-router/mdx/jsx-runtime` maps to the same module.
 
 | Adapter | Behavior |
 |---|---|
-| `defaultConvention` | v0.7 table: `_app`, `_layout`, `index`, `[id]`→`:id`, `-[x]`/`[...x]`→`*x`, `(group)`, `x.y`→`x/y`, `404`→`*404`, `_private`/`components` skipped |
+| `defaultConvention` | Filename table: `_app`, `_layout`, `index`, `[id]`→`:id`, `-[x]`/`[...x]`→`*x`, `(group)`, `x.y`→`x/y`, `404`→`*404`, `_private`/`components` skipped |
 | `solidStartConvention` | Stock `PageFileSystemRouter` (SolidStart-style) |
 | `flatConvention` | `FlatFileSystemRouter` |
 
@@ -144,11 +144,3 @@ interface ErrorComponentProps {
   reset: () => void
 }
 ```
-
-## Removed in v1
-
-`createRoute`, `generatePath`, `createClientEntry`, `createServerEntry`,
-`FileRouter` virtual export, `readRouteInfo`, `RouteMetadataManager`,
-`__routeMetadataRoot__`, `reloadOnChange`, `infoDts`, `inheritance`,
-`serverEntry`/`renderTemplate` (plugin level), `meta`/`?comp`/`?load` extraction
-queries, `tinyglobby`-based provider glob, `bun-types`.

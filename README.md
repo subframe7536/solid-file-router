@@ -10,8 +10,9 @@ supports nested layouts, route providers, and build-time SSG (Static Site
 Generation).
 
 > [!WARNING]
-> This project is under active development and is still pre-1.0. Minor releases
-> may contain breaking changes. Review the release notes before upgrading.
+> This package targets the **prerelease** Solid 2 stack (`solid-js@2.0.0-rc`,
+> `@solidjs/router@next`). Pin upstream versions and review release notes before
+> upgrading.
 >
 > This package is ESM only.
 
