@@ -19,7 +19,7 @@ export default defineConfig({
   },
   plugins: [
     solid({ start: true, ssr: true, extensions: ['.jsx', '.tsx', '.mdx'] }),
-    fileRouter({ mdx: true, ssg: {} }),
+    fileRouter({ mdx: true, ssg: true }),
   ],
   build: {
     minify: false,

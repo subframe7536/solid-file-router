@@ -15,7 +15,7 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [
     solid({ start: true, ssr: true, extensions: ['.jsx', '.tsx', '.mdx'] }),
-    fileRouter({ ssg: {} }),
+    fileRouter({ ssg: true }),
   ],
 })
 ```
@@ -33,7 +33,8 @@ export default function App() {
 }
 ```
 
-Build with `vite build --config vite.ssg.config.ts`. The plugin collects all
+`ssg: true` enables all defaults; pass `SsgOptions` to override. Build with
+`vite build --config vite.ssg.config.ts`. The plugin collects all
 static manifest routes, calls the built `dist/server/server.js`'s
 `handleRequest`, and writes one HTML file per route.
 

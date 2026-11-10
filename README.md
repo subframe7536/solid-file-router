@@ -108,7 +108,7 @@ generates a pass-through root component.
 | [Reference](docs/reference.md) | Exact plugin options, generated modules, types, and runtime APIs        |
 | [Agent Guide](docs/agents.md)  | Repository map, invariants, and verification workflows                  |
 
-Enable the latest opt-in features with `fileRouter({ ssg: {} })` or
+Enable the latest opt-in features with `fileRouter({ ssg: true })` or
 `fileRouter({ mdx: true })`. SSG requires `solid({ start: true, ssr: true })`; MDX
 requires the optional `satteri` peer dependency. Pass an MDX options object to
 map source paths or wrap generated content with `extendLoad`; its

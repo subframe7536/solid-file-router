@@ -112,10 +112,10 @@ export interface FileRouterPluginOption<TData = unknown> {
    */
   verboseLog?: boolean
   /**
-   * SSG prerender configuration. Requires `solid({ start: true, ssr: true })`
-   * or a custom `ssg.serverEntry`.
+   * SSG prerender configuration. `true` enables all defaults. Requires
+   * `solid({ start: true, ssr: true })` or a custom `ssg.serverEntry`.
    */
-  ssg?: SsgOptions
+  ssg?: boolean | SsgOptions
 }
 
 function resolveRouter(
@@ -191,7 +191,7 @@ export function fileRouter<TData = unknown>(
     }),
     createMdxPlugin<TData>(mdx === true ? {} : mdx || false),
     createSsgPlugin(
-      options.ssg,
+      options.ssg === true ? {} : options.ssg || false,
       options.ssg
         ? () =>
             getRouters().flatMap((r) => r.routes.map((entry) => entry.path))
