@@ -66,6 +66,12 @@ describe('toPickId and sanitizeChunkFileName', () => {
 
   it('sanitizes chunk file names removing invalid chars and pick query', () => {
     expect(sanitizeChunkFileName('src/pages/index.tsx?pick=default&lang')).toBe('src/pages/index')
+    expect(sanitizeChunkFileName('src/pages/index.tsx?pick=default&lang.tsx')).toBe(
+      'src/pages/index',
+    )
+    expect(sanitizeChunkFileName('src/pages/index.tsx?pick=default&pick=$css&lang.tsx')).toBe(
+      'src/pages/index',
+    )
   })
 })
 

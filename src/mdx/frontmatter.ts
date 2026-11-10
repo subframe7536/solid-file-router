@@ -26,7 +26,7 @@ async function getYaml(): Promise<typeof import('yaml')> {
     return await (yamlPromise ??= import('yaml'))
   } catch (error) {
     throw new Error(
-      '[solid-file-router] YAML frontmatter requires the optional `yaml` package. Install it with `bun add -d yaml`.',
+      '[solid-file-router] YAML frontmatter requires the optional `yaml` package. Install it with `pnpm add -D yaml`.',
       { cause: error },
     )
   }

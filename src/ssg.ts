@@ -115,6 +115,7 @@ export function createPreviewFallbackMiddleware(
       const html = await readFile(file, 'utf8')
       res.setHeader('content-type', 'text/html')
       res.end(html)
+      return
     } catch {
       /* fall through to 404 */
     }

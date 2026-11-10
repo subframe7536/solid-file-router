@@ -1,12 +1,11 @@
 # Migration to v1.0.0
 
 solid-file-router v1 is a **thin preset over the official Solid 2 stack**. Custom
-route scanning, extraction, code generation, registry, and metadata machinery
-were removed; `filesystem-routing`, `@solidjs/router`, `@solidjs/web`, and
-`@solidjs/vite-plugin` now provide that foundation. This package keeps only the
-features the official stack does not have: filename conventions, inherited
-loading/error components, declarative `metadata`, `draft` routes, MDX routes,
-and SSG prerendering.
+route extraction, legacy AST parsing, registry, and metadata machinery
+were replaced with an in-house filesystem router (`tinyglobby`, `picomatch`, `radix3`)
+compatible with `@solidjs/router`, `@solidjs/web`, and `@solidjs/vite-plugin`.
+This package provides filename conventions, inherited loading/error components,
+declarative `metadata`, `draft` routes, MDX routes, and SSG prerendering.
 
 ## Requirements
 
@@ -15,7 +14,6 @@ and SSG prerendering.
 | `solid-js`             | `^2.0.0-rc`   |
 | `@solidjs/web`         | `^2.0.0-rc`   |
 | `@solidjs/router`      | `^2.0.0-next` |
-| `filesystem-routing`   | `^0.5.0`      |
 | `vite`                 | `^8`          |
 | `@solidjs/vite-plugin` | `^3.0.0-next` |
 

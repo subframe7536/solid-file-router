@@ -136,7 +136,7 @@ src/
 
 ### Virtual Modules
 
-- `virtual:routes` - official `filesystem-routing` manifest module (fixed id);
+- `virtual:routes` - route manifest module (fixed id);
   exports default flat manifest + `pageRoutes` tree
 
 ### Route adaptation

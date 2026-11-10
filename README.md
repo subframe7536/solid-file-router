@@ -3,7 +3,7 @@
 Type-safe file-based routing for Solid and Vite.
 
 `solid-file-router` is a thin preset over the official Solid 2 stack —
-`filesystem-routing` scans route modules, `@solidjs/router` handles matching,
+built-in filesystem routing scans route modules, `@solidjs/router` handles matching,
 and `createFileRouter()` adapts the generated route tree with inherited
 loading/error boundaries, `useHead` metadata, and draft routes. It also
 supports nested layouts and build-time SSG (Static Site
@@ -39,10 +39,10 @@ pnpm add -d vite @solidjs/vite-plugin
 pnpm add -D satteri yaml
 ```
 
-Route scanning, code splitting, and type generation come from the official
-`filesystem-routing` + `@solidjs/vite-plugin` stack — no extra transforms to
-install. This package does not configure `@solidjs/vite-plugin`; keep that
-plugin in your application's Vite config.
+Route scanning, code splitting, and type generation integrate seamlessly with
+the `@solidjs/vite-plugin` stack — no extra transforms to install. This package
+does not configure `@solidjs/vite-plugin`; keep that plugin in your application's
+Vite config.
 
 ## Quick Start
 

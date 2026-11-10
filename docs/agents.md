@@ -84,7 +84,7 @@ expressions in the initializer are fine. Both helpers are identity functions.
 
 ### Route generation
 
-- `filesystem-routing` scans `pagesDir` for `extensions`
+- Built-in filesystem routing scans `pagesDir` for `extensions`
   (`js/jsx/ts/tsx` plus `md/mdx` when `mdx` is enabled).
 - `/(app)` is the root group; group segments appear in manifest paths and are
   stripped in route-tree paths.

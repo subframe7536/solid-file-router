@@ -1083,7 +1083,7 @@ export function toPickId(src: string, pick: string[]): string {
   return PICKABLE_EXTENSIONS.has(ext) ? `${src}?${query}&lang.${ext}` : `${src}?${query}`
 }
 
-const PICK_CHUNK_NAME_RE = /\.[cm]?[jt]sx?\?pick=[^?]*&lang$/
+const PICK_CHUNK_NAME_RE = /\.[cm]?[jt]sx?\?pick=[^?]*(?:&lang(?:\.[cm]?[jt]sx?)?)?$/
 // eslint-disable-next-line no-control-regex
 const INVALID_CHAR_RE = /[\u0000-\u001F"#$&*+,:;<=>?[\]^`{|}\u007F]/g
 const DRIVE_LETTER_RE = /^[a-z]:/i
