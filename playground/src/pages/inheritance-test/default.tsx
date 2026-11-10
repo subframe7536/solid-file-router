@@ -3,7 +3,7 @@ import { createSignal } from 'solid-js'
 import { fetchMockData } from './utils'
 
 export default (): any => {
-  const [data] = createSignal(fetchMockData())
+  const [data] = createSignal(fetchMockData)
 
   return (
     <div style={{ padding: '15px', background: '#f5f5f5', margin: '10px' }}>

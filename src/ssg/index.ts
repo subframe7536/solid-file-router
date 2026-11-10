@@ -158,7 +158,9 @@ export function createSsgPlugin(
   let hasSsrEnv = false
   return {
     name: 'solid-file-router:ssg',
-    apply: (_, env) => env.command === 'build' && !!options,
+    // `closeBundle` only fires during build; `configurePreviewServer` only
+    // during preview — no command gating needed beyond `ssg` being set.
+    apply: () => !!options,
     configResolved(config) {
       root = config.root
       outDir = resolve(root, options && options.outDir ? options.outDir : 'dist/client')
@@ -200,9 +202,9 @@ export function createSsgPlugin(
       if (!options) {
         return
       }
-      return () => {
-        server.middlewares.use(createPreviewFallbackMiddleware(outDir) as any)
-      }
+      // Register pre-internal so the fallback wins over vite's own SPA
+      // fallback — an SSG preview must serve prerendered files and real 404s.
+      server.middlewares.use(createPreviewFallbackMiddleware(outDir) as any)
     },
   }
 }

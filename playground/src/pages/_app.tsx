@@ -20,7 +20,7 @@ function Catch(props: { error: any; reset: () => void }): JSX.Element {
     <div>
       <code>{props.error.message}</code>
       <div>Caught at _app error boundary</div>
-      <button onClick={() => props.reset}>reset</button>
+      <button onClick={() => props.reset()}>reset</button>
     </div>
   )
 }

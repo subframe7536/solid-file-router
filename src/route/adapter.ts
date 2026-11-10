@@ -134,8 +134,13 @@ function wrapRouteComponent(
       useHead(() => metadataToHeadTags(metadata))
     }
     return createComponent(Errored, {
-      fallback: (err: unknown, reset: () => void) =>
-        createComponent(ErrorComp, { error: err, reset }),
+      fallback: (err: () => unknown, reset: () => void) =>
+        createComponent(ErrorComp, {
+          get error() {
+            return err()
+          },
+          reset,
+        }),
       get children() {
         return loading
           ? createComponent(Loading, {
