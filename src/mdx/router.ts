@@ -54,7 +54,7 @@ export interface MdxOptions<TData = unknown> extends MdxCompileOptions {
 export type { MdxRouteConfig } from './frontmatter'
 
 const REG_MDX_DEFAULT_EXPORT = /\n?export default MDXContent;\s*/
-const SATTERI_PACKAGE = 'satteri'
+const REG_FRONTMATTER_EXPORT = /\bexport\s+(?:const|let|var|function|class)\s+frontmatter\b/
 let satteriPromise: Promise<typeof import('satteri')> | undefined
 
 interface CompiledMdxDocument extends Omit<MdxToJsResult, 'frontmatter'> {
@@ -73,13 +73,9 @@ function getUniqueName(code: string, baseName: string): string {
   return name
 }
 
-function hasFrontmatterExport(code: string): boolean {
-  return /\bexport\s+(?:const|let|var|function|class)\s+frontmatter\b/.test(code)
-}
-
 async function getSatteri(): Promise<typeof import('satteri')> {
   try {
-    return await (satteriPromise ??= import(SATTERI_PACKAGE))
+    return await (satteriPromise ??= import('satteri'))
   } catch (error) {
     throw new Error(
       '[solid-file-router] MDX support requires the optional `satteri` package. Install it with `pnpm add -D satteri`.',
@@ -88,16 +84,17 @@ async function getSatteri(): Promise<typeof import('satteri')> {
   }
 }
 
-function getCompileOptions<TData>(
-  options: MdxOptions<TData>,
+async function compileMdxDocument<TData>(
+  source: string,
   sourcePath: string,
-): MdxCompileOptions {
+  options: MdxOptions<TData> = {},
+): Promise<CompiledMdxDocument> {
   const { extendLoad: _extendLoad, ...compileOptions } = options
   if (compileOptions.outputFormat && compileOptions.outputFormat !== 'program') {
     throw new Error('[solid-file-router] MDX routes require Satteri outputFormat="program"')
   }
-
-  return {
+  const { mdxToJs } = await getSatteri()
+  const result = await mdxToJs(source, {
     // Solid 2 SSR calls component expressions directly, so `<_components.h1>`
     // cannot compile there — emit runtime calls through our own jsx-runtime
     // (`Dynamic`-backed) instead of JSX syntax.
@@ -109,16 +106,7 @@ function getCompileOptions<TData>(
     fileURL: pathToFileURL(sourcePath),
     data: {},
     ...compileOptions,
-  } as const
-}
-
-async function compileMdxDocument<TData>(
-  source: string,
-  sourcePath: string,
-  options: MdxOptions<TData> = {},
-): Promise<CompiledMdxDocument> {
-  const { mdxToJs } = await getSatteri()
-  const result = await mdxToJs(source, getCompileOptions(options, sourcePath))
+  } as const)
   const parsed = await parseMdxFrontmatter(
     (result.frontmatter as MdxFrontmatterBlock | null | undefined) ?? null,
   )
@@ -136,16 +124,20 @@ export interface MdxModuleResult {
   data: Data
 }
 
-/**
- * Compiles a Markdown/MDX document into the route-module shape:
- * `export const route` + `export const frontmatter` + default component.
- */
-export async function compileMdx<TData = unknown>(
+interface CompiledRouteData {
+  document: MdxRouteDocument
+  extension: MdxLoadExtension | undefined
+  frontmatter: Record<string, unknown>
+  routeConfig: MdxRouteConfig
+  data: Data
+}
+
+async function compileRouteDocument<TData>(
   source: string,
   sourcePath: string,
-  options: MdxOptions<TData> = {},
+  options: MdxOptions<TData>,
   context?: MdxLoadContext<TData>,
-): Promise<MdxModuleResult> {
+): Promise<CompiledRouteData> {
   const result = await compileMdxDocument(source, sourcePath, options)
   const document: MdxRouteDocument = {
     source,
@@ -159,7 +151,31 @@ export async function compileMdx<TData = unknown>(
     document,
     context ?? { path: sourcePath, sourcePath },
   )
-  const routeConfig = { ...result.routeConfig, ...extension?.routeConfig }
+  return {
+    document,
+    extension,
+    frontmatter: result.frontmatter,
+    routeConfig: { ...result.routeConfig, ...extension?.routeConfig },
+    data: result.data,
+  }
+}
+
+/**
+ * Compiles a Markdown/MDX document into the route-module shape:
+ * `export const route` + `export const frontmatter` + default component.
+ */
+export async function compileMdx<TData = unknown>(
+  source: string,
+  sourcePath: string,
+  options: MdxOptions<TData> = {},
+  context?: MdxLoadContext<TData>,
+): Promise<MdxModuleResult> {
+  const { document, extension, frontmatter, routeConfig, data } = await compileRouteDocument(
+    source,
+    sourcePath,
+    options,
+    context,
+  )
 
   let moduleCode = document.code
   let component = document.component
@@ -183,14 +199,14 @@ export async function compileMdx<TData = unknown>(
     moduleCode,
     '',
     `export const route = ${serializeJavaScriptValue(routeConfig)}`,
-    hasFrontmatterExport(moduleCode)
+    REG_FRONTMATTER_EXPORT.test(moduleCode)
       ? ''
-      : `export const frontmatter = ${serializeJavaScriptValue(result.frontmatter)}`,
+      : `export const frontmatter = ${serializeJavaScriptValue(frontmatter)}`,
     `export default ${component}`,
     '',
   ].join('\n')
 
-  return { code, frontmatter: result.frontmatter, routeConfig, data: result.data }
+  return { code, frontmatter, routeConfig, data }
 }
 
 /**
@@ -204,11 +220,16 @@ export async function compileMdxRouteModule<TData = unknown>(
   options: MdxOptions<TData> = {},
   context?: MdxLoadContext<TData>,
 ): Promise<MdxModuleResult> {
-  const { code: _code, ...result } = await compileMdx(source, sourcePath, options, context)
+  const { frontmatter, routeConfig, data } = await compileRouteDocument(
+    source,
+    sourcePath,
+    options,
+    context,
+  )
   const code = [
-    `export const route = ${serializeJavaScriptValue(result.routeConfig)}`,
-    `export const frontmatter = ${serializeJavaScriptValue(result.frontmatter)}`,
+    `export const route = ${serializeJavaScriptValue(routeConfig)}`,
+    `export const frontmatter = ${serializeJavaScriptValue(frontmatter)}`,
     '',
   ].join('\n')
-  return { ...result, code }
+  return { code, frontmatter, routeConfig, data }
 }

@@ -4,23 +4,20 @@ import { posix } from 'node:path'
 import { normalizePath } from 'vite'
 import type { Plugin } from 'vite'
 
-import { hashString, PACKAGE_NAME } from '../const'
+import { hashString, PACKAGE_NAME, VID_MDX_ROUTE } from '../const'
 
 import { compileMdx, compileMdxRouteModule } from './router'
 import type { MdxOptions } from './router'
 
 const REG_MARKDOWN_MODULE_ID = /\.(?:md|mdx)(?:\?.*)?$/i
-const MDX_ROUTE_PREFIX = 'virtual:sfr-mdx-route:'
 
 /** Prefix of virtual `$$route` modules emitted for `.md`/`.mdx` routes. */
-export const MDX_ROUTE_MODULE_PREFIX = MDX_ROUTE_PREFIX
+export const MDX_ROUTE_MODULE_PREFIX = VID_MDX_ROUTE
 
 /** Compiles Markdown route modules and serves their `$$route` virtual modules. */
 export function createMdxPlugin<TData = unknown>(options: false | MdxOptions<TData>): Plugin {
   let root = ''
   const routeSources = new Map<string, string>()
-  const resolvedIdFor = (src: string): string =>
-    `${posix.join(normalizePath(root), 'node_modules/.sfr-mdx-route')}/${hashString(src)}.tsx`
 
   return {
     name: `${PACKAGE_NAME}:mdx`,
@@ -30,11 +27,11 @@ export function createMdxPlugin<TData = unknown>(options: false | MdxOptions<TDa
     },
     resolveId(id) {
       const [pathname, query] = id.split('?')
-      if (!pathname?.startsWith(MDX_ROUTE_PREFIX)) {
+      if (!pathname?.startsWith(VID_MDX_ROUTE)) {
         return
       }
-      const src = pathname.slice(MDX_ROUTE_PREFIX.length)
-      const resolved = resolvedIdFor(src)
+      const src = pathname.slice(VID_MDX_ROUTE.length)
+      const resolved = `${posix.join(normalizePath(root), 'node_modules/.sfr-mdx-route')}/${hashString(src)}.tsx`
       routeSources.set(resolved, src)
       return query ? `${resolved}?${query}` : resolved
     },
@@ -42,8 +39,7 @@ export function createMdxPlugin<TData = unknown>(options: false | MdxOptions<TDa
       if (!options) {
         return
       }
-      const [pathname] = id.split('?')
-      const src = routeSources.get(pathname!)
+      const src = routeSources.get(id.split('?')[0]!)
       if (src === undefined) {
         return
       }

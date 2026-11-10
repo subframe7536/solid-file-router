@@ -62,7 +62,7 @@ export function staticPathsOf(manifestPaths: readonly string[]): string[] {
     if (REG_DYNAMIC_SEGMENT.test(path)) {
       continue
     }
-    paths.add(path === '' ? '/' : path.endsWith('/') ? path : path)
+    paths.add(path || '/')
   }
   return [...paths].sort()
 }
@@ -182,23 +182,25 @@ function metadataToHeadTags(metadata: RouteMetadata): HeadTag[] {
   return tags
 }
 
+const DevError: Component<ErrorComponentProps> = (props) => {
+  if (DEV) {
+    console.error(untrack(() => props.error))
+  }
+  return null
+}
+
 function wrapRouteComponent(
   Comp: Component<any>,
   metadata: RouteMetadata | undefined,
   loading: Component<any> | undefined,
   error: Component<ErrorComponentProps> | undefined,
 ): Component<any> {
-  const DevError: Component<ErrorComponentProps> = (props) => {
-    if (DEV) {
-      console.error(untrack(() => props.error))
-    }
-    return null
-  }
   const ErrorComp = error ?? DevError
+  const headTags = metadata ? metadataToHeadTags(metadata) : undefined
 
   return (props) => {
-    if (metadata) {
-      useHead(() => metadataToHeadTags(metadata))
+    if (headTags) {
+      useHead(headTags)
     }
     return createComponent(Errored, {
       fallback: (err: () => unknown, reset: () => void) =>
@@ -255,17 +257,20 @@ export function adaptFileRoutes(entries: readonly RouteEntry[]): AdaptResult {
       : entry.errorComponent
     const childPath = typeof entry.path === 'string' ? entry.path : ''
     const path = (parentPath.endsWith('/') ? parentPath.slice(0, -1) : parentPath) + childPath
+    const key = path || '/'
     const info = entry.info as RouteInfo | undefined
     if (info) {
-      routeInfo[path || '/'] = info
+      routeInfo[key] = info
     }
     if (entry.metadata) {
-      routeMetadata[path || '/'] = entry.metadata
+      routeMetadata[key] = entry.metadata
     }
+    const context: InheritContext = { loading, error }
     const children = entry.children
-      ? (Array.isArray(entry.children) ? entry.children : [entry.children])
-          .map((child) => visit(child, { loading, error }, path))
-          .filter((child): child is RouteEntry => !!child)
+      ? (Array.isArray(entry.children) ? entry.children : [entry.children]).flatMap((child) => {
+          const adapted = visit(child, context, path)
+          return adapted ? [adapted] : []
+        })
       : undefined
     const {
       loadingComponent: _l,
@@ -285,9 +290,10 @@ export function adaptFileRoutes(entries: readonly RouteEntry[]): AdaptResult {
     }
   }
 
-  const routes = entries
-    .map((entry) => visit(entry, {}, ''))
-    .filter((entry): entry is RouteEntry => !!entry)
+  const routes = entries.flatMap((entry) => {
+    const adapted = visit(entry, {}, '')
+    return adapted ? [adapted] : []
+  })
 
   return { routes, routeInfo, routeMetadata }
 }

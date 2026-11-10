@@ -74,7 +74,8 @@ export interface FileRouterPluginOption<TData = unknown> {
 export function fileRouter<TData = unknown>(
   options: FileRouterPluginOption<TData> = {},
 ): PluginOption[] {
-  const mdx = options.mdx ?? false
+  const mdx = options.mdx === true ? {} : options.mdx || false
+  const ssg = options.ssg === true ? {} : options.ssg || false
   const extensions = ['js', 'jsx', 'ts', 'tsx', ...(mdx ? ['md', 'mdx'] : [])]
   const pagesDir = options.pagesDir ?? 'src/pages'
   const router =
@@ -97,14 +98,11 @@ export function fileRouter<TData = unknown>(
       router,
       moduleId: VID_EXTRACT,
       types: options.output ?? 'src/routes.d.ts',
-      buildInputs: options.ssg ? 'client' : undefined,
+      buildInputs: ssg ? 'client' : undefined,
       codeSplitting: options.lazy === false ? false : undefined,
       optimizeDepsExclude: ['solid-file-router'],
     }),
-    createMdxPlugin<TData>(mdx === true ? {} : mdx || false),
-    createSsgPlugin(
-      options.ssg === true ? {} : options.ssg || false,
-      options.ssg ? () => router.routes.map((entry) => entry.path) : undefined,
-    ),
+    createMdxPlugin<TData>(mdx),
+    createSsgPlugin(ssg, ssg ? () => router.routes.map((entry) => entry.path) : undefined),
   ]
 }

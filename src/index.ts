@@ -50,6 +50,8 @@ export function createFileRouter(options?: FileRouterOptions): FileRouter {
   }) as FileRouter
 }
 
+let staticPages: string[] | undefined
+
 /**
  * Tells a prerender crawl which pages exist: the manifest's static routes
  * plus `extraPaths` (e.g. dynamic routes the app expands from data). Called
@@ -75,6 +77,6 @@ export function announceRoutes(
   if (!event || !response || response.committed) {
     return false
   }
-  const pages = staticPathsOf(manifest.map((entry) => entry.path))
+  const pages = (staticPages ??= staticPathsOf(manifest.map((entry) => entry.path)))
   return announcePages(event.request, response.headers, [...pages, ...extraPaths], options)
 }

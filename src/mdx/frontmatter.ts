@@ -1,6 +1,5 @@
 import type { RouteConfig } from '../route'
 
-const YAML_PACKAGE = 'yaml'
 let yamlPromise: Promise<typeof import('yaml')> | undefined
 
 export type MdxRouteConfig<T = unknown> = Pick<
@@ -24,26 +23,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 async function getYaml(): Promise<typeof import('yaml')> {
   try {
-    return await (yamlPromise ??= import(YAML_PACKAGE))
+    return await (yamlPromise ??= import('yaml'))
   } catch (error) {
     throw new Error(
       '[solid-file-router] YAML frontmatter requires the optional `yaml` package. Install it with `bun add -d yaml`.',
       { cause: error },
     )
-  }
-}
-
-function parseMatchFilter(value: string, key: string): RegExp {
-  const literal = value.match(/^\/(.*)\/([dgimsuvy]*)$/s)
-  const source = literal?.[1] ?? value
-  const flags = literal?.[2] ?? ''
-
-  try {
-    return new RegExp(source, flags)
-  } catch (error) {
-    throw new Error(`[solid-file-router] Invalid matchFilters.${key} regular expression`, {
-      cause: error,
-    })
   }
 }
 
@@ -58,7 +43,14 @@ function parseMatchFilters(value: unknown): NonNullable<RouteConfig['matchFilter
   const filters: Record<string, RegExp | readonly string[]> = {}
   for (const [key, filter] of Object.entries(value)) {
     if (typeof filter === 'string') {
-      filters[key] = parseMatchFilter(filter, key)
+      const literal = filter.match(/^\/(.*)\/([dgimsuvy]*)$/s)
+      try {
+        filters[key] = new RegExp(literal?.[1] ?? filter, literal?.[2] ?? '')
+      } catch (error) {
+        throw new Error(`[solid-file-router] Invalid matchFilters.${key} regular expression`, {
+          cause: error,
+        })
+      }
       continue
     }
     if (Array.isArray(filter) && filter.every((item) => typeof item === 'string')) {
@@ -72,39 +64,28 @@ function parseMatchFilters(value: unknown): NonNullable<RouteConfig['matchFilter
   return filters
 }
 
-function parseInherit(value: unknown): MdxRouteConfig['inherit'] {
-  if (value === undefined || value === null || typeof value === 'boolean') {
-    return value as MdxRouteConfig['inherit']
-  }
-  if (!isRecord(value)) {
-    throw new Error('[solid-file-router] frontmatter.inherit must be a boolean or object')
-  }
-  for (const key of ['loading', 'error']) {
-    if (key in value && typeof value[key] !== 'boolean') {
-      throw new Error(`[solid-file-router] frontmatter.inherit.${key} must be a boolean`)
-    }
-  }
-  return value as MdxRouteConfig['inherit']
-}
-
-function parseDraft(value: unknown): boolean | undefined {
-  if (value === undefined || value === null) {
-    return undefined
-  }
-  if (typeof value !== 'boolean') {
-    throw new TypeError('[solid-file-router] frontmatter.draft must be a boolean')
-  }
-  return value
-}
-
 export function normalizeMdxRouteConfig<T = unknown>(
   data: Record<string, unknown>,
 ): MdxRouteConfig<T> {
+  const { inherit, draft } = data
+  if (inherit !== undefined && inherit !== null && typeof inherit !== 'boolean') {
+    if (!isRecord(inherit)) {
+      throw new Error('[solid-file-router] frontmatter.inherit must be a boolean or object')
+    }
+    for (const key of ['loading', 'error'] as const) {
+      if (key in inherit && typeof inherit[key] !== 'boolean') {
+        throw new Error(`[solid-file-router] frontmatter.inherit.${key} must be a boolean`)
+      }
+    }
+  }
+  if (draft !== undefined && draft !== null && typeof draft !== 'boolean') {
+    throw new TypeError('[solid-file-router] frontmatter.draft must be a boolean')
+  }
   return {
     info: data.info as MdxRouteConfig<T>['info'],
     matchFilters: parseMatchFilters(data.matchFilters),
-    inherit: parseInherit(data.inherit),
-    draft: parseDraft(data.draft),
+    inherit: inherit as MdxRouteConfig['inherit'],
+    draft: draft as boolean | undefined,
     metadata: data.metadata as MdxRouteConfig<T>['metadata'],
   }
 }
@@ -129,7 +110,7 @@ export async function parseMdxFrontmatter<T = unknown>(
   } catch (error) {
     throw new Error('[solid-file-router] Failed to parse YAML frontmatter', { cause: error })
   }
-  if (data === undefined || block.value.trim() === '') {
+  if (data === undefined || data === null) {
     data = {}
   }
   if (!isRecord(data)) {

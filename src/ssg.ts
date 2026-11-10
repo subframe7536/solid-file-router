@@ -49,11 +49,15 @@ export interface SsgOptions extends Omit<PrerenderOptions, 'pages' | 'autoSubfol
 
 type RequestHandler = (request: Request) => Promise<Response | string>
 
-/** `/` → `index.html`, `/x` → `x.html`, `/x/` → `x/index.html`. */
-export function getPrerenderAssetFileName(route: string): string {
+function assertRoutePath(route: string): void {
   if (!route.startsWith('/')) {
     throw new Error(`[solid-file-router] Invalid prerender route "${route}" — must start with /`)
   }
+}
+
+/** `/` → `index.html`, `/x` → `x.html`, `/x/` → `x/index.html`. */
+export function getPrerenderAssetFileName(route: string): string {
+  assertRoutePath(route)
   if (route === '/') {
     return 'index.html'
   }
@@ -64,9 +68,7 @@ export function getPrerenderAssetFileName(route: string): string {
 }
 
 export function normalizeRoutePath(route: string): string {
-  if (!route.startsWith('/')) {
-    throw new Error(`[solid-file-router] Invalid prerender route "${route}" — must start with /`)
-  }
+  assertRoutePath(route)
   return route.length > 1 ? route.replace(/\/+$/, '') || '/' : route
 }
 
@@ -87,31 +89,27 @@ async function resolveHandler(options: SsgOptions, outDir: string): Promise<Requ
   return handler
 }
 
+interface PreviewRequest {
+  url?: string
+  headers: Record<string, string | string[] | undefined>
+}
+
+interface PreviewResponse {
+  setHeader: (name: string, value: string) => void
+  statusCode: number
+  end: (body?: string) => void
+}
+
 /** Preview fallback: serves prerendered pages and `404.html` for misses. */
-export function createPreviewFallbackMiddleware(outDir: string): (
-  req: { url?: string; headers: Record<string, string | string[] | undefined> },
-  res: {
-    setHeader: (name: string, value: string) => void
-    statusCode: number
-    end: (body?: string) => void
-  },
-  next: () => void,
-) => Promise<void> {
-  return async (
-    req: { url?: string; headers: Record<string, string | string[] | undefined> },
-    res: {
-      setHeader: (name: string, value: string) => void
-      statusCode: number
-      end: (body?: string) => void
-    },
-    next: () => void,
-  ) => {
-    const url = req.url ?? '/'
+export function createPreviewFallbackMiddleware(
+  outDir: string,
+): (req: PreviewRequest, res: PreviewResponse, next: () => void) => Promise<void> {
+  return async (req, res, next) => {
     const acceptsHtml = String(req.headers.accept ?? '').includes('text/html')
     if (!acceptsHtml) {
       return next()
     }
-    const route = url.split('?')[0] ?? '/'
+    const route = req.url?.split('?')[0] || '/'
     const file = join(outDir, getPrerenderAssetFileName(route))
     try {
       const html = await readFile(file, 'utf8')
@@ -150,7 +148,7 @@ export function createSsgPlugin(
     apply: () => !!options,
     configResolved(config) {
       root = config.root
-      outDir = resolve(root, options && options.outDir ? options.outDir : 'dist/client')
+      outDir = resolve(root, (options && options.outDir) || 'dist/client')
       hasSsrEnv = 'ssr' in (config.environments ?? {})
     },
     async closeBundle() {
@@ -169,7 +167,7 @@ export function createSsgPlugin(
           typeof options.routes === 'function' ? await options.routes(routes) : options.routes
         routes = [...provided]
       }
-      if (!routes.includes('/404') && !routes.some((route) => route.endsWith('/404'))) {
+      if (!routes.some((route) => route.endsWith('/404'))) {
         routes.push('/404')
       }
       const handler = await resolveHandler(options, outDir)

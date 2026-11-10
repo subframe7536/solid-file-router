@@ -1,6 +1,8 @@
 import { cleanPath, PageFileSystemRouter } from 'filesystem-routing'
 import type { PageFileSystemRouterConfig, RouteManifestEntry } from 'filesystem-routing'
 
+import { VID_MDX_ROUTE } from './const'
+
 const REG_GROUP = /^\([\w-]+\)$/
 const REG_PARAM = /\[([^\]]+)\]/g
 const REG_SPLAT = /\[\.{3}([\w-]+)\]/g
@@ -68,20 +70,18 @@ export function routePathFromFile(routeFile: string): string | undefined {
   if (parts.length === 0 || parts[0] === '') {
     return undefined
   }
-  // root `_app` / `_layout` is the parent layout of everything
-  if (parts.length === 1 && (parts[0] === '_app' || parts[0] === '_layout')) {
+  // root `_app` is the parent layout of everything; a root `_layout` file
+  // falls through the loop below to the same `/(app)` result
+  if (parts.length === 1 && parts[0] === '_app') {
     return '/(app)'
   }
   const last = parts.length - 1
-  for (let i = 0; i < parts.length; i++) {
-    const segment = parts[i]!
-    if (segment.startsWith('_') && (segment !== '_layout' || i !== last)) {
-      return undefined
-    }
-  }
   const segments: string[] = []
   for (let i = 0; i <= last; i++) {
     const raw = parts[i]!
+    if (raw.startsWith('_') && (raw !== '_layout' || i !== last)) {
+      return undefined
+    }
     if (i === last) {
       if (raw === 'index') {
         segments.push('')
@@ -197,7 +197,7 @@ export class DefaultFileSystemRouter extends PageFileSystemRouter {
       return {
         page: true,
         $component: { src, pick: ['default', '$css'] },
-        $$route: { src: `virtual:sfr-mdx-route:${src}`, pick: ['route'] },
+        $$route: { src: `${VID_MDX_ROUTE}${src}`, pick: ['route'] },
         path,
       }
     }
