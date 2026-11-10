@@ -1,6 +1,7 @@
-import { createComponent, createContext, mergeProps, useContext } from 'solid-js'
-import type { Component, JSX, ParentProps } from 'solid-js'
-import { Dynamic } from 'solid-js/web'
+import type { JSX } from '@solidjs/web'
+import { Dynamic } from '@solidjs/web'
+import { createComponent, createContext, merge, useContext } from 'solid-js'
+import type { Component, ParentProps } from 'solid-js'
 
 /** A component that can override an MDX element or component. */
 export type MDXComponent<Props extends Record<string, any> = Record<string, unknown>> =
@@ -61,7 +62,7 @@ const intrinsicComponents = Object.fromEntries(
   intrinsicNames.map((name) => [
     name,
     (rawProps: Record<string, unknown>) =>
-      createComponent(Dynamic, mergeProps(rawProps, { component: name })),
+      createComponent(Dynamic as Component<any>, merge(rawProps, { component: name })),
   ]),
 ) as MDXComponents
 
@@ -71,7 +72,7 @@ const MDXContext = createContext<MDXComponents>(intrinsicComponents)
 export function MDXProvider(props: ParentProps<{ components?: MDXComponents }>): JSX.Element {
   const parentComponents = useContext(MDXContext)
 
-  return createComponent(MDXContext.Provider, {
+  return createComponent(MDXContext, {
     get value() {
       return { ...parentComponents, ...props.components }
     },
@@ -87,4 +88,18 @@ export function MDXProvider(props: ParentProps<{ components?: MDXComponents }>):
  */
 export function useMDXComponents(localComponents: MDXComponents = {}): MDXComponents {
   return { ...useContext(MDXContext), ...localComponents }
+}
+
+/**
+ * Automatic JSX runtime used by compiled MDX output. Routes every element —
+ * intrinsic or component — through `Dynamic`, which is the only Solid 2 path
+ * that accepts both on the server and the client.
+ */
+export function jsx(type: any, props: any): JSX.Element {
+  return createComponent(Dynamic, { ...props, component: type })
+}
+export const jsxs = jsx
+
+export function Fragment(props: { children?: JSX.Element }): JSX.Element {
+  return props.children
 }

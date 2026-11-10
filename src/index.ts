@@ -1,253 +1,82 @@
-import type { RouteDefinition, RouteSectionProps } from '@solidjs/router'
-import type { Component } from 'solid-js'
-import { createComponent, ErrorBoundary, Suspense, untrack } from 'solid-js'
-import { hydrate, render, renderToStringAsync } from 'solid-js/web'
+import { createRouter } from '@solidjs/router'
+import { fileRoutes } from '@solidjs/router/fs'
+import { getRequestEvent } from '@solidjs/web'
+import type { ResponseStub } from '@solidjs/web'
+import { announcePages } from 'prerender-crawler/announce'
+import manifest, { pageRoutes } from 'virtual:routes'
 
-import { __routeMetadataRoot__ } from './metadata'
-import type { RouteMetadata } from './metadata'
+import { adaptFileRoutes, staticPathsOf } from './route'
+import type { RouteEntry, RouteInfo, RouteMetadata } from './route'
 
-export { __routeMetadataRoot__ }
-export type { RouteMetadata, RouteMetaTag, RouteMetadataLink } from './metadata'
+export {
+  adaptFileRoutes,
+  definePage,
+  defineRoute,
+  staticPathsOf,
+  type ErrorComponentProps,
+  type RouteConfig,
+  type SfrRouteConfig,
+  type RouteEntry,
+  type RouteInfo,
+} from './route'
+export type { RouteMetadata, RouteMetaTag, RouteMetadataLink } from './route'
+export { announcePages } from 'prerender-crawler/announce'
 
-type AnyComp = Component<any>
-
-/** Wraps a route component with loading and error boundaries. */
-export function __loader__(Comp: AnyComp, Loading: AnyComp, Error: AnyComp) {
-  return (props: RouteSectionProps) => {
-    const Catch =
-      Error || ((props) => (import.meta.env.DEV && console.error(untrack(() => props.error)), null))
-    return createComponent(ErrorBoundary, {
-      fallback: (error, reset) =>
-        createComponent(Catch, {
-          error,
-          reset,
-        }),
-      children: Loading
-        ? createComponent(Suspense, {
-            get fallback() {
-              return createComponent(Loading, props)
-            },
-            get children() {
-              return createComponent(Comp, props)
-            },
-          })
-        : createComponent(Comp, props),
-    })
-  }
+export interface FileRouterOptions {
+  /** Manifest tree injection point — defaults to the `virtual:routes` module. */
+  routes?: typeof pageRoutes
+  /** Extra `createRouter` config (`base`, `preloadLinks`, ...) passed through. */
+  router?: Parameters<typeof createRouter>[0]
 }
 
-/** Generated route path declarations augmented by the application. */
-export interface FileRoutePath {}
-/** Generated route metadata declarations augmented by the application. */
-export interface FileRouteInfo {}
-export type FileRouteInfoMap = Partial<
-  Record<keyof FileRoutePath & string, FileRouteInfo | undefined>
->
-export type FileRouteMetadataMap = Partial<
-  Record<keyof FileRoutePath & string, RouteMetadata | undefined>
->
-/** A matched route entry returned by the Solid router. */
-export interface FileRouteMatch {
-  info?: FileRouteInfo
-  route?: {
-    info?: FileRouteInfo
-  }
+export interface FileRouter extends ReturnType<typeof createRouter> {
+  /** The adapted route-definition tree passed to `createRouter`. */
+  fileRoutes: RouteEntry[]
+  /** Collected route `info` keyed by group-stripped path. */
+  routeInfo: Record<string, RouteInfo>
+  /** Collected route `metadata` keyed by group-stripped path. */
+  routeMetadata: Record<string, RouteMetadata>
 }
 
-interface ErrorComponentProps {
-  error: Error
-  reset: VoidFunction
+/** Creates the application router instance from the generated route manifest. */
+export function createFileRouter(options?: FileRouterOptions): FileRouter {
+  const entries = options?.routes ?? pageRoutes
+  const adapted = adaptFileRoutes(fileRoutes(entries) as RouteEntry[])
+  const Router = createRouter({ ...options?.router, routes: adapted.routes })
+  return Object.assign(Router, {
+    fileRoutes: adapted.routes,
+    routeInfo: adapted.routeInfo,
+    routeMetadata: adapted.routeMetadata,
+  }) as FileRouter
 }
+
+let staticPages: string[] | undefined
 
 /**
- * Configuration object for defining route behavior.
+ * Tells a prerender crawl which pages exist: the manifest's static routes
+ * plus `extraPaths` (e.g. dynamic routes the app expands from data). Called
+ * during server render — reads the ambient request event and sets the
+ * `x-prerender` hint header only when the request is the crawler's, so a
+ * regular visitor's response is untouched; a no-op on the client.
  *
- * When used in `_app.tsx` or `_layout.tsx` files, the `loadingComponent` and
- * `errorComponent` properties serve as defaults for all descendant routes.
- *
- * **Component Inheritance:**
- * Routes automatically inherit loading and error components through a three-tier
- * fallback chain:
- * 1. Route-specific component (defined in the route's own `createRoute()`)
- * 2. Nearest ancestor `_layout.tsx` default
- * 3. `_app.tsx` application-wide default
- * 4. None (if not defined anywhere)
- *
- * **Controlling Inheritance:**
- * Use the `inherit` property to control inheritance behavior for individual routes:
- * - `inherit: false` - Disable all inheritance for this route
- * - `inherit: { loading: false }` - Disable loading component inheritance only
- * - `inherit: { error: false }` - Disable error component inheritance only
- *
- * @example
- * // In _app.tsx - Define application-wide defaults
- * export default createRoute({
- *   component: (props) => <div>{props.children}</div>,
- *   loadingComponent: () => <div>Loading...</div>,
- *   errorComponent: (props) => <div>Error: {props.error.message}</div>
- * })
- *
- * @example
- * // In dashboard/_layout.tsx - Override for dashboard section
- * export default createRoute({
- *   component: (props) => <DashboardLayout>{props.children}</DashboardLayout>,
- *   loadingComponent: () => <DashboardSpinner />
- *   // errorComponent inherits from _app.tsx
- * })
- *
- * @example
- * // In dashboard/users.tsx - Route-specific override
- * export default createRoute({
- *   component: () => <UsersList />,
- *   loadingComponent: () => <UsersLoadingSkeleton />
- *   // Overrides dashboard/_layout.tsx default
- * })
- *
- * @example
- * // Disable inheritance for a specific route
- * export default createRoute({
- *   component: () => <SpecialPage />,
- *   inherit: false // No loading/error components from layouts
- * })
- *
- * @example
- * // Selectively disable inheritance
- * export default createRoute({
- *   component: () => <CustomPage />,
- *   loadingComponent: () => <CustomLoader />,
- *   inherit: { error: false } // Use custom loader, but no error boundary
- * })
- */
-export type RouteConfig<T = unknown> = Pick<
-  RouteDefinition<string, T>,
-  'matchFilters' | 'preload'
-> & {
-  /** Document metadata applied during client navigation and emitted by the SSG renderer. */
-  metadata?: RouteMetadata
-  info?: FileRouteInfo
-  /** Whether this route is only available during development. */
-  draft?: boolean
-  component: Component<RouteSectionProps<T>>
-  errorComponent?: Component<ErrorComponentProps>
-  loadingComponent?: Component<RouteSectionProps<T>>
-  /**
-   * Control component inheritance from layouts.
-   *
-   * - `false`: Disable all inheritance (loading and error components)
-   * - `{ loading: false }`: Disable loading component inheritance only
-   * - `{ error: false }`: Disable error component inheritance only
-   * - `undefined` or `true`: Enable inheritance (default behavior)
-   *
-   * @default undefined (inheritance enabled)
-   */
-  inherit?:
-    | boolean
-    | {
-        loading?: boolean
-        error?: boolean
-      }
-}
-
-/**
- * Indicate the route export entry
- *
- * @example
- * ```ts
- * export default createRoute({})
+ * ```tsx
+ * // src/App.tsx
+ * const Router = createFileRouter()
+ * export default () => {
+ *   announceRoutes()
+ *   return <Router>{(props) => <>{props.children}</>}</Router>
+ * }
  * ```
  */
-export function createRoute<T>(config: RouteConfig<T>): RouteConfig<T> {
-  return config
-}
-
-/** Reads route metadata from the deepest matched route. */
-export function readRouteInfo<T extends FileRouteInfo = FileRouteInfo>(
-  matches: readonly FileRouteMatch[],
-): T | undefined {
-  const route = matches.at(-1)
-  return (route?.route?.info ?? route?.info) as T | undefined
-}
-
-/** Generates a route URL from typed path and query parameters. */
-export function generatePath<T extends keyof FileRoutePath & string>(
-  path: T,
-  params: FileRoutePath[T] extends never
-    ? Record<string, unknown>
-    : FileRoutePath[T] & Record<string, unknown>,
-): string {
-  const values = params as Record<string, unknown> | undefined
-  const usedKeys = new Set<string>()
-  const joinedPath = (path as string)
-    .split('/')
-    .flatMap((segment) => {
-      const parameter = segment.match(/^:([\w-]+)(\?)?$/)
-      const splat = segment.match(/^\*(\?)?$/)
-      const key = parameter ? `$${parameter[1]}` : splat ? '*' : undefined
-      if (!key) {
-        return [segment]
-      }
-
-      const value = values?.[key]
-      if (value === undefined || value === null) {
-        if (parameter?.[2] || splat?.[1]) {
-          return []
-        }
-        throw new Error(`[solid-file-router] Missing required route parameter "${key}"`)
-      }
-      usedKeys.add(key)
-      return [String(value)]
-    })
-    .join('/')
-  const result = joinedPath || ((path as string).startsWith('/') ? '/' : '')
-
-  let searchParam: URLSearchParams | undefined
-  for (const [key, value] of Object.entries(values ?? {})) {
-    if (key.startsWith('$') || key === '*' || usedKeys.has(key)) {
-      continue
-    }
-    if (!searchParam) {
-      searchParam = new URLSearchParams()
-    }
-    searchParam.append(key, value as string)
+export function announceRoutes(
+  extraPaths: readonly string[] = [],
+  options: { header?: string } = {},
+): boolean {
+  const event = getRequestEvent()
+  const response = (event as { response?: ResponseStub } | undefined)?.response
+  if (!event || !response || response.committed) {
+    return false
   }
-
-  if (searchParam) {
-    return `${result}?${searchParam.toString()}`
-  }
-
-  return result
-}
-
-/** Mounts or hydrates the client application at the supplied element. */
-export function createClientEntry(
-  component: Parameters<typeof render>[0],
-  mount: Parameters<typeof render>[1],
-): void {
-  if (import.meta.env.DEV) {
-    render(component, mount)
-  } else if ('_$HY' in window) {
-    hydrate(component, mount)
-  } else {
-    render(component, mount)
-  }
-}
-
-/** Creates an SSR renderer for the supplied application component. */
-export async function createServerEntry(component: Component<{ url: string; base: string }>) {
-  if (!import.meta.env.SSR) {
-    throw new Error('[solid-file-router] createServerEntry can only run during SSR')
-  }
-
-  return (props: { url: string }) => {
-    return renderToStringAsync(() =>
-      component({
-        get base() {
-          return import.meta.env.BASE_URL
-        },
-        get url() {
-          return props.url
-        },
-      }),
-    )
-  }
+  const pages = (staticPages ??= staticPathsOf(manifest.map((entry) => entry.path)))
+  return announcePages(event.request, response.headers, [...pages, ...extraPaths], options)
 }

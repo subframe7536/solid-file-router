@@ -1,14 +1,14 @@
 import { fileURLToPath } from 'node:url'
 
+import solid from '@solidjs/vite-plugin'
 import { fileRouter } from 'solid-file-router/plugin'
 import { defineConfig } from 'vite'
-import solidPlugin from 'vite-plugin-solid'
 
 export default defineConfig({
   resolve: {
     alias: [
       {
-        find: 'solid-file-router/mdx',
+        find: /^solid-file-router\/mdx(\/jsx-runtime)?$/,
         replacement: fileURLToPath(new URL('../src/mdx/index.ts', import.meta.url)),
       },
       {
@@ -18,19 +18,8 @@ export default defineConfig({
     ],
   },
   plugins: [
-    solidPlugin({ ssr: true }),
-    fileRouter({
-      infoDts: {
-        name: 'string',
-        role: 'string',
-      },
-      mdx: true,
-      ssg: {
-        serverEntry: 'src/entry-server.tsx',
-        // routes: ['/', '/about'],
-        concurrency: 4,
-      },
-    }),
+    solid({ start: true, ssr: true, extensions: ['.jsx', '.tsx', '.mdx'] }),
+    fileRouter({ mdx: true, ssg: true }),
   ],
   build: {
     minify: false,

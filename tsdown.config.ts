@@ -5,6 +5,7 @@ export default defineConfig({
     plugin: './src/plugin.ts',
     index: './src/index.ts',
     mdx: './src/mdx/index.ts',
+    api: './src/fs/api.ts',
   },
   deps: { neverBundle: ['virtual:routes', 'satteri'] },
   exports: {

@@ -1,7 +1,4 @@
-import { createRoute } from 'solid-file-router'
-
-export default createRoute({
-  component: (props) => {
-    return <div>{JSON.stringify(props)}</div>
-  },
+import { definePage } from 'solid-file-router'
+export default definePage((props) => {
+  return <div>{JSON.stringify(props)}</div>
 })

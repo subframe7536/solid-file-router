@@ -1,5 +1,5 @@
-import { createRoute } from 'solid-file-router'
-import { onMount } from 'solid-js'
+import { definePage } from 'solid-file-router'
+import { onSettled } from 'solid-js'
 
 function createInfo(name: string, usr: any): { name: string; role: any } {
   return { name, role: usr.role }
@@ -11,19 +11,20 @@ const preload = (): void => {
 const user = { role: 'admin' }
 const info = createInfo('test', user)
 
-export default createRoute({
+export const route = {
   info,
   preload,
   matchFilters: { name: ['Alice'] },
-  errorComponent: (props) => {
+  errorComponent: (props: any) => {
     return <h1>{props.error.message}</h1>
   },
-  loadingComponent: (props) => <div>Loading {props.location.hash}</div>,
-  component: () => {
-    onMount(() => {
-      throw new Error('Test Error')
-    })
+  loadingComponent: (props: any) => <div>Loading {props.location.hash}</div>,
+}
 
-    return <button>data</button>
-  },
+export default definePage(() => {
+  onSettled(() => {
+    throw new Error('Test Error')
+  })
+
+  return <button>data</button>
 })

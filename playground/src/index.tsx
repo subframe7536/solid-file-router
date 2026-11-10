@@ -1,6 +1,8 @@
 import './style.css'
 
-import { createClientEntry } from 'solid-file-router'
-import { FileRouter } from 'virtual:routes'
+import { render } from '@solidjs/web'
+import { createFileRouter } from 'solid-file-router'
 
-createClientEntry(() => <FileRouter />, document.getElementById('root')!)
+const Router = createFileRouter()
+
+render(() => <Router>{(props) => <>{props.children}</>}</Router>, document.getElementById('root')!)
