@@ -8,6 +8,9 @@ import { normalizePath } from 'vite'
 import type { Plugin } from 'vite'
 
 import { logger } from './const'
+import { staticPathsOf } from './route'
+
+export { staticPathsOf }
 
 export type PrerenderRoutesSource =
   | readonly string[]
@@ -46,9 +49,6 @@ export interface SsgOptions extends Omit<PrerenderOptions, 'pages' | 'autoSubfol
 
 type RequestHandler = (request: Request) => Promise<Response | string>
 
-const REG_DYNAMIC_SEGMENT = /[:*()]/
-const REG_GROUP_SEGMENT = /^\([^/]+\)$/
-
 /** `/` → `index.html`, `/x` → `x.html`, `/x/` → `x/index.html`. */
 export function getPrerenderAssetFileName(route: string): string {
   if (!route.startsWith('/')) {
@@ -68,22 +68,6 @@ export function normalizeRoutePath(route: string): string {
     throw new Error(`[solid-file-router] Invalid prerender route "${route}" — must start with /`)
   }
   return route.length > 1 ? route.replace(/\/+$/, '') || '/' : route
-}
-
-/** Strips `(group)` segments and keeps only static paths. */
-export function staticPathsOf(manifestPaths: readonly string[]): string[] {
-  const paths = new Set<string>()
-  for (const manifestPath of manifestPaths) {
-    const path = manifestPath
-      .split('/')
-      .filter((segment) => !REG_GROUP_SEGMENT.test(segment))
-      .join('/')
-    if (REG_DYNAMIC_SEGMENT.test(path)) {
-      continue
-    }
-    paths.add(path === '' ? '/' : path.endsWith('/') ? path : path)
-  }
-  return [...paths].sort()
 }
 
 async function resolveHandler(options: SsgOptions, outDir: string): Promise<RequestHandler> {

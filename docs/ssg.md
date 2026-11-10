@@ -48,7 +48,31 @@ static manifest routes, calls the built `dist/server/server.js`'s
 | (unmatched) | `404.html` — always emitted |
 
 Dynamic (`:param`) and splat (`*x`) routes are skipped automatically; emit them
-explicitly through `routes`.
+explicitly through `routes`. The crawl also follows same-origin links in
+rendered pages (`crawlLinks`, default on), so linked dynamic pages are
+prerendered without seeding.
+
+## Announcing pages
+
+`announceRoutes()` tells the crawl which pages exist over the `x-prerender`
+hint header — call it during server render, e.g. in the app root. It reads
+the ambient request event and only writes the header for crawler requests:
+
+```tsx
+// src/App.tsx
+import { announceRoutes, createFileRouter } from 'solid-file-router'
+
+const Router = createFileRouter()
+export default () => {
+  announceRoutes() // manifest static routes; extra paths merged
+  return <Router>{(props) => <>{props.children}</>}</Router>
+}
+```
+
+`announceRoutes(extraPaths, { header })` merges additional paths (dynamic
+routes expanded by the app); `header` must match `ssg.hintHeader` if
+customized. For non-start handlers, the lower-level `announcePages(request,
+headers, paths)` is re-exported from `prerender-crawler/announce`.
 
 ## Options
 

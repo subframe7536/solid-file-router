@@ -114,7 +114,11 @@ expressions in the initializer are fine. Both helpers are identity functions.
 - Requires `solid({ start: true, ssr: true })` (or `ssg.serverEntry` for a
   custom `Request → Response` handler).
 - Prerender runs on the **ssr** environment's `closeBundle` (client when no
-  ssr env exists).
+  ssr env exists) through the `prerender-crawler` engine; `SsgOptions`
+  passes all engine options through (`crawlLinks`, `retries`, `integrations`, …).
+- `announceRoutes()` (server render, ambient `getRequestEvent`) announces the
+  manifest's static routes on the `x-prerender` hint header — crawler
+  requests only. `extraPaths` announces app-expanded dynamic pages.
 - `/` → `index.html`, `/x` → `x.html`, `/x/` → `x/index.html`, always `404.html`.
 - Preview middleware registers **pre-internal** — misses return `404.html`
   with status 404; dynamic routes are not served.

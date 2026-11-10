@@ -1,14 +1,18 @@
 import { createRouter } from '@solidjs/router'
 import { fileRoutes } from '@solidjs/router/fs'
-import { pageRoutes } from 'virtual:routes'
+import { getRequestEvent } from '@solidjs/web'
+import type { ResponseStub } from '@solidjs/web'
+import { announcePages } from 'prerender-crawler/announce'
+import manifest, { pageRoutes } from 'virtual:routes'
 
-import { adaptFileRoutes } from './route'
+import { adaptFileRoutes, staticPathsOf } from './route'
 import type { RouteEntry, RouteInfo, RouteMetadata } from './route'
 
 export {
   adaptFileRoutes,
   definePage,
   defineRoute,
+  staticPathsOf,
   type ErrorComponentProps,
   type RouteConfig,
   type SfrRouteConfig,
@@ -16,6 +20,7 @@ export {
   type RouteInfo,
 } from './route'
 export type { RouteMetadata, RouteMetaTag, RouteMetadataLink } from './route'
+export { announcePages } from 'prerender-crawler/announce'
 
 export interface FileRouterOptions {
   /** Manifest tree injection point — defaults to the `virtual:routes` module. */
@@ -43,4 +48,33 @@ export function createFileRouter(options?: FileRouterOptions): FileRouter {
     routeInfo: adapted.routeInfo,
     routeMetadata: adapted.routeMetadata,
   }) as FileRouter
+}
+
+/**
+ * Tells a prerender crawl which pages exist: the manifest's static routes
+ * plus `extraPaths` (e.g. dynamic routes the app expands from data). Called
+ * during server render — reads the ambient request event and sets the
+ * `x-prerender` hint header only when the request is the crawler's, so a
+ * regular visitor's response is untouched; a no-op on the client.
+ *
+ * ```tsx
+ * // src/App.tsx
+ * const Router = createFileRouter()
+ * export default () => {
+ *   announceRoutes()
+ *   return <Router>{(props) => <>{props.children}</>}</Router>
+ * }
+ * ```
+ */
+export function announceRoutes(
+  extraPaths: readonly string[] = [],
+  options: { header?: string } = {},
+): boolean {
+  const event = getRequestEvent()
+  const response = (event as { response?: ResponseStub } | undefined)?.response
+  if (!event || !response || response.committed) {
+    return false
+  }
+  const pages = staticPathsOf(manifest.map((entry) => entry.path))
+  return announcePages(event.request, response.headers, [...pages, ...extraPaths], options)
 }

@@ -33,6 +33,9 @@ types `DefaultFileSystemRouterConfig`, `SsgOptions`, `PrerenderRoutesSource`,
 | Export                                             | Signature                                                         | Notes                                                                                |
 | -------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `createFileRouter`                                 | `(options?: { routes?, router? }) => FileRouter`                  | Creates the app router; attaches `fileRoutes`, `routeInfo`, `routeMetadata`, `paths` |
+| `announceRoutes`                                   | `(extraPaths?, { header? }) => boolean`                           | Sets `x-prerender` on crawler requests — static manifest routes + `extraPaths`       |
+| `announcePages`                                    | re-export of `prerender-crawler/announce`                         | Raw hint-header writer for custom request handlers                                   |
+| `staticPathsOf`                                    | `(manifestPaths) => string[]`                                     | Group-stripped static paths of a manifest                                            |
 | `adaptFileRoutes`                                  | `(entries: RouteEntry[]) => { routes, routeInfo, routeMetadata }` | Boundary/inheritance adapter over `fileRoutes()` output                              |
 | `defineRoute`                                      | `(config: RouteConfig<T>) => RouteConfig<T>`                      | Identity helper for the `route` export                                               |
 | `definePage`                                       | `(component: Component<RouteSectionProps<T>>) => same`            | Identity helper for the default export                                               |

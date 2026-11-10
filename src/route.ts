@@ -44,6 +44,29 @@ export interface ErrorComponentProps {
   reset: VoidFunction
 }
 
+const REG_DYNAMIC_SEGMENT = /[:*()]/
+const REG_GROUP_SEGMENT = /^\([^/]+\)$/
+
+/**
+ * The manifest's static page paths: `(group)` segments stripped, dynamic
+ * (`:param`/`*splat`) paths dropped. Used for SSG seeding and for
+ * `announceRoutes`.
+ */
+export function staticPathsOf(manifestPaths: readonly string[]): string[] {
+  const paths = new Set<string>()
+  for (const manifestPath of manifestPaths) {
+    const path = manifestPath
+      .split('/')
+      .filter((segment) => !REG_GROUP_SEGMENT.test(segment))
+      .join('/')
+    if (REG_DYNAMIC_SEGMENT.test(path)) {
+      continue
+    }
+    paths.add(path === '' ? '/' : path.endsWith('/') ? path : path)
+  }
+  return [...paths].sort()
+}
+
 /** Extension keys this package consumes on top of the official `route` config. */
 export interface SfrRouteConfig<T = unknown> {
   /** Loading boundary fallback component. */

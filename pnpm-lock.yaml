@@ -166,6 +166,9 @@ importers:
 
   .:
     dependencies:
+      filesystem-routing:
+        specifier: ^0.5.0
+        version: 0.5.0(vite@8.3.6(@types/node@26.6.6)(jiti@2.7.0)(yaml@2.9.1))
       prerender-crawler:
         specifier: ^0.3.0
         version: 0.3.0(vite@8.3.6(@types/node@26.6.6)(jiti@2.7.0)(yaml@2.9.1))
@@ -188,9 +191,6 @@ importers:
       bumpp:
         specifier: ^12.3.0
         version: 12.3.0
-      filesystem-routing:
-        specifier: ^0.5.0
-        version: 0.5.0(vite@8.3.6(@types/node@26.6.6)(jiti@2.7.0)(yaml@2.9.1))
       jsdom:
         specifier: ^31.0.0
         version: 31.0.0
