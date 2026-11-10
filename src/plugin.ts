@@ -1,18 +1,19 @@
 import { isAbsolute, resolve } from 'node:path'
 
-import type { BaseFileSystemRouter } from 'filesystem-routing'
-import { fileRoutes } from 'filesystem-routing/vite'
 import { normalizePath } from 'vite'
 import type { PluginOption } from 'vite'
 
 import { VID_EXTRACT } from './const'
 import { DefaultFileSystemRouter } from './convention'
+import { fileRoutes } from './fs'
+import type { BaseFileSystemRouter } from './fs'
 import { createMdxPlugin } from './mdx/plugin'
 import type { MdxOptions } from './mdx/router'
 import { createSsgPlugin } from './ssg'
 import type { PrerenderRoutesSource, SsgOptions } from './ssg'
 
 export { createGlobMatcher, DefaultFileSystemRouter, routePathFromFile } from './convention'
+export { BaseFileSystemRouter, PageFileSystemRouter, cleanPath, buildRouteTree } from './fs'
 export type { DefaultFileSystemRouterConfig } from './convention'
 export type { Promisable } from './const'
 export type { MdxOptions } from './mdx/router'
@@ -66,10 +67,9 @@ export interface FileRouterPluginOption<TData = unknown> {
 }
 
 /**
- * Thin preset over the official `filesystem-routing` Vite plugin: route
- * scanning, tree building, code splitting, HMR and type generation are all
- * upstream; this package adds the filename convention, MDX compilation and
- * SSG prerendering.
+ * Vite plugin preset for solid-file-router: provides built-in route scanning,
+ * tree building, code splitting, HMR, type generation, filename conventions,
+ * MDX compilation, and SSG prerendering.
  */
 export function fileRouter<TData = unknown>(
   options: FileRouterPluginOption<TData> = {},

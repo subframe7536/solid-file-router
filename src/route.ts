@@ -4,6 +4,8 @@ import type { HeadTag } from '@solidjs/web'
 import type { Component } from 'solid-js'
 import { createComponent, DEV, Errored, Loading, untrack } from 'solid-js'
 
+import { stripRouteGroups } from './fs/tree'
+
 /** Metadata attached to a route and applied through `useHead`. */
 export interface RouteMetadata {
   title?: string
@@ -44,8 +46,7 @@ export interface ErrorComponentProps {
   reset: VoidFunction
 }
 
-const REG_DYNAMIC_SEGMENT = /[:*()]/
-const REG_GROUP_SEGMENT = /^\([^/]+\)$/
+const REG_DYNAMIC_SEGMENT = /[:*]/
 
 /**
  * The manifest's static page paths: `(group)` segments stripped, dynamic
@@ -55,14 +56,11 @@ const REG_GROUP_SEGMENT = /^\([^/]+\)$/
 export function staticPathsOf(manifestPaths: readonly string[]): string[] {
   const paths = new Set<string>()
   for (const manifestPath of manifestPaths) {
-    const path = manifestPath
-      .split('/')
-      .filter((segment) => !REG_GROUP_SEGMENT.test(segment))
-      .join('/')
+    const path = stripRouteGroups(manifestPath)
     if (REG_DYNAMIC_SEGMENT.test(path)) {
       continue
     }
-    paths.add(path || '/')
+    paths.add(path)
   }
   return [...paths].sort()
 }
@@ -163,13 +161,13 @@ function metadataToHeadTags(metadata: RouteMetadata): HeadTag[] {
     })
   }
   for (const meta of metadata.meta ?? []) {
+    const isName = meta.name !== undefined
     tags.push({
       tag: 'meta',
-      key: meta.name !== undefined ? `name:${meta.name}` : `property:${meta.property}`,
-      props:
-        meta.name !== undefined
-          ? { name: meta.name, content: meta.content }
-          : { property: meta.property, content: meta.content },
+      key: isName ? `name:${meta.name}` : `property:${meta.property}`,
+      props: isName
+        ? { name: meta.name, content: meta.content }
+        : { property: meta.property, content: meta.content },
     })
   }
   for (const link of metadata.links ?? []) {

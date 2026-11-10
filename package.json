@@ -21,6 +21,7 @@
   "types": "./dist/index.d.mts",
   "exports": {
     ".": "./dist/index.mjs",
+    "./api": "./dist/api.mjs",
     "./mdx": "./dist/mdx.mjs",
     "./plugin": "./dist/plugin.mjs",
     "./package.json": "./package.json",
@@ -51,8 +52,11 @@
     "release": "pnpm build && pnpm qa && pnpm test && bumpp --all"
   },
   "dependencies": {
-    "filesystem-routing": "^0.5.0",
-    "prerender-crawler": "^0.3.0"
+    "magic-string": "^1.4.5",
+    "picomatch": "^4.0.7",
+    "prerender-crawler": "^0.3.0",
+    "radix3": "^1.1.2",
+    "tinyglobby": "^0.2.17"
   },
   "devDependencies": {
     "@solidjs/router": "2.0.0-next.44",
@@ -60,6 +64,7 @@
     "@solidjs/web": "2.0.0-rc.21",
     "@subf/config": "^0.5.0",
     "@types/node": "^26.6.6",
+    "@types/picomatch": "^4.0.3",
     "bumpp": "^12.3.0",
     "jsdom": "^31.0.0",
     "oxfmt": "^0.78.0",

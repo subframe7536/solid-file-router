@@ -1,60 +1,19 @@
-import { cleanPath, PageFileSystemRouter } from 'filesystem-routing'
-import type { PageFileSystemRouterConfig, RouteManifestEntry } from 'filesystem-routing'
+import picomatch from 'picomatch'
 
 import { VID_MDX_ROUTE } from './const'
+import { cleanPath, PageFileSystemRouter } from './fs'
+import type { PageFileSystemRouterConfig, RouteManifestEntry } from './fs'
 
 const REG_GROUP = /^\([\w-]+\)$/
 const REG_PARAM = /\[([^\]]+)\]/g
 const REG_SPLAT = /\[\.{3}([\w-]+)\]/g
 
-function globToRegExp(glob: string): RegExp {
-  let source = ''
-  for (let i = 0; i < glob.length;) {
-    const char = glob[i]!
-    if (char === '*') {
-      if (glob[i + 1] === '*') {
-        if (glob[i + 2] === '/') {
-          source += '(?:.*/)?'
-          i += 3
-        } else {
-          source += '.*'
-          i += 2
-        }
-      } else {
-        source += '[^/]*'
-        i += 1
-      }
-    } else if (char === '?') {
-      source += '[^/]'
-      i += 1
-    } else if (char === '{') {
-      const end = glob.indexOf('}', i)
-      if (end > i) {
-        source += `(?:${glob
-          .slice(i + 1, end)
-          .split(',')
-          .map((alt) => alt.replace(/[.+^$[\]\\()|]/g, '\\$&'))
-          .join('|')})`
-        i = end + 1
-      } else {
-        source += '\\{'
-        i += 1
-      }
-    } else {
-      source += char.replace(/[.+^$[\]\\()|]/g, '\\$&')
-      i += 1
-    }
-  }
-  return new RegExp(`^${source}$`)
-}
-
 /**
- * Creates a matcher over `**`/`*`/`?`/`{a,b}` glob patterns. Used internally
- * for ignore lists; not a full micromatch clone.
+ * Creates a matcher over glob patterns using picomatch.
+ * Used internally for ignore lists.
  */
 export function createGlobMatcher(globs: readonly string[]): (src: string) => boolean {
-  const patterns = globs.map(globToRegExp)
-  return (src) => patterns.some((pattern) => pattern.test(src))
+  return globs.length === 0 ? () => false : picomatch(globs as string[])
 }
 
 /**
@@ -115,15 +74,9 @@ export function routePathFromFile(routeFile: string): string | undefined {
       if (!segment) {
         continue
       }
-      if (segment.startsWith('*')) {
-        segments.push(segment)
-      } else if (segment.startsWith(':')) {
-        segments.push(optional ? `${segment}?` : segment)
-      } else {
-        // `-literal` optional literal segments have no neutral equivalent;
-        // they are emitted as plain literals (documented difference).
-        segments.push(segment)
-      }
+      // `-literal` optional literal segments have no neutral equivalent;
+      // they are emitted as plain literals (documented difference).
+      segments.push(segment.startsWith(':') && optional ? `${segment}?` : segment)
     }
   }
   if (segments.length === 0) {

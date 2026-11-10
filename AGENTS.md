@@ -2,11 +2,12 @@
 
 ## Project Overview
 
-Type-safe file-based router for Solid 2 — a thin preset over the official stack
-(`filesystem-routing`, `@solidjs/router`, `@solidjs/web`, `@solidjs/vite-plugin`).
+Type-safe file-based router for Solid 2 over the official stack
+(`@solidjs/router`, `@solidjs/web`, `@solidjs/vite-plugin`).
 The package provides:
 
-- `fileRouter()` Vite preset wrapping `filesystem-routing/vite` (`fileRoutes`)
+- Built-in filesystem routing implementation using Vite's `parseSync`, `tinyglobby`, `picomatch`, and `radix3`
+- `fileRouter()` Vite preset (`fileRoutes`)
 - `DefaultFileSystemRouter` — the single built-in filename convention;
   custom scanning via the `router` option
 - `createFileRouter()` runtime adapter: inherited loading/error components,
@@ -115,6 +116,7 @@ src/
   const.ts          # Shared constants, Promisable, and logger
   convention.ts     # DefaultFileSystemRouter — filename table + ignore globs
   route.ts          # adaptFileRoutes + route config types + RouteMetadata/RouteInfo
+  fs/               # In-house filesystem routing (tinyglobby, picomatch, radix3, Vite parseSync AST)
   mdx/              # MDX runtime, Satteri compilation, and Vite plugin
   ssg.ts            # Prerender plugin over prerender-crawler + preview fallback
 ```
