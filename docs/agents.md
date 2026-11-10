@@ -169,7 +169,7 @@ Keep the documentation surfaces distinct:
 - `docs/ssg.md`: the end-to-end static generation workflow
 - `docs/mdx.md`: built-in Markdown/MDX setup and component customization
 - `docs/agents.md`: deterministic integration and maintenance instructions
-- `MIGRATION.md`: upgrade breaking changes
+- `docs/MIGRATION.md`: upgrade breaking changes
 
 Do not copy a full reference section back into the README. Link to the owning
 document and keep one canonical explanation for each behavior.
