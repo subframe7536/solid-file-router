@@ -13,19 +13,14 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-
-      - uses: oven-sh/setup-bun@v2
-
-      # Ensure npm 11.5.1 or later is installed
-      - name: Update npm
-        run: bun install -g npm@^11
-
-      - run: bun ci
-      - run: bun run build
-      - run: npm publish
-      - run: bunx changelogithub
+      - uses: pnpm/setup@v3
+        with:
+          runtime: node@24
+          cache: true
+      - run: pnpm publish --provenance --no-git-checks
+      - run: pnpm dlx changelogithub
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
