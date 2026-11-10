@@ -73,13 +73,13 @@ Create a page:
 
 ```tsx
 // src/pages/index.tsx
-export const route = {
-  info: { title: 'Home' },
-}
+import { definePage, defineRoute } from 'solid-file-router'
 
-export default function Page() {
-  return <h1>Hello</h1>
-}
+export const route = defineRoute({
+  info: { title: 'Home' },
+})
+
+export default definePage(() => <h1>Hello</h1>)
 ```
 
 Render the generated router:

@@ -1,6 +1,7 @@
 import { TestComponent } from '../components/test'
+import { definePage } from 'solid-file-router'
 
-export default (): any => {
+export default definePage(() => {
   return (
     <div style={{ padding: '20px', 'font-family': 'system-ui, sans-serif' }}>
       <h1>Solid File Router Playground</h1>
@@ -128,4 +129,4 @@ export default (): any => {
       </nav>
     </div>
   )
-}
+})

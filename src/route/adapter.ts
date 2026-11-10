@@ -49,6 +49,18 @@ export function defineRoute<T = unknown>(config: RouteConfig<T>): RouteConfig<T>
   return config
 }
 
+/**
+ * Identity helper for a route module's default export — types `props` as
+ * `RouteSectionProps` so pages do not need `any`. Safe with the official
+ * scanner: it only checks that a default export exists, never the
+ * initializer's shape.
+ */
+export function definePage<T = unknown>(
+  component: Component<RouteSectionProps<T>>,
+): Component<RouteSectionProps<T>> {
+  return component
+}
+
 export type RouteEntry = {
   path?: string | string[]
   component?: Component<any>

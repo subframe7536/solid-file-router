@@ -1,8 +1,9 @@
 import { isServer } from '@solidjs/web'
+import { definePage } from 'solid-file-router'
 
 const renderTime = new Date().toISOString()
 
-export default (props: any): any => {
+export default definePage((props) => {
   return (
     <div style={{ padding: '20px', 'font-family': 'system-ui, sans-serif' }}>
       <h2>Dynamic Layout</h2>
@@ -30,4 +31,4 @@ export default (props: any): any => {
       {props.children}
     </div>
   )
-}
+})

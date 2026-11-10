@@ -1,8 +1,9 @@
+import { definePage } from 'solid-file-router'
 export const route = {
   inherit: false,
 }
 
-export default (): any => {
+export default definePage(() => {
   return (
     <div style={{ padding: '15px', background: '#f5f5f5', margin: '10px' }}>
       <h3>Route: No Inheritance</h3>
@@ -16,4 +17,4 @@ export default (): any => {
       </p>
     </div>
   )
-}
+})

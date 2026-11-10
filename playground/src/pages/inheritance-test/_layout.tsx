@@ -1,3 +1,4 @@
+import { definePage } from 'solid-file-router'
 export const route = {
   loadingComponent: () => (
     <div
@@ -16,7 +17,7 @@ export const route = {
   ),
 }
 
-export default (props: any): any => {
+export default definePage((props) => {
   return (
     <div style={{ padding: '20px', border: '2px solid blue', margin: '10px' }}>
       <h2>Layout: Inheritance Test Section</h2>
@@ -26,4 +27,4 @@ export default (props: any): any => {
       <div>{props.children}</div>
     </div>
   )
-}
+})

@@ -1,4 +1,5 @@
-export default (): any => {
+import { definePage } from 'solid-file-router'
+export default definePage(() => {
   return (
     <div style={{ padding: '15px', background: '#fff3e0', margin: '10px' }}>
       <h3>Component Inheritance Test Suite</h3>
@@ -91,4 +92,4 @@ export default (): any => {
       </div>
     </div>
   )
-}
+})

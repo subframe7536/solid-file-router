@@ -8,6 +8,7 @@ import type { RouteEntry } from './route/adapter'
 
 export {
   adaptFileRoutes,
+  definePage,
   defineRoute,
   type ErrorComponentProps,
   type RouteConfig,

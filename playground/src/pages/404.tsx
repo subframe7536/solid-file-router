@@ -2,8 +2,9 @@ import { useNavigate } from '@solidjs/router'
 import { onSettled } from 'solid-js'
 
 import { Router } from '../router'
+import { definePage } from 'solid-file-router'
 
-export default function NotFound(): any {
+export default definePage(function NotFound() {
   const nav = useNavigate()
   onSettled(() => {
     setTimeout(() => {
@@ -11,4 +12,4 @@ export default function NotFound(): any {
     }, 2000)
   })
   return <div>404</div>
-}
+})

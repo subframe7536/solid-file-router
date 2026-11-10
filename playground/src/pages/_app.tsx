@@ -1,18 +1,19 @@
 import type { JSX } from '@solidjs/web'
 import { MDXProvider } from 'solid-file-router/mdx'
+import { definePage } from 'solid-file-router'
 
 export const route = {
   loadingComponent: () => <div>Loading...</div>,
   errorComponent: Catch,
 }
 
-export default (props: any): any => {
+export default definePage((props) => {
   return (
     <MDXProvider>
       <div>{props.children}</div>
     </MDXProvider>
   )
-}
+})
 
 function Catch(props: { error: any; reset: () => void }): JSX.Element {
   console.error(props)

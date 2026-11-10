@@ -1,4 +1,5 @@
-export default (): any => {
+import { definePage } from 'solid-file-router'
+export default definePage(() => {
   return (
     <div>
       <h3>SSR vs SPA Demo</h3>
@@ -17,4 +18,4 @@ export default (): any => {
       </p>
     </div>
   )
-}
+})

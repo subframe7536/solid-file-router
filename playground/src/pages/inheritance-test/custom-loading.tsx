@@ -1,6 +1,7 @@
 import { createSignal } from 'solid-js'
 
 import { fetchMockData } from './utils'
+import { definePage } from 'solid-file-router'
 
 export const route = {
   loadingComponent: () => (
@@ -20,7 +21,7 @@ export const route = {
   ),
 }
 
-export default (): any => {
+export default definePage(() => {
   const [data] = createSignal(fetchMockData)
 
   return (
@@ -37,4 +38,4 @@ export default (): any => {
       </p>
     </div>
   )
-}
+})

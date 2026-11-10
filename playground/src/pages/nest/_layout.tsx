@@ -1,6 +1,7 @@
 import { useLocation } from '@solidjs/router'
+import { definePage } from 'solid-file-router'
 
-export default (props: any): any => {
+export default definePage((props) => {
   return (
     <>
       <div>nest layout useLocation() 's pathname: {useLocation().pathname}</div>
@@ -8,4 +9,4 @@ export default (props: any): any => {
       <div>nest layout props.children: {props.children}</div>
     </>
   )
-}
+})

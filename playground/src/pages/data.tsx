@@ -1,4 +1,5 @@
 import { onSettled } from 'solid-js'
+import { definePage } from 'solid-file-router'
 
 function createInfo(name: string, usr: any): { name: string; role: any } {
   return { name, role: usr.role }
@@ -20,10 +21,10 @@ export const route = {
   loadingComponent: (props: any) => <div>Loading {props.location.hash}</div>,
 }
 
-export default (): any => {
+export default definePage(() => {
   onSettled(() => {
     throw new Error('Test Error')
   })
 
   return <button>data</button>
-}
+})
