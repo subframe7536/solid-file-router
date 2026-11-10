@@ -1,17 +1,4 @@
-import { createRoute } from 'solid-file-router'
-
-export default createRoute({
-  component: (props) => {
-    return (
-      <div style={{ padding: '20px', border: '2px solid blue', margin: '10px' }}>
-        <h2>Layout: Inheritance Test Section</h2>
-        <p style={{ color: 'blue', 'font-size': '12px' }}>
-          This layout provides a custom loading component
-        </p>
-        <div>{props.children}</div>
-      </div>
-    )
-  },
+export const route = {
   loadingComponent: () => (
     <div
       style={{
@@ -27,5 +14,16 @@ export default createRoute({
       </div>
     </div>
   ),
-  // errorComponent not defined - will inherit from _app.tsx
-})
+}
+
+export default (props: any): any => {
+  return (
+    <div style={{ padding: '20px', border: '2px solid blue', margin: '10px' }}>
+      <h2>Layout: Inheritance Test Section</h2>
+      <p style={{ color: 'blue', 'font-size': '12px' }}>
+        This layout provides a custom loading component
+      </p>
+      <div>{props.children}</div>
+    </div>
+  )
+}

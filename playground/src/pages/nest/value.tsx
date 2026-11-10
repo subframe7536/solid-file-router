@@ -1,7 +1,3 @@
-import { createRoute } from 'solid-file-router'
-
-export default createRoute({
-  component: (props) => {
-    return <div>{JSON.stringify(props)}</div>
-  },
-})
+export default (props: any): any => {
+  return <div>{JSON.stringify(props)}</div>
+}

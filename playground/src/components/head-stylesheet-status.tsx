@@ -1,13 +1,12 @@
-import { A } from '@solidjs/router'
-import { createSignal, onMount } from 'solid-js'
-import type { JSX } from 'solid-js'
+import type { JSX } from '@solidjs/web'
+import { createSignal, onSettled } from 'solid-js'
 
 let previousStylesheet: HTMLLinkElement | undefined
 
 export function HeadStylesheetStatus(props: { currentPage: string }): JSX.Element {
   const [status, setStatus] = createSignal('checking')
 
-  onMount(() => {
+  onSettled(() => {
     queueMicrotask(() => {
       const stylesheet = document.head.querySelector<HTMLLinkElement>('link[rel="stylesheet"]')
       if (!stylesheet) {
@@ -36,7 +35,7 @@ export function HeadStylesheetStatus(props: { currentPage: string }): JSX.Elemen
         Main stylesheet node: <code>{status()}</code>
       </p>
       <p style={{ 'margin-bottom': '0' }}>
-        Switch between <A href="/head-assets">page A</A> and <A href="/head-assets-next">page B</A>{' '}
+        Switch between <a href="/head-assets">page A</a> and <a href="/head-assets-next">page B</a>{' '}
         while watching this status.
       </p>
       <small>

@@ -1,7 +1,3 @@
-import { createRoute } from 'solid-file-router'
-
-export default createRoute({
-  component: () => {
-    return <div>nest</div>
-  },
-})
+export default (): any => {
+  return <div>nest</div>
+}

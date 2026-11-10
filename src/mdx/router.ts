@@ -1,16 +1,8 @@
-import { readFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 
 import type { Data, MdxCompileOptions, MdxToJsResult } from 'satteri'
 
-import { defineRouteProvider } from '../route/provider'
-import type {
-  Promisable,
-  RouteProvider,
-  RouteProviderEntry,
-  RouteProviderLoadContext,
-} from '../route/provider'
-import { createPagesPathResolver } from '../route/provider/pages'
+import type { Promisable } from '../route/provider'
 
 import { parseMdxFrontmatter, serializeJavaScriptValue } from './frontmatter'
 import type { MdxFrontmatterBlock, MdxRouteConfig } from './frontmatter'
@@ -18,7 +10,7 @@ import type { MdxFrontmatterBlock, MdxRouteConfig } from './frontmatter'
 export interface MdxRouteDocument {
   /** Original Markdown or MDX source. */
   source: string
-  /** Compiled module body without the default export route wrapper. */
+  /** Compiled module body without generated exports. */
   code: string
   /** Default compiled content component name. */
   component: string
@@ -28,6 +20,15 @@ export interface MdxRouteDocument {
   routeConfig: MdxRouteConfig
   /** Satteri document data collected by MDX plugins. */
   data: Data
+}
+
+export interface MdxLoadContext<TData = unknown> {
+  /** Route-file path relative to the pages dir (extension stripped). */
+  path: string
+  /** Absolute source path. */
+  sourcePath: string
+  /** Provider-specific data (route providers only). */
+  data?: TData
 }
 
 export interface MdxLoadExtension {
@@ -42,55 +43,23 @@ export interface MdxLoadExtension {
 }
 
 export interface MdxOptions<TData = unknown> extends MdxCompileOptions {
-  /**
-   * Glob used to discover Markdown and MDX route files.
-   * @default Derived from `pagesDir` for Markdown and MDX files.
-   */
-  filter?: string
-  /**
-   * Directory used by the default filter, inherit from `FileRouterPluginOption.pagesDir` by default
-   * @default 'src/pages'
-   */
-  pagesDir?: string
-  /**
-   * Transforms the default logical route entry after extension normalization.
-   * The source path is relative to the Vite root.
-   */
-  transformPath?: (
-    sourcePath: string,
-    defaultEntry: Readonly<RouteProviderEntry<TData>>,
-  ) => RouteProviderEntry<TData>
   /** Extends the generated route module without taking over MDX compilation. */
   extendLoad?: (
     document: Readonly<MdxRouteDocument>,
-    context: Readonly<RouteProviderLoadContext<TData>>,
+    context: Readonly<MdxLoadContext<TData>>,
   ) => Promisable<MdxLoadExtension | undefined>
 }
 
 /** Route configuration read from a native Markdown/MDX document's frontmatter. */
 export type { MdxRouteConfig } from './frontmatter'
 
-const REG_MDX = /\.(md|mdx)$/i
 const REG_MDX_DEFAULT_EXPORT = /\n?export default MDXContent;\s*/
-const REG_MDX_LAYOUT = /(?:^|\/)(?:_app|_layout)\.(?:md|mdx)$/i
 const SATTERI_PACKAGE = 'satteri'
 let satteriPromise: Promise<typeof import('satteri')> | undefined
 
-type CompiledMdxDocument = Omit<MdxToJsResult, 'frontmatter'> & {
+interface CompiledMdxDocument extends Omit<MdxToJsResult, 'frontmatter'> {
   frontmatter: Record<string, unknown>
   routeConfig: MdxRouteConfig
-}
-
-function getRouteConfigName(code: string): string {
-  const baseName = '__sfr_mdx_route'
-  let name = baseName
-  let suffix = 0
-
-  while (new RegExp(`\\b${name}\\b`).test(code)) {
-    name = `${baseName}_${++suffix}`
-  }
-
-  return name
 }
 
 function getUniqueName(code: string, baseName: string): string {
@@ -100,6 +69,7 @@ function getUniqueName(code: string, baseName: string): string {
   while (new RegExp(`\\b${name}\\b`).test(code)) {
     name = `${baseName}_${++suffix}`
   }
+
   return name
 }
 
@@ -107,19 +77,12 @@ function hasFrontmatterExport(code: string): boolean {
   return /\bexport\s+(?:const|let|var|function|class)\s+frontmatter\b/.test(code)
 }
 
-function addFrontmatterExport(code: string, frontmatter: Record<string, unknown>): string {
-  if (hasFrontmatterExport(code)) {
-    return code
-  }
-  return `${code}\nexport const frontmatter = ${serializeJavaScriptValue(frontmatter)}\n`
-}
-
 async function getSatteri(): Promise<typeof import('satteri')> {
   try {
     return await (satteriPromise ??= import(SATTERI_PACKAGE))
   } catch (error) {
     throw new Error(
-      '[solid-file-router] MdxRouter requires the optional `satteri` package. Install it with `bun add -d satteri`.',
+      '[solid-file-router] MDX support requires the optional `satteri` package. Install it with `pnpm add -D satteri`.',
       { cause: error },
     )
   }
@@ -129,21 +92,17 @@ function getCompileOptions<TData>(
   options: MdxOptions<TData>,
   sourcePath: string,
 ): MdxCompileOptions {
-  const {
-    filter: _filter,
-    pagesDir: _pagesDir,
-    transformPath: _transformPath,
-    extendLoad: _extendLoad,
-    ...compileOptions
-  } = options
+  const { extendLoad: _extendLoad, ...compileOptions } = options
   if (compileOptions.outputFormat && compileOptions.outputFormat !== 'program') {
-    throw new Error(
-      '[solid-file-router] MdxRouter requires Satteri outputFormat="program" for route modules',
-    )
+    throw new Error('[solid-file-router] MDX routes require Satteri outputFormat="program"')
   }
 
   return {
-    jsx: true,
+    // Solid 2 SSR calls component expressions directly, so `<_components.h1>`
+    // cannot compile there — emit runtime calls through our own jsx-runtime
+    // (`Dynamic`-backed) instead of JSX syntax.
+    jsx: false,
+    jsxImportSource: 'solid-file-router/mdx',
     providerImportSource: 'solid-file-router/mdx',
     elementAttributeNameCase: 'html',
     stylePropertyNameCase: 'css',
@@ -165,102 +124,91 @@ async function compileMdxDocument<TData>(
   )
   return {
     ...result,
-    code: addFrontmatterExport(result.code, parsed.data),
     frontmatter: parsed.data,
     routeConfig: parsed.routeConfig,
   }
 }
 
-/** Compiles an MDX document for direct consumption by Vite. */
+export interface MdxModuleResult {
+  code: string
+  frontmatter: Record<string, unknown>
+  routeConfig: MdxRouteConfig
+  data: Data
+}
+
+/**
+ * Compiles a Markdown/MDX document into the route-module shape:
+ * `export const route` + `export const frontmatter` + default component.
+ */
 export async function compileMdx<TData = unknown>(
   source: string,
   sourcePath: string,
   options: MdxOptions<TData> = {},
-): Promise<Omit<CompiledMdxDocument, 'routeConfig'>> {
+  context?: MdxLoadContext<TData>,
+): Promise<MdxModuleResult> {
   const result = await compileMdxDocument(source, sourcePath, options)
-  const { routeConfig: _routeConfig, ...compiled } = result
-  return compiled
+  const document: MdxRouteDocument = {
+    source,
+    code: result.code.replace(REG_MDX_DEFAULT_EXPORT, ''),
+    component: 'MDXContent',
+    frontmatter: result.frontmatter,
+    routeConfig: result.routeConfig,
+    data: result.data,
+  }
+  const extension = await options.extendLoad?.(
+    document,
+    context ?? { path: sourcePath, sourcePath },
+  )
+  const routeConfig = { ...result.routeConfig, ...extension?.routeConfig }
+
+  let moduleCode = document.code
+  let component = document.component
+  if (extension?.mdxContent?.trim()) {
+    const runtimeName = getUniqueName(moduleCode, '__sfr_mdx_components')
+    const contentName = getUniqueName(`${moduleCode}\n${extension.mdxContent}`, '__sfr_mdx_content')
+    moduleCode = [
+      `import { useMDXComponents as ${runtimeName} } from 'solid-file-router/mdx'`,
+      '',
+      moduleCode,
+      '',
+      `const ${contentName} = (props) => {`,
+      `  const components = ${runtimeName}()`,
+      `  return ${extension.mdxContent}`,
+      '}',
+    ].join('\n')
+    component = contentName
+  }
+
+  const code = [
+    moduleCode,
+    '',
+    `export const route = ${serializeJavaScriptValue(routeConfig)}`,
+    hasFrontmatterExport(moduleCode)
+      ? ''
+      : `export const frontmatter = ${serializeJavaScriptValue(result.frontmatter)}`,
+    `export default ${component}`,
+    '',
+  ].join('\n')
+
+  return { code, frontmatter: result.frontmatter, routeConfig, data: result.data }
 }
 
 /**
- * Creates the Satteri-backed Markdown/MDX route provider.
+ * Compiles only the route-facing exports of a Markdown/MDX document —
+ * used for the `$$route` virtual module so the manifest never eagerly
+ * bundles the compiled component.
  */
-export const mdxRouteProvider = <TData = unknown>(
+export async function compileMdxRouteModule<TData = unknown>(
+  source: string,
+  sourcePath: string,
   options: MdxOptions<TData> = {},
-): RouteProvider<TData> => {
-  const pagesDir = options.pagesDir ?? 'src/pages'
-  const paths = createPagesPathResolver(pagesDir, options.filter ?? '', 'md,mdx')
-
-  return defineRouteProvider<TData>({
-    filter: paths.filter,
-    glob: paths.glob,
-    transformPath(file) {
-      const routePath = paths.routePath(file)
-      if (REG_MDX_LAYOUT.test(routePath)) {
-        throw new Error(
-          `[solid-file-router] Markdown/MDX files cannot be used as layouts: ${file}. Use a JSX/TSX _app or _layout route instead.`,
-        )
-      }
-      const defaultEntry = { path: routePath.replace(REG_MDX, '.tsx') }
-      return options.transformPath?.(paths.sourcePath(file), defaultEntry) ?? defaultEntry
-    },
-    async load(context) {
-      const { sourcePath } = context
-      const source = await readFile(sourcePath, 'utf8')
-      const result = await compileMdxDocument(source, sourcePath, options)
-      const document: MdxRouteDocument = {
-        source,
-        code: result.code.replace(REG_MDX_DEFAULT_EXPORT, ''),
-        component: 'MDXContent',
-        frontmatter: result.frontmatter,
-        routeConfig: result.routeConfig,
-        data: result.data,
-      }
-      const extension = await options.extendLoad?.(document, context)
-      const routeConfig = {
-        ...result.routeConfig,
-        ...extension?.routeConfig,
-      }
-
-      let moduleCode = document.code
-      let component = document.component
-      if (extension?.mdxContent?.trim()) {
-        const runtimeName = getUniqueName(moduleCode, '__sfr_mdx_components')
-        const contentName = getUniqueName(
-          `${moduleCode}\n${extension.mdxContent}`,
-          '__sfr_mdx_content',
-        )
-        moduleCode = [
-          `import { useMDXComponents as ${runtimeName} } from 'solid-file-router/mdx'`,
-          '',
-          moduleCode,
-          '',
-          `const ${contentName} = (props) => {`,
-          `  const components = ${runtimeName}()`,
-          `  return ${extension.mdxContent}`,
-          '}',
-        ].join('\n')
-        component = contentName
-      }
-
-      const routeConfigName = getRouteConfigName(moduleCode)
-      return [
-        "import { createRoute } from 'solid-file-router'",
-        '',
-        moduleCode,
-        '',
-        `const ${routeConfigName} = ${serializeJavaScriptValue(routeConfig)}`,
-        '',
-        'export default createRoute({',
-        `  info: ${routeConfigName}.info,`,
-        `  metadata: ${routeConfigName}.metadata,`,
-        `  matchFilters: ${routeConfigName}.matchFilters,`,
-        `  inherit: ${routeConfigName}.inherit,`,
-        `  draft: ${routeConfigName}.draft,`,
-        `  component: ${component},`,
-        '})',
-        '',
-      ].join('\n')
-    },
-  })
+  context?: MdxLoadContext<TData>,
+): Promise<MdxModuleResult> {
+  const { code: _code, ...result } = await compileMdx(source, sourcePath, options, context)
+  const code = [
+    `export const route = ${serializeJavaScriptValue(result.routeConfig)}`,
+    `export const frontmatter = ${serializeJavaScriptValue(result.frontmatter)}`,
+    '',
+  ].join('\n')
+  return { ...result, code }
 }

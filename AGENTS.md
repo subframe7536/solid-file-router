@@ -2,46 +2,53 @@
 
 ## Project Overview
 
-Type-safe file-based router for Solid.js. The package provides:
+Type-safe file-based router for Solid 2 — a thin preset over the official stack
+(`filesystem-routing`, `@solidjs/router`, `@solidjs/web`, `@solidjs/vite-plugin`).
+The package provides:
 
-- A Vite plugin that generates routes from `src/pages/` directory structure
-- Runtime utilities (`createRoute`, `generatePath`)
-- Component inheritance system for loading/error boundaries
-- Consumers configure `vite-plugin-solid` separately in app Vite configs
+- `fileRouter()` Vite preset wrapping `filesystem-routing/vite` (`fileRoutes`)
+- `DefaultFileSystemRouter` + convention adapters (`defaultConvention`,
+  `solidStartConvention`, `flatConvention`)
+- `createFileRouter()` runtime adapter: inherited loading/error components,
+  `useHead` metadata, draft routes
+- Experimental `routeProviders` for non-file route sources (virtual `?pick=` modules)
+- MDX routes via Satteri (`export const route` + default component)
+- SSG prerendering through the start `handleRequest`
+- Consumers configure `@solidjs/vite-plugin` separately in app Vite configs
 
 ## Build / Lint / Test Commands
 
 ```bash
-bun run build          # Build library with tsdown
-bun run test           # Run vitest once (CI mode) in
-bun run test:dev       # Run vitest watch mode
-bun run lint           # Lint with oxlint
-bun run format         # Format with oxfmt
-bun run typecheck      # TypeScript type checking (tsc --noEmit)
-bun run qa             # Auto-fix lint, format, then typecheck
-bun run oxc            # Lint + auto-fix + format in one pass
-bun run release        # Build -> lint -> test -> bump version
+pnpm build          # Build library with tsdown
+pnpm test           # Run vitest once (CI mode) in
+pnpm test:dev       # Run vitest watch mode
+pnpm lint           # Lint with oxlint
+pnpm format         # Format with oxfmt
+pnpm typecheck      # TypeScript type checking (tsc --noEmit)
+pnpm qa             # Auto-fix lint, format, then typecheck
+pnpm oxc            # Lint + auto-fix + format in one pass
+pnpm release        # Build -> lint -> test -> bump version
 ```
 
 ### Running a Single Test
 
 ```bash
 # Run a specific test file
-bun run test -- tests/extract.test.ts
+pnpm test -- tests/extract.test.ts
 
 # Run tests matching a pattern
-bun run test -t "extracts properties"
+pnpm test -t "extracts properties"
 
 # Run single test file (non-watch)
-bun run test --run tests/extract.test.ts
+pnpm test --run tests/extract.test.ts
 ```
 
 ### Playground
 
 ```bash
-bun run play           # Dev server for playground/
-bun run play:build     # Build playground
-bun run play:preview   # Preview playground build
+pnpm play           # Dev server for playground/
+pnpm play:build     # Build playground
+pnpm play:preview   # Preview playground build
 ```
 
 ## Code Style
@@ -104,12 +111,15 @@ bun run play:preview   # Preview playground build
 
 ```
 src/
-  index.ts          # Public runtime entry (createRoute, generatePath, client/server entries)
-  plugin.ts         # Vite plugin orchestration (fileRouter)
+  index.ts          # Public runtime entry (createFileRouter, defineRoute)
+  plugin.ts         # Vite preset orchestration (fileRouter -> fileRoutes)
   const.ts          # Shared constants and logger
-  mdx/              # MDX runtime components, compilation, and Vite plugin
-  route/            # Route discovery, transforms, registry, codegen, and Vite plugins
-  ssg/              # Static generation entry, Vite plugin, and rendering helpers
+  mdx/              # MDX runtime, Satteri compilation, and Vite plugin
+  route/
+    adapter.ts      # adaptFileRoutes: inheritance, useHead metadata, draft
+    convention.ts   # DefaultFileSystemRouter + convention adapters
+    provider/       # Experimental route-provider contract + virtual-module runtime
+  ssg/              # Prerender plugin over the start handleRequest
 ```
 
 ## Testing Conventions
@@ -127,15 +137,16 @@ src/
 
 ### Virtual Modules
 
-The plugin uses Vite virtual modules for route injection:
+- `virtual:routes` - official `filesystem-routing` manifest module (`moduleId`
+  option keeps the v0.7 name); exports default flat manifest + `pageRoutes` tree
 
-- `virtual:routes` - resolved to `\0virtual:routes`, exports `FileRouter`, `fileRoutes`, `Root`, `routeInfo`
-- `virtual:router-entry` - client/server helper exports `renderClient`, `renderServer`
+### Route adaptation
 
-### AST Extraction
-
-Route files are transformed via Babel AST parsing to extract specific properties from `createRoute()` calls. Supports query-based filtering: `?meta`, `?comp`, `?load`, `?error`.
+`adaptFileRoutes` walks the `pageRoutes` tree and wraps each component in
+`Errored`/`Loading` boundaries, wires `metadata` to `useHead`, drops `draft`
+routes in production, and collects `routeInfo`/`routeMetadata`.
 
 ### Component Inheritance
 
-Loading and error components cascade from `_app.tsx` -> `_layout.tsx` -> route file. Controlled via `inherit` option in `createRoute()` or global `inheritance` plugin config.
+Loading and error components cascade `_app.tsx` -> `_layout.tsx` -> route file.
+Controlled per-route via `inherit` (`false` or `{ loading?, error? }`).

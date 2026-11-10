@@ -1,174 +1,204 @@
-import type { Plugin } from 'vite'
+import { isAbsolute, resolve } from 'node:path'
+
+import type { BaseFileSystemRouter } from 'filesystem-routing'
+import { fileRoutes } from 'filesystem-routing/vite'
+import { normalizePath } from 'vite'
+import type { PluginOption } from 'vite'
 
 import { createMdxPlugin } from './mdx/plugin'
-import { mdxRouteProvider } from './mdx/router'
 import type { MdxOptions } from './mdx/router'
-import type { InheritanceConfig } from './route/definition'
-import { fsRouteProvider } from './route/fs-provider'
-import { createRouterPlugin } from './route/plugin'
-import type { RoutePluginContext } from './route/plugin'
+import {
+  defaultConvention,
+  DefaultFileSystemRouter,
+  DEFAULT_IGNORES,
+  flatConvention,
+  routePathFromFile,
+  solidStartConvention,
+} from './route/convention'
+import type { DefaultFileSystemRouterConfig, FileRouterConvention } from './route/convention'
+import { createRouteProviderPlugin, defineRouteProvider } from './route/provider'
 import type {
   Promisable,
+  RouteProvider,
   RouteProviderEntry,
   RouteProviderLoadContext,
-  RouteProvider,
 } from './route/provider'
-import { defineRouteProvider } from './route/provider'
-import { RouteRegistry } from './route/registry'
-import type { InfoTypeDefinition } from './route/type-gen'
 import { createSsgPlugin } from './ssg'
-import type { SsgOptions } from './ssg'
+import type { PrerenderRoutesSource, SsgOptions } from './ssg'
 
-export type { MdxLoadExtension, MdxOptions, MdxRouteDocument } from './mdx/router'
+export type { MdxOptions } from './mdx/router'
 export type { RouteMetadata, RouteMetaTag, RouteMetadataLink } from './metadata'
-export type { InfoTypeDefinition, InlineInfoTypeDefinition } from './route/type-gen'
 export {
-  defineRouteProvider,
-  type Promisable,
-  type RouteProviderEntry,
-  type RouteProviderLoadContext,
-  type RouteProvider,
+  defaultConvention,
+  DefaultFileSystemRouter,
+  DEFAULT_IGNORES,
+  flatConvention,
+  routePathFromFile,
+  solidStartConvention,
 }
-export type { PrerenderRoutesSource } from './ssg'
-export { renderTemplate } from './ssg'
+export type { DefaultFileSystemRouterConfig, FileRouterConvention }
+export { defineRouteProvider }
+export type { Promisable, RouteProvider, RouteProviderEntry, RouteProviderLoadContext }
+export type { PrerenderRoutesSource, SsgOptions }
 
 export interface FileRouterPluginOption<TData = unknown> {
   /**
-   * The output file path where the page types will be saved.
-   * @default 'src/routes.d.ts'
-   */
-  output?: string
-  /**
    * The directory containing all route files.
    *
-   * e.g. If your `_app.tsx` is located at `module/route/_app.tsx`,
-   * You need to setup to `module/routes`
+   * e.g. If your `_app.tsx` is located at `module/routes/_app.tsx`,
+   * set `pagesDir` to `module/routes`.
    * @default 'src/pages'
    */
   pagesDir?: string
   /**
-   * Additional route providers appended after the built-in providers.
-   * @default undefined
+   * The output file path for generated route types.
+   * @default 'src/routes.d.ts'
+   */
+  output?: string
+  /**
+   * The id the route manifest is served from.
+   * @default 'virtual:routes'
+   */
+  moduleId?: string
+  /**
+   * Filename convention adapter producing the file-system router.
+   * Defaults to {@link defaultConvention}; mutually exclusive with
+   * `router`/`routers`.
+   */
+  convention?: FileRouterConvention
+  /**
+   * A fully custom file-system router (official seam, passed through).
+   * Mutually exclusive with `convention`/`routers`.
+   */
+  router?: BaseFileSystemRouter
+  /**
+   * Per-environment file-system routers (official seam, passed through).
+   * Mutually exclusive with `convention`/`router`.
+   */
+  routers?: Record<string, BaseFileSystemRouter>
+  /**
+   * Filename → neutral-path override (official `toPath` seam, only applies
+   * when the convention builds the router).
+   */
+  toPath?: DefaultFileSystemRouterConfig['toPath']
+  /**
+   * Source file → manifest entry override (official `toRoute` seam, only
+   * applies when the convention builds the router).
+   */
+  toRoute?: DefaultFileSystemRouterConfig['toRoute']
+  /**
+   * Extra ignore globs appended to {@link DEFAULT_IGNORES}.
+   * Only applies when the convention builds the router.
+   */
+  ignore?: readonly string[]
+  /**
+   * Whether route modules are code-split into lazy chunks.
+   * @default true
+   */
+  lazy?: boolean
+  /**
+   * EXPERIMENTAL: additional route providers (e.g. CMS sources) served
+   * through virtual `?pick=` modules.
    */
   routeProviders?: readonly RouteProvider<TData>[]
   /**
-   * Enable built-in Markdown/MDX route discovery and Satteri compilation.
+   * Enable Markdown/MDX route compilation through Satteri.
    * @default false
    */
   mdx?: boolean | MdxOptions<TData>
   /**
-   * A list of glob patterns to be ignored during processing.
-   *
-   * Default is {@link DEFAULT_IGNORES}: all files in `components/`, `node_modules/` and `dist/`
-   * @default DEFAULT_IGNORES
-   */
-  ignore?: string[]
-  /**
-   * Escape hatch that reloads the page for route content updates. Structural
-   * changes may still reload automatically. Useful when route modules depend
-   * on state that Vite cannot update through the normal HMR module graph.
-   * @default false
-   */
-  reloadOnChange?: boolean
-  /**
-   * Whether to generate route modules with lazy imports.
-   * When omitted, enabled in client builds and disabled in SSR builds.
-   * @default Client builds: true; SSR builds: false
-   */
-  lazy?: boolean
-  /**
-   * Route's dts config to control Route's info type
-   * @example
-   * ```ts
-   * {
-   *   title: 'string',
-   *   description: 'string',
-   *   auth: {
-   *     required: 'boolean',
-   *     code: 'string',
-   *   },
-   *   tags: 'string[]',
-   * }
-   * ```
-   */
-  infoDts?: InfoTypeDefinition
-  /**
-   * Whether to enable verbose log
+   * Whether to enable verbose log.
    * @default false
    */
   verboseLog?: boolean
   /**
-   * Component inheritance configuration.
-   *
-   * Controls how loading and error components are inherited from layouts.
-   *
-   * @default { enabled: true }
-   *
-   * @example
-   * // Disable inheritance globally
-   * { enabled: false }
-   *
-   * @example
-   * // Enable with custom behavior
-   * {
-   *   enabled: true,
-   *   inheritLoading: true,
-   *   inheritError: true
-   * }
-   */
-  inheritance?: InheritanceConfig
-  /**
-   * Optional SSG configuration with Vite Environment API.
-   * Keep `vite-plugin-solid` setup in user land while this plugin handles prerender outputs.
+   * SSG prerender configuration. Requires `solid({ start: true, ssr: true })`
+   * or a custom `ssg.serverEntry`.
    */
   ssg?: SsgOptions
 }
 
-/** Default directories excluded from route discovery. */
-export const DEFAULT_IGNORES = ['**/components/**', '**/node_modules/**', '**/dist/**']
-
-/** Creates focused Vite plugins for route discovery, transforms, MDX, and optional SSG. */
-export function fileRouter<TData = unknown>(options: FileRouterPluginOption<TData> = {}): Plugin[] {
-  const {
-    output = 'src/routes.d.ts',
-    pagesDir = 'src/pages',
-    ignore = DEFAULT_IGNORES,
-    reloadOnChange = false,
-    lazy,
-    infoDts,
-    verboseLog,
-    inheritance = { enabled: true },
-    routeProviders = [],
-    mdx = false,
-    ssg,
-  } = options
-  const mdxOptions = mdx ? (mdx === true ? { pagesDir } : { pagesDir, ...mdx }) : false
-  const registry = new RouteRegistry<TData>({
-    pagesDir,
-    ignore,
-    output,
-    infoDts,
-    verboseLog,
-    inheritance: {
-      enabled: inheritance.enabled ?? true,
-      inheritLoading: inheritance.inheritLoading ?? true,
-      inheritError: inheritance.inheritError ?? true,
-    },
-    routeProviders: [
-      fsRouteProvider<TData>({ pagesDir }),
-      ...(mdxOptions ? [mdxRouteProvider<TData>(mdxOptions)] : []),
-      ...routeProviders,
-    ],
-  })
-  const context: RoutePluginContext<TData> = {
-    registry,
-    lazy,
-    reloadOnChange,
-    verboseLog,
+function resolveRouter(
+  options: Pick<
+    FileRouterPluginOption<never>,
+    'convention' | 'router' | 'routers' | 'pagesDir' | 'ignore' | 'toPath' | 'toRoute'
+  >,
+  extensions: string[],
+): BaseFileSystemRouter | undefined {
+  const supplied = [options.convention, options.router, options.routers].filter(Boolean)
+  if (supplied.length > 1) {
+    throw new Error(
+      '[solid-file-router] `convention`, `router` and `routers` are mutually exclusive — pass exactly one.',
+    )
   }
+  if (options.router) {
+    return options.router
+  }
+  if (options.routers) {
+    return undefined
+  }
+  const convention = options.convention ?? defaultConvention
+  return convention({
+    dir: options.pagesDir ?? 'src/pages',
+    extensions,
+    ignore: options.ignore,
+    toPath: options.toPath,
+    toRoute: options.toRoute,
+  })
+}
+
+/**
+ * Thin preset over the official `filesystem-routing` Vite plugin: route
+ * scanning, tree building, code splitting, HMR and type generation are all
+ * upstream; this package adds filename conventions, MDX compilation, route
+ * providers and SSG prerendering.
+ */
+export function fileRouter<TData = unknown>(
+  options: FileRouterPluginOption<TData> = {},
+): PluginOption[] {
+  const mdx = options.mdx ?? false
+  const extensions = ['js', 'jsx', 'ts', 'tsx', ...(mdx ? ['md', 'mdx'] : [])]
+  const router = resolveRouter(options, extensions)
+  const getRouters = (): BaseFileSystemRouter[] => [
+    ...new Set(
+      [router, ...Object.values(options.routers ?? {})].filter(
+        (value): value is BaseFileSystemRouter => !!value,
+      ),
+    ),
+  ]
+  const rawDir = options.pagesDir ?? 'src/pages'
   return [
-    createRouterPlugin(context),
-    createMdxPlugin<TData>(mdxOptions),
-    createSsgPlugin(ssg ?? false, registry, context),
+    {
+      name: 'solid-file-router:root',
+      config(config) {
+        // BaseFileSystemRouter eagerly resolves `dir` against cwd at
+        // construction; `pagesDir` is relative to the vite root instead.
+        // `config` (not `configResolved`) because the official plugin calls
+        // `router.getRoutes()` from `configEnvironment`, which runs first.
+        if (router && !isAbsolute(rawDir)) {
+          router.config.dir = normalizePath(resolve(config.root ?? '.', rawDir))
+        }
+      },
+    },
+    fileRoutes({
+      router,
+      routers: options.routers,
+      moduleId: options.moduleId ?? 'virtual:routes',
+      types: options.output ?? 'src/routes.d.ts',
+      buildInputs: options.ssg ? 'client' : undefined,
+      codeSplitting: options.lazy === false ? false : undefined,
+      optimizeDepsExclude: ['solid-file-router'],
+    }),
+    createMdxPlugin<TData>(mdx === true ? {} : mdx || false),
+    createSsgPlugin(
+      options.ssg,
+      options.ssg
+        ? () =>
+            getRouters().flatMap((r) => r.routes.map((entry) => entry.path))
+        : undefined,
+    ),
+    ...(options.routeProviders?.length
+      ? [createRouteProviderPlugin(options.routeProviders, getRouters)]
+      : []),
   ]
 }

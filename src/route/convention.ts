@@ -1,0 +1,216 @@
+import { cleanPath, FlatFileSystemRouter, PageFileSystemRouter } from 'filesystem-routing'
+import type {
+  BaseFileSystemRouter,
+  FileSystemRouterConfig,
+  PageFileSystemRouterConfig,
+  RouteManifestEntry,
+} from 'filesystem-routing'
+
+const REG_GROUP = /^\([\w-]+\)$/
+const REG_PARAM = /\[([^\]]+)\]/g
+const REG_SPLAT = /\[\.{3}([\w-]+)\]/g
+
+/**
+ * Default ignore globs applied on top of the route directory scan. `toPath`
+ * conventions still see every matched file; these only filter scan results.
+ */
+export const DEFAULT_IGNORES = ['**/components/**', '**/node_modules/**', '**/dist/**'] as const
+
+function globToRegExp(glob: string): RegExp {
+  let source = ''
+  for (let i = 0; i < glob.length;) {
+    const char = glob[i]!
+    if (char === '*') {
+      if (glob[i + 1] === '*') {
+        if (glob[i + 2] === '/') {
+          source += '(?:.*/)?'
+          i += 3
+        } else {
+          source += '.*'
+          i += 2
+        }
+      } else {
+        source += '[^/]*'
+        i += 1
+      }
+    } else if (char === '?') {
+      source += '[^/]'
+      i += 1
+    } else if (char === '{') {
+      const end = glob.indexOf('}', i)
+      if (end > i) {
+        source += `(?:${glob
+          .slice(i + 1, end)
+          .split(',')
+          .map((alt) => alt.replace(/[.+^$[\]\\()|]/g, '\\$&'))
+          .join('|')})`
+        i = end + 1
+      } else {
+        source += '\\{'
+        i += 1
+      }
+    } else {
+      source += char.replace(/[.+^$[\]\\()|]/g, '\\$&')
+      i += 1
+    }
+  }
+  return new RegExp(`^${source}$`)
+}
+
+/**
+ * Creates a matcher over `**`/`*`/`?`/`{a,b}` glob patterns. Used internally
+ * for ignore lists and provider watch filters; not a full micromatch clone.
+ */
+export function createGlobMatcher(globs: readonly string[]): (src: string) => boolean {
+  const patterns = globs.map(globToRegExp)
+  return (src) => patterns.some((pattern) => pattern.test(src))
+}
+
+/**
+ * Maps a route file path — relative to the pages dir, leading `/`, extension
+ * stripped, e.g. `/blog/[id]` — to a path in the neutral pattern language
+ * (`:param`, `:param?`, `*rest`, `(group)`), or `undefined` to skip the file.
+ *
+ * Every emitted path is prefixed with the `/(app)` route group so an `_app`
+ * file becomes the parent layout of all routes via official group nesting.
+ */
+export function routePathFromFile(routeFile: string): string | undefined {
+  const parts = routeFile.split('/').slice(1)
+  if (parts.length === 0 || parts[0] === '') {
+    return undefined
+  }
+  // root `_app` / `_layout` is the parent layout of everything
+  if (parts.length === 1 && (parts[0] === '_app' || parts[0] === '_layout')) {
+    return '/(app)'
+  }
+  const last = parts.length - 1
+  for (let i = 0; i < parts.length; i++) {
+    const segment = parts[i]!
+    if (segment.startsWith('_') && (segment !== '_layout' || i !== last)) {
+      return undefined
+    }
+  }
+  const segments: string[] = []
+  for (let i = 0; i <= last; i++) {
+    const raw = parts[i]!
+    if (i === last) {
+      if (raw === 'index') {
+        segments.push('')
+        continue
+      }
+      if (raw === '404') {
+        segments.push('*404')
+        continue
+      }
+      if (raw === '_layout') {
+        continue
+      }
+    }
+    // `(group)` segments are retained — official tree-building strips them
+    // for URLs but keeps them for nesting
+    if (REG_GROUP.test(raw)) {
+      segments.push(raw)
+      continue
+    }
+    const transformed = raw.replace(REG_SPLAT, '*$1').replace(REG_PARAM, ':$1')
+    for (const part of transformed.split('.')) {
+      if (!part || part === 'index' || part === '_layout' || REG_GROUP.test(part)) {
+        continue
+      }
+      let segment = part
+      let optional = false
+      if (segment.startsWith('-')) {
+        optional = true
+        segment = segment.slice(1)
+      }
+      if (!segment) {
+        continue
+      }
+      if (segment.startsWith('*')) {
+        segments.push(segment)
+      } else if (segment.startsWith(':')) {
+        segments.push(optional ? `${segment}?` : segment)
+      } else {
+        // `-literal` optional literal segments have no neutral equivalent;
+        // they are emitted as plain literals (documented difference).
+        segments.push(segment)
+      }
+    }
+  }
+  if (segments.length === 0) {
+    return '/(app)'
+  }
+  return `/(app)/${segments.join('/')}`
+}
+
+export interface DefaultFileSystemRouterConfig extends PageFileSystemRouterConfig {
+  /** Extra ignore globs appended to {@link DEFAULT_IGNORES}. */
+  ignore?: readonly string[]
+}
+
+/**
+ * File-system router carrying this package's filename conventions
+ * (`_app`/`_layout`/`404`/`-[param]`/`-[...splat]`/`(group)`/`.` segments/`_` private)
+ * on top of the official scanning and module-convention machinery.
+ */
+export class DefaultFileSystemRouter extends PageFileSystemRouter {
+  private isIgnored: (src: string) => boolean
+
+  constructor(config: DefaultFileSystemRouterConfig) {
+    super(config)
+    this.isIgnored = createGlobMatcher([...DEFAULT_IGNORES, ...(config.ignore ?? [])])
+  }
+
+  override toPath(src: string): string | undefined {
+    if (this.config.toPath) {
+      return super.toPath(src)
+    }
+    return routePathFromFile(cleanPath(src, this.config))
+  }
+
+  override isRoute(src: string): boolean {
+    return super.isRoute(src) && !this.isIgnored(src)
+  }
+
+  override toRoute(src: string): RouteManifestEntry | undefined {
+    if (this.config.toRoute) {
+      return super.toRoute(src)
+    }
+    if (/\.mdx?$/i.test(src)) {
+      const path = this.toPath(src)
+      if (path === undefined) {
+        return
+      }
+      // The stock convention emits no `$$route` for markdown. Ours points at a
+      // virtual module that re-compiles only the route-facing exports, so the
+      // manifest never eagerly bundles the compiled component.
+      return {
+        page: true,
+        $component: { src, pick: ['default', '$css'] },
+        $$route: { src: `virtual:sfr-mdx-route:${src}`, pick: ['route'] },
+        path,
+      }
+    }
+    return super.toRoute(src)
+  }
+}
+
+/**
+ * A convention adapter: produces a `BaseFileSystemRouter` for a given scan
+ * config. Passed as a value to `fileRouter({ convention })` — mutually
+ * exclusive with `router`/`routers`.
+ */
+export type FileRouterConvention = (
+  config: FileSystemRouterConfig & { ignore?: readonly string[] },
+) => BaseFileSystemRouter
+
+/** This package's filename conventions — the default. */
+export const defaultConvention: FileRouterConvention = (config) =>
+  new DefaultFileSystemRouter(config as DefaultFileSystemRouterConfig)
+
+/** The stock SolidStart convention (`index`, `[param]`, `[[param]]`, `[...rest]`). */
+export const solidStartConvention: FileRouterConvention = (config) =>
+  new PageFileSystemRouter(config)
+
+/** The flat convention (`+page`-style leaf routes, no nesting). */
+export const flatConvention: FileRouterConvention = (config) => new FlatFileSystemRouter(config)

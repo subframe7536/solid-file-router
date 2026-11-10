@@ -30,17 +30,17 @@ inheritance, route metadata, route providers, and build-time SSG (Static Site Ge
 Install the router and the Solid/Vite dependencies:
 
 ```bash
-bun add solid-file-router @solidjs/router solid-js
-bun add -d vite vite-plugin-solid
+pnpm add solid-file-router @solidjs/router @solidjs/web solid-js
+pnpm add -d vite @solidjs/vite-plugin
 # Optional: required for Markdown/MDX routes and YAML frontmatter
-bun add -d satteri yaml
+pnpm add -D satteri yaml
 ```
 
 `@babel/core` and `tinyglobby` are already provided through
-`vite-plugin-solid` and Vite, so applications do not need to install them
+`@solidjs/vite-plugin` and Vite, so applications do not need to install them
 directly.
 
-This package does not configure `vite-plugin-solid`; keep that plugin in your
+This package does not configure `@solidjs/vite-plugin`; keep that plugin in your
 application's Vite config.
 
 ## Quick Start
@@ -51,7 +51,7 @@ Configure Vite:
 // vite.config.ts
 import { fileRouter } from 'solid-file-router/plugin'
 import { defineConfig } from 'vite'
-import solidPlugin from 'vite-plugin-solid'
+import solid from '@solidjs/vite-plugin'
 
 export default defineConfig({
   plugins: [solidPlugin(), fileRouter()],
@@ -73,21 +73,25 @@ Create a page:
 
 ```tsx
 // src/pages/index.tsx
-import { createRoute } from 'solid-file-router'
+export const route = {
+  info: { title: 'Home' },
+}
 
-export default createRoute({
-  component: () => <h1>Hello</h1>,
-})
+export default function Page() {
+  return <h1>Hello</h1>
+}
 ```
 
 Render the generated router:
 
 ```tsx
 // src/index.tsx
-import { render } from 'solid-js/web'
-import { FileRouter } from 'virtual:routes'
+import { render } from '@solidjs/web'
+import { createFileRouter } from 'solid-file-router'
 
-render(() => <FileRouter />, document.getElementById('root')!)
+const Router = createFileRouter()
+
+render(() => <Router>{(props) => <>{props.children}</>}</Router>, document.getElementById('root')!)
 ```
 
 An `_app.tsx` root layout is recommended but optional. Without one, the plugin
@@ -121,13 +125,13 @@ dependency. See the [route provider guide](docs/guide.md#route-providers) and
 This repository uses Bun:
 
 ```bash
-bun run build
-bun run test
-bun run lint
-bun run typecheck
+pnpm build
+pnpm test
+pnpm lint
+pnpm typecheck
 ```
 
-Run the playground with `bun run play`. Repository-specific instructions are in
+Run the playground with `pnpm play`. Repository-specific instructions are in
 [AGENTS.md](AGENTS.md).
 
 ## License

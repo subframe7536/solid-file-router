@@ -1,10 +1,9 @@
-import { createRoute } from 'solid-file-router'
-
-export default createRoute({
+export const route = {
   preload: () => {
     return 123
   },
-  component: (props) => {
-    return <div>data: {JSON.stringify(props.data)}</div>
-  },
-})
+}
+
+export default (props: any): any => {
+  return <div>data: {JSON.stringify(props.data)}</div>
+}

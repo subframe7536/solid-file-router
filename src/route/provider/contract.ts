@@ -1,15 +1,12 @@
 /** A value that may be returned synchronously or asynchronously. */
 export type Promisable<T> = T | Promise<T>
 
-/** Resolves route files for a Vite root. */
-export type RouteProviderGlob = (
-  glob: typeof import('tinyglobby').glob,
-  filter: string,
-  root: string,
-) => Promisable<string[]>
-
 export interface RouteProviderEntry<TData = unknown> {
-  /** Logical file path used for route matching and layout inheritance. */
+  /**
+   * Logical route file path (relative, extension included) used for route
+   * matching and layout inheritance — mapped through the active convention's
+   * `toPath` like a real file under `pagesDir`.
+   */
   path: string
   /**
    * Optional public route ID.
@@ -38,9 +35,9 @@ export interface RouteProvider<TData = unknown> {
   filter: string
   /**
    * Optional custom glob implementation.
-   * @default (glob, filter, root) => glob(filter, { cwd: root, absolute: false })
+   * @default (filter, root) => <fast-glob>(`${root}/${filter}`, { absolute: false })
    */
-  glob?: RouteProviderGlob
+  glob?: (filter: string, root: string) => Promisable<string[]>
   /**
    * Maps each discovered source path to its logical route entry.
    * @default (path) => ({ path }).
@@ -60,7 +57,6 @@ export interface RouteProvider<TData = unknown> {
 /** Normalizes a route provider and supplies default glob/path transforms. */
 export function defineRouteProvider<TData>(provider: RouteProvider<TData>): RouteProvider<TData> {
   return {
-    glob: (glob, filter, root) => glob(filter, { cwd: root, absolute: false }),
     transformPath(path) {
       return { path }
     },
