@@ -40,7 +40,7 @@
     "play": "vite serve playground",
     "play:ssg": "vite serve playground --config ./playground/vite.ssg.config.ts",
     "play:ssg:build": "pnpm build && vite build playground --config ./playground/vite.ssg.config.ts",
-    "play:ssg:preview": "pnpm play:ssg:build && vite preview --config ./playground/vite.ssg.config.ts --outDir playground/dist/client",
+    "play:ssg:preview": "pnpm play:ssg:build && vite preview playground --config ./playground/vite.ssg.config.ts --outDir dist/client",
     "play:build": "pnpm build && vite build playground",
     "play:preview": "pnpm play:build && vite preview playground",
     "lint": "oxlint",
