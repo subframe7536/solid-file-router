@@ -1,11 +1,11 @@
 # Migration to v1.0.0
 
-solid-file-router v1 is a **thin preset over the official Solid 2 stack**. Custom
-route extraction, legacy AST parsing, registry, and metadata machinery
-were replaced with an in-house filesystem router (`tinyglobby`, `picomatch`, `radix3`)
-compatible with `@solidjs/router`, `@solidjs/web`, and `@solidjs/vite-plugin`.
-This package provides filename conventions, inherited loading/error components,
-declarative `metadata`, `draft` routes, MDX routes, and SSG prerendering.
+solid-file-router v1 is a **thin preset over the official Solid 2 stack**. The
+v0.7 route extraction, registry, and head/metadata machinery were replaced by
+the official `@solidjs/router`, `@solidjs/web`, and `@solidjs/vite-plugin`
+packages. This package still provides the filename conventions, inherited
+loading/error components, declarative `metadata`, `draft` routes, MDX routes,
+and SSG prerendering on top of them.
 
 ## Requirements
 
@@ -17,17 +17,12 @@ declarative `metadata`, `draft` routes, MDX routes, and SSG prerendering.
 | `vite`                 | `^8`     |
 | `@solidjs/vite-plugin` | `^3`     |
 
-## Package manager
-
-pnpm is now the package manager (`packageManager` is set; `bun.lock` was
-removed). Replace `bun run x` with `pnpm x`.
-
 ## Vite config
 
 ```ts
-import { fileRouter } from 'solid-file-router/plugin'
 // before
 import solidPlugin from 'vite-plugin-solid'
+import { fileRouter } from 'solid-file-router/plugin'
 
 export default defineConfig({
   plugins: [solidPlugin(), fileRouter({ mdx: true })],
