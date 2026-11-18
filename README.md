@@ -9,10 +9,9 @@ loading/error boundaries, `useHead` metadata, and draft routes. It also
 supports nested layouts and build-time SSG (Static Site
 Generation).
 
-> [!WARNING]
-> This package targets the **prerelease** Solid 2 stack (`solid-js@2.0.0-rc`,
-> `@solidjs/router@next`). Pin upstream versions and review release notes before
-> upgrading.
+> [!NOTE]
+> This package targets the stable Solid 2 stack (`solid-js@^2`,
+> `@solidjs/router@^2`).
 >
 > This package is ESM only.
 

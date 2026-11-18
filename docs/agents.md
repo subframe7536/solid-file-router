@@ -23,7 +23,7 @@ Do not duplicate those rules here.
    `BaseFileSystemRouter` otherwise eagerly resolves `dir` against cwd, and
    upstream calls `router.getRoutes()` from `configEnvironment` before
    `configResolved` runs.
-8. This is v1 on the Solid 2 **prerelease** stack — pin upstream versions.
+8. This is v1 on the stable Solid 2 stack (`solid-js@^2`, `@solidjs/router@^2`).
 
 ## Consumer Task Map
 

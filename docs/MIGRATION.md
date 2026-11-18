@@ -9,16 +9,13 @@ declarative `metadata`, `draft` routes, MDX routes, and SSG prerendering.
 
 ## Requirements
 
-| Dependency             | Version       |
-| ---------------------- | ------------- |
-| `solid-js`             | `^2.0.0-rc`   |
-| `@solidjs/web`         | `^2.0.0-rc`   |
-| `@solidjs/router`      | `^2.0.0-next` |
-| `vite`                 | `^8`          |
-| `@solidjs/vite-plugin` | `^3.0.0-next` |
-
-All upstream packages are **prereleases** — pin exact versions and expect
-breaking changes between RC/next releases.
+| Dependency             | Version  |
+| ---------------------- | -------- |
+| `solid-js`             | `^2`     |
+| `@solidjs/web`         | `^2`     |
+| `@solidjs/router`      | `^2`     |
+| `vite`                 | `^8`     |
+| `@solidjs/vite-plugin` | `^3`     |
 
 ## Package manager
 
