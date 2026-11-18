@@ -9,26 +9,30 @@ and SSG prerendering on top of them.
 
 ## Requirements
 
-| Dependency             | Version  |
-| ---------------------- | -------- |
-| `solid-js`             | `^2`     |
-| `@solidjs/web`         | `^2`     |
-| `@solidjs/router`      | `^2`     |
-| `vite`                 | `^8`     |
-| `@solidjs/vite-plugin` | `^3`     |
+| Dependency             | Version |
+| ---------------------- | ------- |
+| `solid-js`             | `^2`    |
+| `@solidjs/web`         | `^2`    |
+| `@solidjs/router`      | `^2`    |
+| `vite`                 | `^8`    |
+| `@solidjs/vite-plugin` | `^3`    |
 
 ## Vite config
 
+**Before**
+
 ```ts
-// before
-import solidPlugin from 'vite-plugin-solid'
 import { fileRouter } from 'solid-file-router/plugin'
+import solidPlugin from 'vite-plugin-solid'
 
 export default defineConfig({
   plugins: [solidPlugin(), fileRouter({ mdx: true })],
 })
+```
 
-// after
+**After**
+
+```ts
 import solid from '@solidjs/vite-plugin'
 import { fileRouter } from 'solid-file-router/plugin'
 
@@ -62,8 +66,9 @@ filename rules, pass a router: `fileRouter({ router: new MyRouter(config) })`
 
 ## Route modules
 
+**Before**
+
 ```tsx
-// before
 export default createRoute({
   info: { title: 'Home' },
   matchFilters: { id: /^\d+$/ },
@@ -71,8 +76,11 @@ export default createRoute({
   errorComponent: Catch,
   component: (props) => <div>{props.children}</div>,
 })
+```
 
-// after
+**After**
+
+```tsx
 export const route = {
   info: { title: 'Home' },
   matchFilters: { id: /^\d+$/ },
@@ -92,13 +100,18 @@ presence only, so wrapping does not affect extraction).
 
 ## Entry / mount
 
+**Before**
+
 ```tsx
-// before
 import { createClientEntry } from 'solid-file-router'
 import { FileRouter } from 'virtual:routes'
-createClientEntry(() => <FileRouter />, document.getElementById('root')!)
 
-// after
+createClientEntry(() => <FileRouter />, document.getElementById('root')!)
+```
+
+**After**
+
+```tsx
 import { render } from '@solidjs/web'
 import { createFileRouter } from 'solid-file-router'
 
