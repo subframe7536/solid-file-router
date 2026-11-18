@@ -10,7 +10,7 @@ import { buildRouteTree } from './tree'
 import { sanitizeChunkFileName, toPickId, treeShake } from './tree-shake'
 import type { FileRoutesOptions, ModuleRef, RouteManifestEntry } from './types'
 import { serializeTypes } from './types-gen'
-import { fileSystemWatcher } from './watcher'
+import { debounce, fileSystemWatcher } from './watcher'
 
 export const DEFAULT_EXTENSIONS = ['js', 'jsx', 'ts', 'tsx', 'tsrx']
 export const DEFAULT_MODULE_ID = 'virtual:file-routes'
@@ -121,6 +121,7 @@ export function fileRoutes(options: FileRoutesOptions = {}): PluginOption[] {
   const getRouter = (environment: string): BaseFileSystemRouter | undefined =>
     options.routers?.[environment] ?? defaultRouter
 
+  let writtenTypesVersion = -1
   async function writeTypes(): Promise<void> {
     if (!options.types) {
       return
@@ -131,6 +132,12 @@ export function fileRoutes(options: FileRoutesOptions = {}): PluginOption[] {
     }
     const file = resolve(root, options.types === true ? 'src/routes.d.ts' : options.types)
     const routes = (await router.getRoutes()) ?? []
+    // The manifest hasn't changed since the last serialization — skip the
+    // O(routes) type generation entirely.
+    if (router.version === writtenTypesVersion) {
+      return
+    }
+    writtenTypesVersion = router.version
     const contents = serializeTypes(
       virtualId,
       routes,
@@ -316,6 +323,6 @@ export const pageRoutes = ${serializeTree(tree)};
       },
     },
     treeShake(),
-    fileSystemWatcher(getRouter, virtualId, writeTypes),
+    fileSystemWatcher(getRouter, virtualId, debounce(writeTypes, 50)),
   ]
 }

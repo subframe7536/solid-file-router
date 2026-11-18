@@ -1,4 +1,5 @@
 import { posix, resolve } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 
 import picomatch from 'picomatch'
 import { convertPathToPattern, globSync } from 'tinyglobby'
@@ -28,6 +29,8 @@ export function cleanPath(src: string, config: FileSystemRouterConfig): string {
  */
 export class BaseFileSystemRouter extends EventTarget {
   routes: RouteManifestEntry[] = []
+  /** Bumped on every dispatched reload; consumers use it to skip stale work. */
+  version = 0
   private sources = new Map<string, string>()
   config: FileSystemRouterConfig
   private routePaths = new Map<string, string>()
@@ -102,9 +105,15 @@ export class BaseFileSystemRouter extends EventTarget {
       if (this.routePaths.get(normalized) !== route.path) {
         this.removeRoute(normalized)
       }
+      const previous = this.routes.find((r) => r.path === route.path)
       const updated = this._addRoute(route, normalized)
       this.routePaths.set(normalized, route.path)
-      this.reload(route.path, updated ? 'update' : 'add')
+      // Skip the reload when rescanning produced an identical entry — edits
+      // that don't touch exports leave the manifest (and generated code)
+      // byte-for-byte the same.
+      if (!updated || !isDeepStrictEqual(previous, route)) {
+        this.reload(route.path, updated ? 'update' : 'add')
+      }
     } catch (e) {
       console.error(e)
     }
@@ -115,6 +124,7 @@ export class BaseFileSystemRouter extends EventTarget {
   }
 
   reload(route: string, type: RouterReloadType): void {
+    this.version++
     this.dispatchEvent(
       new CustomEvent('reload', {
         detail: { route, type },

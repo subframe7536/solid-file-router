@@ -55,6 +55,26 @@ describe('stripRouteGroups and buildRouteTree', () => {
     expect(blog!.children).toHaveLength(1)
     expect(blog!.children![0]!.path).toBe('/:id')
   })
+
+  it('nests under the nearest existing ancestor and keeps relative ids', () => {
+    const entries = [
+      { path: '/(app)', page: true },
+      { path: '/(app)/docs', page: true },
+      { path: '/(app)/docs/api', page: true },
+      { path: '/(app)/docs/api/:fn', page: true },
+      { path: '/(app)/blog/:id/comments', page: true },
+    ]
+    const tree = buildRouteTree(entries)
+    expect(tree).toHaveLength(1)
+    const docs = tree[0]!.children?.find((c) => c.id === '/docs')
+    const orphan = tree[0]!.children?.find((c) => c.id === '/blog/:id/comments')
+    expect(tree[0]!.children).toHaveLength(2)
+    expect(docs!.children![0]!.id).toBe('/api')
+    expect(docs!.children![0]!.children![0]!.id).toBe('/:fn')
+    // `/(app)/blog` is missing, so this nests directly under `/(app)`
+    expect(orphan!.id).toBe('/blog/:id/comments')
+    expect(orphan!.path).toBe('/blog/:id/comments')
+  })
 })
 
 describe('toPickId and sanitizeChunkFileName', () => {
@@ -156,6 +176,57 @@ describe('BaseFileSystemRouter with tinyglobby', () => {
     const routes = await router.getRoutes()
     expect(routes.length).toBeGreaterThan(0)
     expect(routes.some((r) => r.path === '/')).toBe(true)
+  })
+})
+
+describe('incremental route updates', () => {
+  const config = {
+    dir: '/x',
+    extensions: ['tsx'],
+    toPath: () => '/a',
+  }
+
+  it('skips reload when rescanning produces an identical entry', async () => {
+    const router = new BaseFileSystemRouter({
+      ...config,
+      toRoute: () => ({ path: '/a', page: true, $component: { src: '/x/a.tsx', pick: ['d'] } }),
+    })
+    await router.updateRoute('/x/a.tsx')
+    const events: string[] = []
+    router.on('reload', (evt) => events.push(evt.detail.type))
+    const version = router.version
+    await router.updateRoute('/x/a.tsx')
+    expect(events).toEqual([])
+    expect(router.version).toBe(version)
+  })
+
+  it('reloads when rescanning produces a changed entry', async () => {
+    let flag = false
+    const router = new BaseFileSystemRouter({
+      ...config,
+      toRoute: () => ({ path: '/a', page: true, extra: flag }),
+    })
+    await router.updateRoute('/x/a.tsx')
+    const events: string[] = []
+    router.on('reload', (evt) => events.push(evt.detail.type))
+    flag = true
+    await router.updateRoute('/x/a.tsx')
+    expect(events).toEqual(['update'])
+  })
+
+  it('removes and re-adds when the mapped path changes', async () => {
+    let path = '/a'
+    const router = new BaseFileSystemRouter({
+      ...config,
+      toRoute: () => ({ path, page: true }),
+    })
+    await router.updateRoute('/x/a.tsx')
+    const events: string[] = []
+    router.on('reload', (evt) => events.push(evt.detail.type))
+    path = '/b'
+    await router.updateRoute('/x/a.tsx')
+    expect(events).toEqual(['remove', 'add'])
+    expect(router.routes.map((r) => r.path)).toEqual(['/b'])
   })
 })
 
