@@ -7,6 +7,7 @@ export default defineConfig({
     mdx: './src/mdx/index.ts',
     api: './src/fs/api.ts',
   },
+  dts: { generator: 'tsrs' },
   deps: { neverBundle: ['virtual:routes', 'satteri'] },
   exports: {
     customExports(exports) {

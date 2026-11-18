@@ -24,7 +24,7 @@ pnpm test           # Run vitest once (CI mode) in
 pnpm test:dev       # Run vitest watch mode
 pnpm lint           # Lint with oxlint
 pnpm format         # Format with oxfmt
-pnpm typecheck      # TypeScript type checking (tsc --noEmit)
+pnpm typecheck      # TypeScript type checking (tsrs --noEmit --fast)
 pnpm qa             # Auto-fix lint, format, then typecheck
 pnpm oxc            # Lint + auto-fix + format in one pass
 pnpm release        # Build -> lint -> test -> bump version
