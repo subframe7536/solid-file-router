@@ -1,6 +1,6 @@
 {
   "name": "solid-file-router",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.3",
   "description": "Type safe file router for solid.js",
   "homepage": "https://github.com/subframe7536/solid-file-router#readme",
   "bugs": {
@@ -35,6 +35,7 @@
   },
   "scripts": {
     "build": "tsdown",
+    "prepublishOnly": "pnpm run build",
     "dev": "tsdown --watch",
     "test": "vitest --run",
     "test:dev": "vitest",
