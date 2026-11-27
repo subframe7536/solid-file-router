@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   createPreviewFallbackMiddleware,
+  createSsgPlugin,
   getPrerenderAssetFileName,
   normalizeRoutePath,
   staticPathsOf,
@@ -144,5 +145,47 @@ describe('createPreviewFallbackMiddleware', () => {
     )
 
     expect(nextCalled).toBe(true)
+  })
+})
+
+describe('createSsgPlugin enable option', () => {
+  const applyOf = (
+    plugin: ReturnType<typeof createSsgPlugin>,
+  ): ((
+    config: Record<string, unknown>,
+    env: { command: 'build' | 'serve'; mode: string },
+  ) => boolean) =>
+    plugin.apply as (
+      config: Record<string, unknown>,
+      env: { command: 'build' | 'serve'; mode: string },
+    ) => boolean
+
+  it('defaults to active in both build and serve/preview when options are provided', () => {
+    const apply = applyOf(createSsgPlugin({}))
+    expect(apply({}, { command: 'build', mode: 'production' })).toBe(true)
+    expect(apply({}, { command: 'serve', mode: 'development' })).toBe(true)
+  })
+
+  it('disables plugin completely when enable is false', () => {
+    const apply = applyOf(createSsgPlugin({ enable: false }))
+    expect(apply({}, { command: 'build', mode: 'production' })).toBe(false)
+    expect(apply({}, { command: 'serve', mode: 'development' })).toBe(false)
+  })
+
+  it('activates only on build when enable is build-only', () => {
+    const plugin = createSsgPlugin({ enable: 'build-only' })
+    const apply = applyOf(plugin)
+    expect(apply({}, { command: 'build', mode: 'production' })).toBe(true)
+    expect(apply({}, { command: 'serve', mode: 'development' })).toBe(false)
+
+    let used = false
+    ;(plugin.configurePreviewServer as (server: any) => void)({
+      middlewares: {
+        use: () => {
+          used = true
+        },
+      },
+    })
+    expect(used).toBe(false)
   })
 })

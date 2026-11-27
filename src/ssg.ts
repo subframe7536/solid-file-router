@@ -25,6 +25,14 @@ export type PrerenderRoutesSource =
  */
 export interface SsgOptions extends Omit<PrerenderOptions, 'pages' | 'autoSubfolderIndex'> {
   /**
+   * Controls when the SSG plugin is active:
+   * - `true` (default): prerenders on `vite build` and serves prerendered pages/404s on `vite preview`.
+   * - `'build-only'`: prerenders on `vite build` only; leaves `vite preview` untouched.
+   * - `false`: disables SSG completely.
+   * @default true
+   */
+  enable?: boolean | 'build-only'
+  /**
    * Routes to prerender. Defaults to all static manifest routes (no `:param`
    * or `*splat` segments); discovered links still extend the crawl unless
    * `crawlLinks` is disabled.
@@ -139,21 +147,28 @@ export function createSsgPlugin(
   options: SsgOptions | false | undefined,
   getRoutes?: () => readonly string[],
 ): Plugin {
+  const enable = options ? (options.enable ?? true) : false
   let root = ''
   let outDir = ''
   let hasSsrEnv = false
   return {
     name: 'solid-file-router:ssg',
-    // `closeBundle` only fires during build; `configurePreviewServer` only
-    // during preview — no command gating needed beyond `ssg` being set.
-    apply: () => !!options,
+    apply(_config, env) {
+      if (enable === false) {
+        return false
+      }
+      if (enable === 'build-only') {
+        return env.command === 'build'
+      }
+      return true
+    },
     configResolved(config) {
       root = config.root
       outDir = resolve(root, (options && options.outDir) || 'dist/client')
       hasSsrEnv = 'ssr' in (config.environments ?? {})
     },
     async closeBundle() {
-      if (!options) {
+      if (!options || enable === false) {
         return
       }
       // run after the server bundle exists: on the ssr environment when start
@@ -173,6 +188,7 @@ export function createSsgPlugin(
       }
       const handler = await resolveHandler(options, outDir)
       const {
+        enable: _enable,
         routes: _routes,
         concurrency,
         serverEntry: _serverEntry,
@@ -203,7 +219,7 @@ export function createSsgPlugin(
       }
     },
     configurePreviewServer(server) {
-      if (!options) {
+      if (!options || enable !== true) {
         return
       }
       // Register pre-internal so the fallback wins over vite's own SPA
