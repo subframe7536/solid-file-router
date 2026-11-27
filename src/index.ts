@@ -3,13 +3,15 @@ import { fileRoutes } from '@solidjs/router/fs'
 import { getRequestEvent } from '@solidjs/web'
 import type { ResponseStub } from '@solidjs/web'
 import { announcePages } from 'prerender-crawler/announce'
+import { createComponent, createContext, useContext } from 'solid-js'
 import manifest, { pageRoutes } from 'virtual:routes'
 
-import { adaptFileRoutes, staticPathsOf } from './route'
-import type { RouteEntry, RouteInfo, RouteMetadata } from './route'
+import { adaptFileRoutes, collectRouteMeta, staticPathsOf } from './route'
+import type { RouteEntry, RouteInfo, RouteMetaCollection, RouteMetadata } from './route'
 
 export {
   adaptFileRoutes,
+  collectRouteMeta,
   definePage,
   defineRoute,
   staticPathsOf,
@@ -18,6 +20,7 @@ export {
   type SfrRouteConfig,
   type RouteEntry,
   type RouteInfo,
+  type RouteMetaCollection,
 } from './route'
 export type { RouteMetadata, RouteMetaTag, RouteMetadataLink } from './route'
 export { announcePages } from 'prerender-crawler/announce'
@@ -38,12 +41,65 @@ export interface FileRouter extends ReturnType<typeof createRouter> {
   routeMetadata: Record<string, RouteMetadata>
 }
 
+const RouteDataContext = createContext<RouteMetaCollection | undefined>(undefined)
+
+let activeRouteData: RouteMetaCollection | undefined
+let defaultRouteData: RouteMetaCollection | undefined
+
+function getDefaultRouteData(): RouteMetaCollection {
+  return (defaultRouteData ??= collectRouteMeta(fileRoutes(pageRoutes) as RouteEntry[]))
+}
+
+/**
+ * Returns the collected route `info` map without importing the app's `Router`
+ * instance, avoiding circular imports when route modules need route metadata.
+ */
+export function getRouteInfo(): Readonly<Record<string, RouteInfo>> {
+  return (activeRouteData ?? getDefaultRouteData()).routeInfo
+}
+
+/**
+ * Returns the collected route `metadata` map without importing the app's
+ * `Router` instance.
+ */
+export function getRouteMetadata(): Readonly<Record<string, RouteMetadata>> {
+  return (activeRouteData ?? getDefaultRouteData()).routeMetadata
+}
+
+/**
+ * Reads the collected route `info` map from the active router context, falling
+ * back to `getRouteInfo()` when called outside `<Router>`.
+ */
+export function useRouteInfo(): Readonly<Record<string, RouteInfo>> {
+  return useContext(RouteDataContext)?.routeInfo ?? getRouteInfo()
+}
+
+/**
+ * Reads the collected route `metadata` map from the active router context,
+ * falling back to `getRouteMetadata()` when called outside `<Router>`.
+ */
+export function useRouteMetadata(): Readonly<Record<string, RouteMetadata>> {
+  return useContext(RouteDataContext)?.routeMetadata ?? getRouteMetadata()
+}
+
 /** Creates the application router instance from the generated route manifest. */
 export function createFileRouter(options?: FileRouterOptions): FileRouter {
   const entries = options?.routes ?? pageRoutes
   const adapted = adaptFileRoutes(fileRoutes(entries) as RouteEntry[])
-  const Router = createRouter({ ...options?.router, routes: adapted.routes })
-  return Object.assign(Router, {
+  const routeData: RouteMetaCollection = {
+    routeInfo: adapted.routeInfo,
+    routeMetadata: adapted.routeMetadata,
+  }
+  activeRouteData = routeData
+  const BaseRouter = createRouter({ ...options?.router, routes: adapted.routes })
+  const Router = ((props: Parameters<typeof BaseRouter>[0]) =>
+    createComponent(RouteDataContext, {
+      value: routeData,
+      get children() {
+        return createComponent(BaseRouter, props)
+      },
+    })) as typeof BaseRouter
+  return Object.assign(Router, BaseRouter, {
     fileRoutes: adapted.routes,
     routeInfo: adapted.routeInfo,
     routeMetadata: adapted.routeMetadata,

@@ -230,6 +230,48 @@ interface AdaptResult {
   routeMetadata: Record<string, RouteMetadata>
 }
 
+export interface RouteMetaCollection {
+  routeInfo: Record<string, RouteInfo>
+  routeMetadata: Record<string, RouteMetadata>
+}
+
+/**
+ * Collects `routeInfo` and `routeMetadata` from a route-definition tree
+ * without wrapping components or creating a router instance.
+ */
+export function collectRouteMeta(entries: readonly RouteEntry[]): RouteMetaCollection {
+  const routeInfo: Record<string, RouteInfo> = {}
+  const routeMetadata: Record<string, RouteMetadata> = {}
+
+  const visit = (entry: RouteEntry, parentPath: string): void => {
+    if (!DEV && entry.draft === true) {
+      return
+    }
+    const childPath = typeof entry.path === 'string' ? entry.path : ''
+    const path = (parentPath.endsWith('/') ? parentPath.slice(0, -1) : parentPath) + childPath
+    const key = path || '/'
+    const info = entry.info as RouteInfo | undefined
+    if (info) {
+      routeInfo[key] = info
+    }
+    if (entry.metadata) {
+      routeMetadata[key] = entry.metadata
+    }
+    if (entry.children) {
+      const children = Array.isArray(entry.children) ? entry.children : [entry.children]
+      for (const child of children) {
+        visit(child, path)
+      }
+    }
+  }
+
+  for (const entry of entries) {
+    visit(entry, '')
+  }
+
+  return { routeInfo, routeMetadata }
+}
+
 /**
  * Depth-first adaptation of the official `fileRoutes()` route-definition
  * tree: inherited loading/error boundaries, `useHead` metadata and

@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js'
 import { describe, expect, it } from 'vitest'
 
-import { adaptFileRoutes, defineRoute } from '../src/route'
+import { adaptFileRoutes, collectRouteMeta, defineRoute } from '../src/route'
 
 const comp = (name: string): Component => {
   const c = (): null => null
@@ -79,6 +79,12 @@ describe('adaptFileRoutes', () => {
       },
     ] as any)
     expect(routes[0]!.children).toHaveLength(2)
+  })
+
+  it('collects routeInfo and routeMetadata without wrapping components via collectRouteMeta', () => {
+    const { routeInfo, routeMetadata } = collectRouteMeta(tree() as any)
+    expect(routeInfo['/']).toEqual({ name: 'index' })
+    expect(routeMetadata['/about']).toEqual({ title: 'About' })
   })
 })
 
