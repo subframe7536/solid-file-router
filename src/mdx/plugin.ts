@@ -10,6 +10,10 @@ import { compileMdxRouteDocument, renderMdxComponentModule, renderMdxRouteModule
 import type { CompiledMdxRouteData, MdxLoadContext, MdxOptions } from './router'
 
 const REG_MARKDOWN_MODULE_ID = /\.(?:md|mdx)(?:\?.*)?$/i
+const REG_MDX_ROUTE_VIRTUAL_ID = new RegExp(
+  `^${VID_MDX_ROUTE.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)}`,
+)
+const REG_MDX_ROUTE_RESOLVED_ID = /\/node_modules\/\.sfr-mdx-route\/[^/]+\.tsx(?:\?.*)?$/
 
 function stripQuery(id: string): string {
   return id.split('?')[0] ?? id
@@ -71,27 +75,33 @@ export function createMdxPlugin<TData = unknown>(
     handleHotUpdate({ file }) {
       cache.delete(normalizePath(file))
     },
-    resolveId(id) {
-      const [pathname, query] = id.split('?')
-      if (!pathname?.startsWith(VID_MDX_ROUTE)) {
-        return
-      }
-      const src = pathname.slice(VID_MDX_ROUTE.length)
-      const resolved = `${posix.join(normalizePath(root), 'node_modules/.sfr-mdx-route')}/${hashString(src)}.tsx`
-      routeSources.set(resolved, src)
-      return query ? `${resolved}?${query}` : resolved
+    resolveId: {
+      filter: { id: REG_MDX_ROUTE_VIRTUAL_ID },
+      handler(id) {
+        const [pathname, query] = id.split('?')
+        if (!pathname?.startsWith(VID_MDX_ROUTE)) {
+          return
+        }
+        const src = pathname.slice(VID_MDX_ROUTE.length)
+        const resolved = `${posix.join(normalizePath(root), 'node_modules/.sfr-mdx-route')}/${hashString(src)}.tsx`
+        routeSources.set(resolved, src)
+        return query ? `${resolved}?${query}` : resolved
+      },
     },
-    async load(id) {
-      if (!options) {
-        return
-      }
-      const src = routeSources.get(stripQuery(id))
-      if (src === undefined) {
-        return
-      }
-      const source = await readFile(src, 'utf8')
-      const compiled = await compileCached(source, src)
-      return renderMdxRouteModule(compiled).code
+    load: {
+      filter: { id: REG_MDX_ROUTE_RESOLVED_ID },
+      async handler(id) {
+        if (!options) {
+          return
+        }
+        const src = routeSources.get(stripQuery(id))
+        if (src === undefined) {
+          return
+        }
+        const source = await readFile(src, 'utf8')
+        const compiled = await compileCached(source, src)
+        return renderMdxRouteModule(compiled).code
+      },
     },
     transform: {
       order: 'pre',

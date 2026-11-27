@@ -152,8 +152,13 @@ function applyEager(
 /**
  * Vite delivery plugin that serializes the neutral route manifest into virtual modules.
  */
+const escapeRegex = (value: string): string =>
+  value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`)
+
 export function fileRoutes(options: FileRoutesOptions = {}): Array<PluginOption> {
   const virtualId = options.moduleId ?? DEFAULT_MODULE_ID
+  const resolveIdFilter = new RegExp(`^(?:${escapeRegex(virtualId)}|${escapeRegex(flagsId)})$`)
+  const loadIdFilter = new RegExp(`^(?:${escapeRegex(virtualId)}|${escapeRegex(resolvedFlagsId)})$`)
   const codeSplitting = options.codeSplitting !== false
   const isEager = createEagerMatcher(options.eager)
   const buildInputs = options.buildInputs
@@ -271,103 +276,109 @@ export function fileRoutes(options: FileRoutesOptions = {}): Array<PluginOption>
         }
         return { build: { rollupOptions: { input } } }
       },
-      resolveId(source) {
-        if (source === virtualId) {
-          return virtualId
-        }
-        if (source === flagsId) {
-          return resolvedFlagsId
-        }
+      resolveId: {
+        filter: { id: resolveIdFilter },
+        handler(source) {
+          if (source === virtualId) {
+            return virtualId
+          }
+          if (source === flagsId) {
+            return resolvedFlagsId
+          }
+        },
       },
-      async load(loadedId) {
-        if (loadedId === resolvedFlagsId) {
-          const router = getRouter(this.environment.name)
-          const routes = (router && (await router.getRoutes())) ?? []
-          const serverRoutes =
-            this.environment.mode !== 'build' || routes.some((route) => route.server === true)
-          return `export const serverRoutes = ${serverRoutes};`
-        }
-        if (loadedId !== virtualId) {
-          return
-        }
-        const envRoot = this.environment.config.root
-        const isBuild = this.environment.mode === 'build'
-        const js = jsCode()
-        const environmentName = this.environment.name
-        const router = getRouter(environmentName)
-        let routes = applyEager((router ? await router.getRoutes() : []) ?? [], isEager)
-        const serverConsumer = isServerConsumer(environmentName, this.environment.config.consumer)
+      load: {
+        filter: { id: loadIdFilter },
+        async handler(loadedId) {
+          if (loadedId === resolvedFlagsId) {
+            const router = getRouter(this.environment.name)
+            const routes = (router && (await router.getRoutes())) ?? []
+            const serverRoutes =
+              this.environment.mode !== 'build' || routes.some((route) => route.server === true)
+            return `export const serverRoutes = ${serverRoutes};`
+          }
+          if (loadedId !== virtualId) {
+            return
+          }
+          const envRoot = this.environment.config.root
+          const isBuild = this.environment.mode === 'build'
+          const js = jsCode()
+          const environmentName = this.environment.name
+          const router = getRouter(environmentName)
+          let routes = applyEager((router ? await router.getRoutes() : []) ?? [], isEager)
+          const serverConsumer = isServerConsumer(environmentName, this.environment.config.consumer)
 
-        if (!options.routers?.[environmentName] && !serverConsumer) {
-          routes = stripHandlerRefs(routes)
-        }
+          if (!options.routers?.[environmentName] && !serverConsumer) {
+            routes = stripHandlerRefs(routes)
+          }
 
-        const serializeEntry = (entry: RouteManifestEntry): string =>
-          JSON.stringify(entry, (key, value) => {
-            if (value === undefined) {
-              return undefined
-            }
-            if (key.startsWith('$$')) {
-              const buildId = toModuleId(entry, value, serverConsumer)
-              const refs: Record<string, string> = {}
-              for (const pick of value.pick) {
-                refs[pick] = js.addNamedImport(pick, buildId)
+          const serializeEntry = (entry: RouteManifestEntry): string =>
+            JSON.stringify(entry, (key, value) => {
+              if (value === undefined) {
+                return undefined
               }
-              return {
-                require: `_$() => ({ ${Object.entries(refs)
-                  .map(([pick, namedImport]) => `'${pick}': ${namedImport}`)
-                  .join(', ')} })$_`,
-              }
-            } else if (key.startsWith('$')) {
-              const buildId = toModuleId(entry, value, serverConsumer)
-              const src = normalizePath(relative(envRoot, buildId))
-              if (!codeSplitting || value.eager) {
+              if (key.startsWith('$$')) {
+                const buildId = toModuleId(entry, value, serverConsumer)
+                const refs: Record<string, string> = {}
+                for (const pick of value.pick) {
+                  refs[pick] = js.addNamedImport(pick, buildId)
+                }
+                return {
+                  require: `_$() => ({ ${Object.entries(refs)
+                    .map(([pick, namedImport]) => `'${pick}': ${namedImport}`)
+                    .join(', ')} })$_`,
+                }
+              } else if (key.startsWith('$')) {
+                const buildId = toModuleId(entry, value, serverConsumer)
+                const src = normalizePath(relative(envRoot, buildId))
+                if (!codeSplitting || value.eager) {
+                  return {
+                    src,
+                    require: `_$() => (${js.addNamespaceImport(buildId)})$_`,
+                  }
+                }
                 return {
                   src,
-                  require: `_$() => (${js.addNamespaceImport(buildId)})$_`,
+                  build: isBuild ? `_$() => import('${buildId}')$_` : undefined,
+                  import: `_$() => import('${buildId}')$_`,
                 }
               }
-              return {
-                src,
-                build: isBuild ? `_$() => import('${buildId}')$_` : undefined,
-                import: `_$() => import('${buildId}')$_`,
-              }
-            }
-            return value
-          })
-            .replaceAll('"_$(', '(')
-            .replaceAll(')$_"', ')')
-
-        const bindings = routes.map(
-          (route, index) => `const route${index} = ${serializeEntry(route)};`,
-        )
-        const tree = buildRouteTree(
-          routes
-            .map((route, index) => ({ path: route.path, page: route.page, index }))
-            .filter((stub) => stub.page),
-        )
-
-        const serializeTree = (nodes: Array<RouteTreeEntry>): string =>
-          `[${nodes
-            .map((node) => {
-              const fields = [
-                `...route${String(node.index)}`,
-                `id: ${JSON.stringify(node.id)}`,
-                `path: ${JSON.stringify(node.path)}`,
-              ]
-              if (node.children) {
-                fields.push(`children: ${serializeTree(node.children)}`)
-              }
-              return `{ ${fields.join(', ')} }`
+              return value
             })
-            .join(', ')}]`
+              .replaceAll('"_$(', '(')
+              .replaceAll(')$_"', ')')
 
-        return `${js.getImportStatements()}
+          const bindings = routes.map(
+            (route, index) => `const route${index} = ${serializeEntry(route)};`,
+          )
+          const tree = buildRouteTree(
+            routes
+              .map((route, index) => ({ path: route.path, page: route.page, index }))
+              .filter((stub) => stub.page),
+          )
+
+          const serializeTree = (nodes: Array<RouteTreeEntry>): string =>
+            `[${nodes
+              .map((node) => {
+                const fields = [
+                  `...route${String(node.index)}`,
+                  `id: ${JSON.stringify(node.id)}`,
+                  `path: ${JSON.stringify(node.path)}`,
+                ]
+                if (node.children) {
+                  fields.push(`children: ${serializeTree(node.children)}`)
+                }
+                return `{ ${fields.join(', ')} }`
+              })
+              .join(', ')}]`
+
+          return `${js.getImportStatements()}
 ${bindings.join('\n')}
 const routes = [${routes.map((_, index) => `route${index}`).join(', ')}];
 export default routes;
 export const pageRoutes = ${serializeTree(tree)};
 `
+        },
       },
     },
     treeShake(),

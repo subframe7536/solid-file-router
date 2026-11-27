@@ -154,7 +154,10 @@ describe('compositeFileSystemRouter and multi-dir pagesDir', () => {
       ;(rootPlugin.config as (c: { root: string }) => void)({ root })
 
       const routesPlugin = plugins.find((p) => p.name === 'solid-file-router:routes')!
-      const loaded = await (routesPlugin.load as any).call(
+      const loadHook = routesPlugin.load as {
+        handler: (this: unknown, id: string) => Promise<string | undefined>
+      }
+      const loaded = await loadHook.handler.call(
         { environment: { name: 'client', mode: 'build', config: { root, consumer: 'client' } } },
         VID_EXTRACT,
       )
@@ -190,12 +193,14 @@ describe('mDX plugin caching and MdxLoadContext', () => {
       }))
       ;(plugin.configResolved as (c: { root: string }) => void)({ root })
 
-      const resolvedRouteId = (plugin.resolveId as (id: string) => string | undefined)(
-        `${VID_MDX_ROUTE}${mdxFile}`,
-      )!
-      const routeCode = await (plugin.load as (id: string) => Promise<string | undefined>)(
-        resolvedRouteId,
-      )
+      const resolveIdHook = plugin.resolveId as {
+        handler: (id: string) => string | undefined
+      }
+      const loadHook = plugin.load as {
+        handler: (id: string) => Promise<string | undefined>
+      }
+      const resolvedRouteId = resolveIdHook.handler(`${VID_MDX_ROUTE}${mdxFile}`)!
+      const routeCode = await loadHook.handler(resolvedRouteId)
       const transformHandler = (
         plugin.transform as { handler: (c: string, id: string) => Promise<string | undefined> }
       ).handler

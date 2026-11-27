@@ -1304,19 +1304,24 @@ export function sanitizeChunkFileName(name: string): string {
   return driveLetter + stripped.slice(driveLetter.length).replaceAll(INVALID_CHAR_RE, '_')
 }
 
+const REG_TREE_SHAKE_PICK = /\.(?:js|jsx|ts|tsx)\?(?:.*&)?pick=/
+
 export function treeShake(): Plugin {
   return {
     name: 'solid-file-router:tree-shake',
     enforce: 'pre',
-    transform(code, id) {
-      const [path, queryString] = id.split('?')
-      if (!path) {
-        return
-      }
-      const query = new URLSearchParams(queryString)
-      if (query.has('pick') && PICKABLE_EXTENSIONS.has(extname(path).slice(1))) {
-        return pickExports(code, id, query.getAll('pick'))
-      }
+    transform: {
+      filter: { id: REG_TREE_SHAKE_PICK },
+      handler(code, id) {
+        const [path, queryString] = id.split('?')
+        if (!path) {
+          return
+        }
+        const query = new URLSearchParams(queryString)
+        if (query.has('pick') && PICKABLE_EXTENSIONS.has(extname(path).slice(1))) {
+          return pickExports(code, id, query.getAll('pick'))
+        }
+      },
     },
   }
 }
