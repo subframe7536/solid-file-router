@@ -3,33 +3,52 @@ import { isAbsolute, resolve } from 'node:path'
 import { normalizePath } from 'vite'
 import type { PluginOption } from 'vite'
 
-import { VID_EXTRACT } from './const'
+import { PACKAGE_NAME, VID_EXTRACT } from './const'
 import { DefaultFileSystemRouter } from './convention'
-import { fileRoutes } from './fs'
-import type { BaseFileSystemRouter } from './fs'
+import { CompositeFileSystemRouter, fileRoutes, stripRouteGroups } from './fs'
+import type { BaseFileSystemRouter, EagerRouteMatcher } from './fs'
 import { createMdxPlugin } from './mdx/plugin'
 import type { MdxOptions } from './mdx/router'
 import { createSsgPlugin } from './ssg'
 import type { PrerenderRoutesSource, SsgOptions } from './ssg'
 
 export { createGlobMatcher, DefaultFileSystemRouter, routePathFromFile } from './convention'
-export { BaseFileSystemRouter, PageFileSystemRouter, cleanPath, buildRouteTree } from './fs'
+export {
+  BaseFileSystemRouter,
+  CompositeFileSystemRouter,
+  PageFileSystemRouter,
+  cleanPath,
+  buildRouteTree,
+} from './fs'
 export type { DefaultFileSystemRouterConfig } from './convention'
 export type { Promisable } from './const'
-export type { MdxOptions } from './mdx/router'
+export type { EagerRouteMatcher } from './fs'
+export type { MdxLoadContext, MdxLoadExtension, MdxOptions, MdxRouteDocument } from './mdx/router'
 export type { RouteMetadata, RouteMetaTag, RouteMetadataLink } from './route'
 export type { PrerenderRoutesSource, SsgOptions }
 
+export interface PagesDirConfig {
+  /** Route directory, resolved against the Vite root when relative. */
+  dir: string
+  /** Override file extensions scanned in this directory. */
+  extensions?: string[]
+  /** Override ignore globs for this directory. Defaults to top-level `ignore`. */
+  ignore?: readonly string[]
+}
+
+export type PagesDirOption = string | PagesDirConfig | readonly (string | PagesDirConfig)[]
+
 export interface FileRouterPluginOption<TData = unknown> {
   /**
-   * The directory containing all route files, resolved against the Vite
-   * root. Ignored when `router` is given.
+   * The directory (or directories) containing route files, resolved against
+   * the Vite root. Ignored when `router` is given.
    *
    * e.g. If your `_app.tsx` is located at `module/routes/_app.tsx`,
-   * set `pagesDir` to `module/routes`.
+   * set `pagesDir` to `module/routes`. Pass an array of strings or
+   * `{ dir, extensions?, ignore? }` entries to combine multiple route trees.
    * @default 'src/pages'
    */
-  pagesDir?: string
+  pagesDir?: PagesDirOption
   /**
    * Globs matched against file paths relative to `pagesDir`. Matched files
    * are not routes (e.g. `hooks/**`, `**\/*.test.tsx`). Files under a
@@ -49,6 +68,13 @@ export interface FileRouterPluginOption<TData = unknown> {
    */
   lazy?: boolean
   /**
+   * Routes whose `$component` should be imported eagerly even when `lazy` is
+   * enabled (for example `['/(app)', '/']` or `['/']` to avoid an initial
+   * dynamic import waterfall). Accepts manifest/group-stripped paths or a
+   * predicate over each manifest entry.
+   */
+  eager?: EagerRouteMatcher
+  /**
    * Enable Markdown/MDX route compilation through Satteri.
    * @default false
    */
@@ -66,6 +92,19 @@ export interface FileRouterPluginOption<TData = unknown> {
   router?: BaseFileSystemRouter
 }
 
+function normalizePagesDirs(pagesDir: PagesDirOption | undefined): PagesDirConfig[] {
+  if (pagesDir === undefined) {
+    return [{ dir: 'src/pages' }]
+  }
+  const list = Array.isArray(pagesDir) ? pagesDir : [pagesDir]
+  return list.map((entry) => (typeof entry === 'string' ? { dir: entry } : entry))
+}
+
+function normalizeRoutePath(manifestPath: string): string {
+  const stripped = stripRouteGroups(manifestPath)
+  return stripped.length > 1 ? stripped.replace(/\/+$/, '') || '/' : stripped
+}
+
 /**
  * Vite plugin preset for solid-file-router: provides built-in route scanning,
  * tree building, code splitting, HMR, type generation, filename conventions,
@@ -76,21 +115,66 @@ export function fileRouter<TData = unknown>(
 ): PluginOption[] {
   const mdx = options.mdx === true ? {} : options.mdx || false
   const ssg = options.ssg === true ? {} : options.ssg || false
+  const ssgEnabled = ssg !== false && ssg.enable !== false
   const extensions = ['js', 'jsx', 'ts', 'tsx', ...(mdx ? ['md', 'mdx'] : [])]
-  const pagesDir = options.pagesDir ?? 'src/pages'
-  const router =
-    options.router ??
-    new DefaultFileSystemRouter({ dir: pagesDir, extensions, ignore: options.ignore })
+
+  const managedRouters: Array<{ router: DefaultFileSystemRouter; dir: string }> = []
+  let router: BaseFileSystemRouter
+  if (options.router) {
+    router = options.router
+  } else {
+    const entries = normalizePagesDirs(options.pagesDir)
+    const children = entries.map((entry) => {
+      const child = new DefaultFileSystemRouter({
+        dir: entry.dir,
+        extensions: entry.extensions ?? extensions,
+        ignore: entry.ignore ?? options.ignore,
+      })
+      managedRouters.push({ router: child, dir: entry.dir })
+      return child
+    })
+    router = children.length === 1 ? children[0]! : new CompositeFileSystemRouter(children)
+  }
+
   return [
     {
       name: 'solid-file-router:root',
       config(config) {
         // BaseFileSystemRouter eagerly resolves `dir` against cwd at
         // construction; `pagesDir` is relative to the vite root instead.
-        // `config` (not `configResolved`) because the official plugin calls
+        // `config` (not `configResolved`) because `fileRoutes` calls
         // `router.getRoutes()` from `configEnvironment`, which runs first.
-        if (!options.router && !isAbsolute(pagesDir)) {
-          router.config.dir = normalizePath(resolve(config.root ?? '.', pagesDir))
+        for (const item of managedRouters) {
+          if (!isAbsolute(item.dir)) {
+            item.router.config.dir = normalizePath(resolve(config.root ?? '.', item.dir))
+          }
+        }
+      },
+      configEnvironment(name, config, env) {
+        const isServer = (config.consumer ?? (name === 'client' ? 'client' : 'server')) === 'server'
+        if (!isServer) {
+          return
+        }
+        return {
+          resolve: {
+            // Server bundles import `virtual:routes` through solid-file-router;
+            // externalizing it leaves an unresolvable virtual specifier.
+            noExternal: [PACKAGE_NAME],
+          },
+          ...(ssgEnabled && env.command === 'build' && name === 'ssr'
+            ? {
+                build: {
+                  rolldownOptions: {
+                    output: {
+                      // SSG's `resolveHandler` imports `server.js?t=...`. Disabling
+                      // code splitting prevents lazy chunks from back-importing
+                      // `../server.js` and duplicating shared runtime singletons.
+                      codeSplitting: false,
+                    },
+                  },
+                },
+              }
+            : {}),
         }
       },
     },
@@ -98,11 +182,20 @@ export function fileRouter<TData = unknown>(
       router,
       moduleId: VID_EXTRACT,
       types: options.output ?? 'src/routes.d.ts',
-      buildInputs: ssg ? 'client' : undefined,
+      buildInputs: ssgEnabled ? 'client' : undefined,
       codeSplitting: options.lazy === false ? false : undefined,
-      optimizeDepsExclude: ['solid-file-router'],
+      eager: options.eager,
+      optimizeDepsExclude: [PACKAGE_NAME],
     }),
-    createMdxPlugin<TData>(mdx),
-    createSsgPlugin(ssg, ssg ? () => router.routes.map((entry) => entry.path) : undefined),
+    createMdxPlugin<TData>(mdx, (sourcePath) => {
+      const path = router.relativePath(sourcePath)
+      const manifestPath = router.toPath(sourcePath)
+      const routePath = manifestPath !== undefined ? normalizeRoutePath(manifestPath) : undefined
+      return { path, routePath }
+    }),
+    createSsgPlugin(
+      ssgEnabled ? ssg : false,
+      ssgEnabled ? () => router.routes.map((entry) => entry.path) : undefined,
+    ),
   ]
 }
