@@ -1,29 +1,71 @@
 import { readFile } from 'node:fs/promises'
-import { posix } from 'node:path'
+import { posix, relative } from 'node:path'
 
 import { normalizePath } from 'vite'
 import type { Plugin } from 'vite'
 
 import { hashString, PACKAGE_NAME, VID_MDX_ROUTE } from '../const'
 
-import { compileMdx, compileMdxRouteModule } from './router'
-import type { MdxOptions } from './router'
+import { compileMdxRouteDocument, renderMdxComponentModule, renderMdxRouteModule } from './router'
+import type { CompiledMdxRouteData, MdxLoadContext, MdxOptions } from './router'
 
 const REG_MARKDOWN_MODULE_ID = /\.(?:md|mdx)(?:\?.*)?$/i
 
 /** Prefix of virtual `$$route` modules emitted for `.md`/`.mdx` routes. */
 export const MDX_ROUTE_MODULE_PREFIX = VID_MDX_ROUTE
 
+export type MdxContextResolver = (sourcePath: string) => {
+  path?: string
+  routePath?: string
+}
+
 /** Compiles Markdown route modules and serves their `$$route` virtual modules. */
-export function createMdxPlugin<TData = unknown>(options: false | MdxOptions<TData>): Plugin {
+export function createMdxPlugin<TData = unknown>(
+  options: false | MdxOptions<TData>,
+  resolveContext?: MdxContextResolver,
+): Plugin {
   let root = ''
   const routeSources = new Map<string, string>()
+  const cache = new Map<string, { source: string; promise: Promise<CompiledMdxRouteData> }>()
+
+  function compileCached(source: string, rawSourcePath: string): Promise<CompiledMdxRouteData> {
+    const sourcePath = normalizePath(rawSourcePath)
+    const cached = cache.get(sourcePath)
+    if (cached && cached.source === source) {
+      return cached.promise
+    }
+    const resolved = resolveContext?.(sourcePath)
+    const fallbackPath = root
+      ? normalizePath(relative(root, sourcePath)).replace(/\.[^./]+$/, '')
+      : sourcePath
+    const context: MdxLoadContext<TData> = {
+      path: resolved?.path ?? fallbackPath,
+      ...(resolved?.routePath !== undefined ? { routePath: resolved.routePath } : {}),
+      sourcePath,
+    }
+    const promise = compileMdxRouteDocument(
+      source,
+      sourcePath,
+      options as MdxOptions<TData>,
+      context,
+    ).catch((error) => {
+      if (cache.get(sourcePath)?.promise === promise) {
+        cache.delete(sourcePath)
+      }
+      throw error
+    })
+    cache.set(sourcePath, { source, promise })
+    return promise
+  }
 
   return {
     name: `${PACKAGE_NAME}:mdx`,
     apply: () => !!options,
     configResolved(config) {
       root = config.root
+    },
+    handleHotUpdate({ file }) {
+      cache.delete(normalizePath(file))
     },
     resolveId(id) {
       const [pathname, query] = id.split('?')
@@ -44,11 +86,8 @@ export function createMdxPlugin<TData = unknown>(options: false | MdxOptions<TDa
         return
       }
       const source = await readFile(src, 'utf8')
-      const result = await compileMdxRouteModule(source, src, options, {
-        path: src,
-        sourcePath: src,
-      })
-      return result.code
+      const compiled = await compileCached(source, src)
+      return renderMdxRouteModule(compiled).code
     },
     transform: {
       order: 'pre',
@@ -58,11 +97,8 @@ export function createMdxPlugin<TData = unknown>(options: false | MdxOptions<TDa
           return
         }
         const sourcePath = fullId.split('?')[0]!
-        const result = await compileMdx(code, sourcePath, options, {
-          path: sourcePath,
-          sourcePath,
-        })
-        return result.code
+        const compiled = await compileCached(code, sourcePath)
+        return renderMdxComponentModule(compiled).code
       },
     },
   }

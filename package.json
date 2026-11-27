@@ -25,6 +25,8 @@
     "./mdx": "./dist/mdx.mjs",
     "./plugin": "./dist/plugin.mjs",
     "./package.json": "./package.json",
+    "./mdx/jsx-runtime": "./dist/mdx.mjs",
+    "./mdx/jsx-dev-runtime": "./dist/mdx.mjs",
     "./client": {
       "types": "./client.d.ts"
     }

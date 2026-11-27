@@ -99,6 +99,7 @@ export function jsx(type: any, props: any): JSX.Element {
   return createComponent(Dynamic, { ...props, component: type })
 }
 export const jsxs = jsx
+export const jsxDEV = jsx
 
 export function Fragment(props: { children?: JSX.Element }): JSX.Element {
   return props.children

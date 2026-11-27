@@ -25,6 +25,8 @@ export interface MdxRouteDocument {
 export interface MdxLoadContext<TData = unknown> {
   /** Route-file path relative to the pages dir (extension stripped). */
   path: string
+  /** Normalized route URL path (group segments stripped, e.g. `/guide/intro` or `/`). */
+  routePath?: string
   /** Absolute source path. */
   sourcePath: string
   /** Provider-specific data (route providers only). */
@@ -124,7 +126,7 @@ export interface MdxModuleResult {
   data: Data
 }
 
-interface CompiledRouteData {
+export interface CompiledMdxRouteData {
   document: MdxRouteDocument
   extension: MdxLoadExtension | undefined
   frontmatter: Record<string, unknown>
@@ -132,12 +134,16 @@ interface CompiledRouteData {
   data: Data
 }
 
-async function compileRouteDocument<TData>(
+/**
+ * Compiles a Markdown/MDX document and runs `extendLoad` once, returning the
+ * shared intermediate representation used for both component and `$$route` modules.
+ */
+export async function compileMdxRouteDocument<TData>(
   source: string,
   sourcePath: string,
-  options: MdxOptions<TData>,
+  options: MdxOptions<TData> = {},
   context?: MdxLoadContext<TData>,
-): Promise<CompiledRouteData> {
+): Promise<CompiledMdxRouteData> {
   const result = await compileMdxDocument(source, sourcePath, options)
   const document: MdxRouteDocument = {
     source,
@@ -160,22 +166,9 @@ async function compileRouteDocument<TData>(
   }
 }
 
-/**
- * Compiles a Markdown/MDX document into the route-module shape:
- * `export const route` + `export const frontmatter` + default component.
- */
-export async function compileMdx<TData = unknown>(
-  source: string,
-  sourcePath: string,
-  options: MdxOptions<TData> = {},
-  context?: MdxLoadContext<TData>,
-): Promise<MdxModuleResult> {
-  const { document, extension, frontmatter, routeConfig, data } = await compileRouteDocument(
-    source,
-    sourcePath,
-    options,
-    context,
-  )
+/** Renders the full route component module from a precompiled MDX route document. */
+export function renderMdxComponentModule(compiled: CompiledMdxRouteData): MdxModuleResult {
+  const { document, extension, frontmatter, routeConfig, data } = compiled
 
   let moduleCode = document.code
   let component = document.component
@@ -209,6 +202,32 @@ export async function compileMdx<TData = unknown>(
   return { code, frontmatter, routeConfig, data }
 }
 
+/** Renders only the route-facing exports from a precompiled MDX route document. */
+export function renderMdxRouteModule(compiled: CompiledMdxRouteData): MdxModuleResult {
+  const { frontmatter, routeConfig, data } = compiled
+  const code = [
+    `export const route = ${serializeJavaScriptValue(routeConfig)}`,
+    `export const frontmatter = ${serializeJavaScriptValue(frontmatter)}`,
+    '',
+  ].join('\n')
+  return { code, frontmatter, routeConfig, data }
+}
+
+/**
+ * Compiles a Markdown/MDX document into the route-module shape:
+ * `export const route` + `export const frontmatter` + default component.
+ */
+export async function compileMdx<TData = unknown>(
+  source: string,
+  sourcePath: string,
+  options: MdxOptions<TData> = {},
+  context?: MdxLoadContext<TData>,
+): Promise<MdxModuleResult> {
+  return renderMdxComponentModule(
+    await compileMdxRouteDocument(source, sourcePath, options, context),
+  )
+}
+
 /**
  * Compiles only the route-facing exports of a Markdown/MDX document —
  * used for the `$$route` virtual module so the manifest never eagerly
@@ -220,16 +239,5 @@ export async function compileMdxRouteModule<TData = unknown>(
   options: MdxOptions<TData> = {},
   context?: MdxLoadContext<TData>,
 ): Promise<MdxModuleResult> {
-  const { frontmatter, routeConfig, data } = await compileRouteDocument(
-    source,
-    sourcePath,
-    options,
-    context,
-  )
-  const code = [
-    `export const route = ${serializeJavaScriptValue(routeConfig)}`,
-    `export const frontmatter = ${serializeJavaScriptValue(frontmatter)}`,
-    '',
-  ].join('\n')
-  return { code, frontmatter, routeConfig, data }
+  return renderMdxRouteModule(await compileMdxRouteDocument(source, sourcePath, options, context))
 }

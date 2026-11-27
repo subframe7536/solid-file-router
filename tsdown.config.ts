@@ -11,6 +11,8 @@ export default defineConfig({
   deps: { neverBundle: ['virtual:routes', 'satteri'] },
   exports: {
     customExports(exports) {
+      exports['./mdx/jsx-runtime'] = './dist/mdx.mjs'
+      exports['./mdx/jsx-dev-runtime'] = './dist/mdx.mjs'
       exports['./client'] = {
         types: './client.d.ts',
       }
