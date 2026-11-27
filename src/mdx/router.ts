@@ -4,20 +4,27 @@ import type { Data, MdxCompileOptions, MdxToJsResult } from 'satteri'
 
 import type { Promisable } from '../const'
 
-import { parseMdxFrontmatter, serializeJavaScriptValue } from './frontmatter'
+import {
+  extractMdxFrontmatterBlock,
+  parseMdxFrontmatter,
+  serializeJavaScriptValue,
+} from './frontmatter'
 import type { MdxFrontmatterBlock, MdxRouteConfig } from './frontmatter'
 
-export interface MdxRouteDocument {
+export interface MdxRouteInput {
   /** Original Markdown or MDX source. */
   source: string
-  /** Compiled module body without generated exports. */
-  code: string
-  /** Default compiled content component name. */
-  component: string
   /** Parsed YAML frontmatter values. */
   frontmatter: Record<string, unknown>
   /** Native route configuration parsed from frontmatter. */
   routeConfig: MdxRouteConfig
+}
+
+export interface MdxRouteDocument extends MdxRouteInput {
+  /** Compiled module body without generated exports. */
+  code: string
+  /** Default compiled content component name. */
+  component: string
   /** Satteri document data collected by MDX plugins. */
   data: Data
 }
@@ -50,6 +57,16 @@ export interface MdxOptions<TData = unknown> extends MdxCompileOptions {
     document: Readonly<MdxRouteDocument>,
     context: Readonly<MdxLoadContext<TData>>,
   ) => Promisable<MdxLoadExtension | undefined>
+  /**
+   * Lightweight route-metadata hook used when resolving `$$route` (and
+   * inlining MDX route configs into `virtual:routes`). When provided — or when
+   * `extendLoad` is omitted — `$$route` skips full MDX compilation
+   * (`satteri.mdxToJs`) and runs frontmatter parsing + `extendRoute` only.
+   */
+  extendRoute?: (
+    document: Readonly<MdxRouteInput>,
+    context: Readonly<MdxLoadContext<TData>>,
+  ) => Promisable<Partial<MdxRouteConfig> | undefined>
 }
 
 /** Route configuration read from a native Markdown/MDX document's frontmatter. */
@@ -91,7 +108,7 @@ async function compileMdxDocument<TData>(
   sourcePath: string,
   options: MdxOptions<TData> = {},
 ): Promise<CompiledMdxDocument> {
-  const { extendLoad: _extendLoad, ...compileOptions } = options
+  const { extendLoad: _extendLoad, extendRoute: _extendRoute, ...compileOptions } = options
   if (compileOptions.outputFormat && compileOptions.outputFormat !== 'program') {
     throw new Error('[solid-file-router] MDX routes require Satteri outputFormat="program"')
   }
@@ -202,9 +219,41 @@ export function renderMdxComponentModule(compiled: CompiledMdxRouteData): MdxMod
   return { code, frontmatter, routeConfig, data }
 }
 
-/** Renders only the route-facing exports from a precompiled MDX route document. */
-export function renderMdxRouteModule(compiled: CompiledMdxRouteData): MdxModuleResult {
-  const { frontmatter, routeConfig, data } = compiled
+export interface ExtractedMdxRouteData {
+  frontmatter: Record<string, unknown>
+  routeConfig: MdxRouteConfig
+}
+
+/**
+ * Extracts frontmatter and runs `extendRoute` without running full Satteri
+ * `mdxToJs` compilation, keeping `$$route` resolution fast during startup.
+ */
+export async function extractMdxRouteData<TData>(
+  source: string,
+  sourcePath: string,
+  options: MdxOptions<TData> = {},
+  context?: MdxLoadContext<TData>,
+): Promise<ExtractedMdxRouteData> {
+  const parsed = await parseMdxFrontmatter(extractMdxFrontmatterBlock(source))
+  const routeOverride = await options.extendRoute?.(
+    {
+      source,
+      frontmatter: parsed.data,
+      routeConfig: parsed.routeConfig,
+    },
+    context ?? { path: sourcePath, sourcePath },
+  )
+  return {
+    frontmatter: parsed.data,
+    routeConfig: { ...parsed.routeConfig, ...routeOverride },
+  }
+}
+
+/** Renders only the route-facing exports from extracted or compiled MDX route data. */
+export function renderMdxRouteModule(
+  compiled: Pick<CompiledMdxRouteData, 'frontmatter' | 'routeConfig'> & { data?: Data },
+): MdxModuleResult {
+  const { frontmatter, routeConfig, data = {} } = compiled
   const code = [
     `export const route = ${serializeJavaScriptValue(routeConfig)}`,
     `export const frontmatter = ${serializeJavaScriptValue(frontmatter)}`,
@@ -239,5 +288,8 @@ export async function compileMdxRouteModule<TData = unknown>(
   options: MdxOptions<TData> = {},
   context?: MdxLoadContext<TData>,
 ): Promise<MdxModuleResult> {
+  if (options.extendRoute || !options.extendLoad) {
+    return renderMdxRouteModule(await extractMdxRouteData(source, sourcePath, options, context))
+  }
   return renderMdxRouteModule(await compileMdxRouteDocument(source, sourcePath, options, context))
 }

@@ -7,7 +7,7 @@ import { PACKAGE_NAME, VID_EXTRACT } from './const'
 import { DefaultFileSystemRouter } from './convention'
 import { CompositeFileSystemRouter, fileRoutes, stripRouteGroups } from './fs'
 import type { BaseFileSystemRouter, EagerRouteMatcher } from './fs'
-import { createMdxPlugin } from './mdx/plugin'
+import { createMdxIntegration } from './mdx/plugin'
 import type { MdxOptions } from './mdx/router'
 import { createSsgPlugin } from './ssg'
 import type { PrerenderRoutesSource, SsgOptions } from './ssg'
@@ -23,7 +23,13 @@ export {
 export type { DefaultFileSystemRouterConfig } from './convention'
 export type { Promisable } from './const'
 export type { EagerRouteMatcher } from './fs'
-export type { MdxLoadContext, MdxLoadExtension, MdxOptions, MdxRouteDocument } from './mdx/router'
+export type {
+  MdxLoadContext,
+  MdxLoadExtension,
+  MdxOptions,
+  MdxRouteDocument,
+  MdxRouteInput,
+} from './mdx/router'
 export type { RouteMetadata, RouteMetaTag, RouteMetadataLink } from './route'
 export type { PrerenderRoutesSource, SsgOptions }
 
@@ -138,6 +144,13 @@ export function fileRouter<TData = unknown>(
       children.length === 1 && firstChild ? firstChild : new CompositeFileSystemRouter(children)
   }
 
+  const mdxIntegration = createMdxIntegration<TData>(mdx, (sourcePath) => {
+    const path = router.relativePath(sourcePath)
+    const manifestPath = router.toPath(sourcePath)
+    const routePath = manifestPath !== undefined ? normalizeRoutePath(manifestPath) : undefined
+    return { path, routePath }
+  })
+
   return [
     {
       name: 'solid-file-router:root',
@@ -188,13 +201,9 @@ export function fileRouter<TData = unknown>(
       codeSplitting: options.lazy === false ? false : undefined,
       eager: options.eager,
       optimizeDepsExclude: [PACKAGE_NAME],
+      resolveInlineRoute: mdx ? mdxIntegration.resolveInlineRoute : undefined,
     }),
-    createMdxPlugin<TData>(mdx, (sourcePath) => {
-      const path = router.relativePath(sourcePath)
-      const manifestPath = router.toPath(sourcePath)
-      const routePath = manifestPath !== undefined ? normalizeRoutePath(manifestPath) : undefined
-      return { path, routePath }
-    }),
+    mdxIntegration.plugin,
     createSsgPlugin(
       ssgEnabled ? ssg : false,
       ssgEnabled ? () => router.routes.map((entry) => entry.path) : undefined,

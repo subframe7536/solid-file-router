@@ -12,6 +12,22 @@ export interface MdxFrontmatterBlock {
   value: string
 }
 
+const REG_YAML_FRONTMATTER = /^---\r?\n(?:([\s\S]*?)\r?\n)?---(?:\r?\n|$)/
+const REG_TOML_FRONTMATTER = /^\+\+\+\r?\n(?:([\s\S]*?)\r?\n)?\+\+\+(?:\r?\n|$)/
+
+/** Extracts a leading YAML or TOML frontmatter block from raw Markdown/MDX source. */
+export function extractMdxFrontmatterBlock(source: string): MdxFrontmatterBlock | null {
+  const yamlMatch = source.match(REG_YAML_FRONTMATTER)
+  if (yamlMatch) {
+    return { kind: 'yaml', value: yamlMatch[1] ?? '' }
+  }
+  const tomlMatch = source.match(REG_TOML_FRONTMATTER)
+  if (tomlMatch) {
+    return { kind: 'toml', value: tomlMatch[1] ?? '' }
+  }
+  return null
+}
+
 export interface ParsedMdxFrontmatter<T = unknown> {
   data: Record<string, unknown>
   routeConfig: MdxRouteConfig<T>
@@ -143,6 +159,7 @@ export function serializeJavaScriptValue(value: unknown): string {
   }
   if (isRecord(value)) {
     return `{ ${Object.entries(value)
+      .filter(([, item]) => item !== undefined)
       .map(([key, item]) => `${JSON.stringify(key)}: ${serializeJavaScriptValue(item)}`)
       .join(', ')} }`
   }

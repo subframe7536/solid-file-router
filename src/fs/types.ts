@@ -87,6 +87,8 @@ export interface FileRoutesOptions extends Pick<
   optimizeDepsExclude?: Array<string>
   /** Write declaration for the virtual module. */
   types?: boolean | string
+  /** Optional resolver that inlines `$$` route refs directly into the manifest module. */
+  resolveInlineRoute?: (ref: ModuleRef) => Promise<{ code: string; watchFile?: string } | undefined>
 }
 
 export type RouterReloadType = 'update' | 'remove' | 'add'

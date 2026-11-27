@@ -2,6 +2,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { defineMdastPlugin } from 'satteri'
 import type { Plugin } from 'vite'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -218,9 +219,87 @@ describe('mDX plugin caching and MdxLoadContext', () => {
       expect(componentCode).toContain('export default')
 
       // Invalidating via handleHotUpdate triggers recompilation
-      ;(plugin.handleHotUpdate as (ctx: { file: string }) => void)({ file: mdxFile })
+      await (plugin.handleHotUpdate as (ctx: { file: string }) => Promise<void>)({ file: mdxFile })
       await transformHandler(source, mdxFile)
       expect(extendLoad).toHaveBeenCalledTimes(2)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('inlines MDX $$route configs into virtual:routes via extendRoute and only invalidates on routeConfig changes', async () => {
+    const root = await createTempDir()
+    try {
+      const pagesDir = join(root, 'src/pages')
+      await mkdir(pagesDir, { recursive: true })
+      const mdxFile = join(pagesDir, 'guide.mdx')
+      await writeFile(mdxFile, '---\ntitle: Guide v1\n---\n\nBody v1\n')
+
+      const extendLoad = vi.fn<NonNullable<MdxOptions['extendLoad']>>(() => ({
+        routeConfig: { info: { title: 'Full' } as any },
+      }))
+      const extendRoute = vi.fn<NonNullable<MdxOptions['extendRoute']>>((doc) => ({
+        info: { title: String(doc.frontmatter.title) } as any,
+      }))
+      const mdastPlugin = vi.fn<() => ReturnType<typeof defineMdastPlugin>>(() =>
+        defineMdastPlugin({ name: 'unused-on-route', heading() {} }),
+      )
+
+      const plugins = flattenPlugins(
+        fileRouter({
+          pagesDir: 'src/pages',
+          mdx: {
+            extendLoad,
+            extendRoute,
+            mdastPlugins: [mdastPlugin],
+          },
+        }),
+      )
+      const rootPlugin = plugins.find((p) => p.name === 'solid-file-router:root')!
+      ;(rootPlugin.config as (c: { root: string }) => void)({ root })
+
+      const routesPlugin = plugins.find((p) => p.name === 'solid-file-router:routes')!
+      const routesLoad = routesPlugin.load as {
+        handler: (this: unknown, id: string) => Promise<string | undefined>
+      }
+      const manifestCode = await routesLoad.handler.call(
+        { environment: { name: 'client', mode: 'serve', config: { root, consumer: 'client' } } },
+        VID_EXTRACT,
+      )
+
+      expect(manifestCode).toContain('"title": "Guide v1"')
+      expect(manifestCode).not.toContain('.sfr-mdx-route')
+      expect(extendRoute).toHaveBeenCalledTimes(1)
+      expect(extendLoad).not.toHaveBeenCalled()
+      expect(mdastPlugin).not.toHaveBeenCalled()
+
+      const mdxPlugin = plugins.find((p) => p.name === 'solid-file-router:mdx')!
+      const invalidateModule = vi.fn<() => void>()
+      const reloadModule = vi.fn<() => void>()
+      const fakeServer = {
+        environments: {
+          client: {
+            name: 'client',
+            moduleGraph: { getModuleById: () => ({ id: VID_EXTRACT }), invalidateModule },
+            reloadModule,
+          },
+        },
+      }
+      const handleHotUpdate = mdxPlugin.handleHotUpdate as (ctx: {
+        file: string
+        server: unknown
+      }) => Promise<void>
+
+      // Body-only edit leaves routeConfig unchanged -> virtual:routes is not invalidated
+      await writeFile(mdxFile, '---\ntitle: Guide v1\n---\n\nBody v2\n')
+      await handleHotUpdate({ file: mdxFile, server: fakeServer })
+      expect(invalidateModule).not.toHaveBeenCalled()
+
+      // Frontmatter edit changes routeConfig -> virtual:routes is invalidated and reloaded
+      await writeFile(mdxFile, '---\ntitle: Guide v2\n---\n\nBody v2\n')
+      await handleHotUpdate({ file: mdxFile, server: fakeServer })
+      expect(invalidateModule).toHaveBeenCalledTimes(1)
+      expect(reloadModule).toHaveBeenCalledTimes(1)
     } finally {
       await rm(root, { recursive: true, force: true })
     }

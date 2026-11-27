@@ -312,15 +312,54 @@ export function fileRoutes(options: FileRoutesOptions = {}): Array<PluginOption>
             routes = stripHandlerRefs(routes)
           }
 
-          const serializeEntry = (entry: RouteManifestEntry): string =>
-            JSON.stringify(entry, (key, value) => {
+          const inlinedRefs = new Map<string, string>()
+          if (options.resolveInlineRoute) {
+            const pendingRefs = new Map<string, ModuleRef>()
+            for (const route of routes) {
+              for (const [key, value] of Object.entries(route)) {
+                if (key.startsWith('$$') && value && typeof value === 'object' && 'src' in value) {
+                  const ref = value as ModuleRef
+                  pendingRefs.set(`${ref.src}\0${ref.pick.join(',')}`, ref)
+                }
+              }
+            }
+            const resolved = await Promise.all(
+              [...pendingRefs.entries()].map(async ([refKey, ref]) => {
+                const entry = await options.resolveInlineRoute?.(ref)
+                return entry ? ([refKey, entry] as const) : undefined
+              }),
+            )
+            for (const item of resolved) {
+              if (!item) {
+                continue
+              }
+              const [refKey, entry] = item
+              inlinedRefs.set(refKey, entry.code)
+              if (entry.watchFile) {
+                this.addWatchFile?.(entry.watchFile)
+              }
+            }
+          }
+
+          const inlinePlaceholders = new Map<string, string>()
+          let inlineCount = 0
+
+          const serializeEntry = (entry: RouteManifestEntry): string => {
+            const serialized = JSON.stringify(entry, (key, value) => {
               if (value === undefined) {
                 return undefined
               }
               if (key.startsWith('$$')) {
-                const buildId = toModuleId(entry, value, serverConsumer)
+                const ref = value as ModuleRef
+                const inlineCode = inlinedRefs.get(`${ref.src}\0${ref.pick.join(',')}`)
+                if (inlineCode !== undefined) {
+                  const placeholder = `__SFR_INLINE_${inlineCount++}__`
+                  inlinePlaceholders.set(placeholder, `() => (${inlineCode})`)
+                  return { require: placeholder }
+                }
+                const buildId = toModuleId(entry, ref, serverConsumer)
                 const refs: Record<string, string> = {}
-                for (const pick of value.pick) {
+                for (const pick of ref.pick) {
                   refs[pick] = js.addNamedImport(pick, buildId)
                 }
                 return {
@@ -347,6 +386,14 @@ export function fileRoutes(options: FileRoutesOptions = {}): Array<PluginOption>
             })
               .replaceAll('"_$(', '(')
               .replaceAll(')$_"', ')')
+
+            let result = serialized
+            for (const [placeholder, code] of inlinePlaceholders) {
+              result = result.replace(JSON.stringify(placeholder), code)
+            }
+            inlinePlaceholders.clear()
+            return result
+          }
 
           const bindings = routes.map(
             (route, index) => `const route${index} = ${serializeEntry(route)};`,
