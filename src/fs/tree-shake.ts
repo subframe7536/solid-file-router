@@ -33,40 +33,113 @@ const TYPE_ONLY_ANCESTORS = new Set([
   'TSUnionType',
 ])
 
-function forEachChild(node: any, visit: (child: any) => void): void {
-  for (const key in node) {
-    const value = node[key]
+interface AstNode {
+  type: string
+  start: number
+  end: number
+  name?: string
+  value?: unknown
+  id?: AstNode | null
+  key?: AstNode | null
+  init?: AstNode | null
+  body?: AstNode | Array<AstNode> | null
+  expression?: AstNode | null
+  declaration?: AstNode | null
+  declarations?: Array<AstNode>
+  specifiers?: Array<AstNode>
+  local?: AstNode
+  imported?: AstNode
+  exported?: AstNode
+  argument?: AstNode | null
+  left?: AstNode | null
+  right?: AstNode | null
+  object?: AstNode | null
+  property?: AstNode | null
+  computed?: boolean
+  params?: Array<AstNode>
+  properties?: Array<AstNode>
+  elements?: Array<AstNode | null>
+  source?: AstNode | null
+  kind?: string
+  declare?: boolean
+  exportKind?: string
+  superClass?: AstNode | null
+  parameter?: AstNode | null
+  moduleReference?: AstNode | null
+  param?: AstNode | null
+  discriminant?: AstNode | null
+  cases?: Array<AstNode>
+  consequent?: Array<AstNode>
+  operator?: string
+  decorators?: Array<AstNode>
+}
+
+interface Binding {
+  kind: string
+  declaration: AstNode
+  references: Array<AstNode>
+  violations: Array<AstNode>
+}
+
+interface Scope {
+  parent?: Scope
+  bindings: Map<string, Binding>
+  hoists?: boolean
+  ownsArguments?: boolean
+  isParams?: boolean
+}
+
+interface TreeState {
+  parents: Map<AstNode, AstNode>
+  removed: Set<AstNode>
+  unexported: Set<AstNode>
+  localDeclarators: Set<AstNode>
+}
+
+function isAstNode(value: unknown): value is AstNode {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { type?: unknown }).type === 'string'
+  )
+}
+
+function forEachChild(node: AstNode, visit: (child: AstNode) => void): void {
+  for (const [, value] of Object.entries(node)) {
     if (Array.isArray(value)) {
       for (const item of value) {
-        if (item && typeof item.type === 'string') {
+        if (isAstNode(item)) {
           visit(item)
         }
       }
-    } else if (value && typeof value.type === 'string') {
+    } else if (isAstNode(value)) {
       visit(value)
     }
   }
 }
 
-function unwrapParentheses(node: any): void {
-  for (const key in node) {
-    const value = node[key]
+function unwrapParentheses(node: AstNode): void {
+  const record = node as unknown as Record<string, unknown>
+  for (const [key, value] of Object.entries(record)) {
     if (Array.isArray(value)) {
-      value.forEach((item, index) => {
-        while (item?.type === 'ParenthesizedExpression') {
-          value[index] = item = item.expression
+      value.forEach((item: unknown, index) => {
+        let current = item
+        while (isAstNode(current) && current.type === 'ParenthesizedExpression') {
+          current = current.expression
+          value[index] = current
         }
       })
     } else {
       let inner = value
-      while (inner?.type === 'ParenthesizedExpression') {
-        node[key] = inner = inner.expression
+      while (isAstNode(inner) && inner.type === 'ParenthesizedExpression') {
+        inner = inner.expression
+        record[key] = inner
       }
     }
   }
 }
 
-function isFunctionLike(node: any): boolean {
+function isFunctionLike(node: AstNode): boolean {
   return (
     node.type === 'FunctionDeclaration' ||
     node.type === 'FunctionExpression' ||
@@ -74,29 +147,36 @@ function isFunctionLike(node: any): boolean {
   )
 }
 
-function isClassLike(node: any): boolean {
+function isClassLike(node: AstNode): boolean {
   return node.type === 'ClassDeclaration' || node.type === 'ClassExpression'
 }
 
-function isNamedDeclaration(node: any): boolean {
-  return node.type === 'FunctionDeclaration' || node.type === 'ClassDeclaration'
+function isNamedDeclaration(node: AstNode | null | undefined): boolean {
+  return node?.type === 'FunctionDeclaration' || node?.type === 'ClassDeclaration'
 }
 
-function isExportWrapper(node: any): boolean {
-  return node.type === 'ExportNamedDeclaration' || node.type === 'ExportDefaultDeclaration'
+function isExportWrapper(node: AstNode | undefined): boolean {
+  return node?.type === 'ExportNamedDeclaration' || node?.type === 'ExportDefaultDeclaration'
 }
 
-function isReference(node: any, parent: any, grandparent: any): boolean {
+function isReference(
+  node: AstNode,
+  parent: AstNode | undefined,
+  grandparent: AstNode | undefined,
+): boolean {
+  if (!parent) {
+    return true
+  }
   if (
     node.type === 'JSXIdentifier' &&
     parent.type !== 'JSXMemberExpression' &&
-    /^[a-z]/.test(node.name)
+    /^[a-z]/.test(node.name ?? '')
   ) {
     return false
   }
   switch (parent.type) {
     case 'MemberExpression':
-      return parent.property === node ? parent.computed : true
+      return parent.property === node ? Boolean(parent.computed) : true
     case 'JSXMemberExpression':
       return parent.object === node
     case 'VariableDeclarator':
@@ -105,18 +185,18 @@ function isReference(node: any, parent: any, grandparent: any): boolean {
       return parent.body === node
     case 'Property':
       if (parent.key === node) {
-        return parent.computed
+        return Boolean(parent.computed)
       }
       return grandparent?.type !== 'ObjectPattern'
     case 'MethodDefinition':
     case 'TSAbstractMethodDefinition':
-      return parent.key === node ? parent.computed : false
+      return parent.key === node ? Boolean(parent.computed) : false
     case 'PropertyDefinition':
     case 'AccessorProperty':
     case 'TSAbstractPropertyDefinition':
     case 'TSAbstractAccessorProperty':
     case 'TSPropertySignature':
-      return parent.key === node ? parent.computed : true
+      return parent.key === node ? Boolean(parent.computed) : true
     case 'ClassDeclaration':
     case 'ClassExpression':
       return parent.superClass === node
@@ -130,7 +210,7 @@ function isReference(node: any, parent: any, grandparent: any): boolean {
     case 'TSQualifiedName':
       return parent.right !== node
     case 'TSTypeParameter':
-      return parent.name !== node
+      return (parent.name as unknown) !== node
     case 'TSMappedType':
       return parent.key !== node
     case 'LabeledStatement':
@@ -155,18 +235,27 @@ function isReference(node: any, parent: any, grandparent: any): boolean {
   }
 }
 
-function patternIdentifiers(pattern: any, out: any[] = []): any[] {
+function patternIdentifiers(
+  pattern: AstNode | null | undefined,
+  out: Array<AstNode> = [],
+): Array<AstNode> {
   switch (pattern?.type) {
     case 'Identifier':
       out.push(pattern)
       break
     case 'ObjectPattern':
-      for (const property of pattern.properties) {
-        patternIdentifiers(property.type === 'Property' ? property.value : property, out)
+      for (const property of pattern.properties ?? []) {
+        const target =
+          property.type === 'Property'
+            ? isAstNode(property.value)
+              ? property.value
+              : undefined
+            : property
+        patternIdentifiers(target, out)
       }
       break
     case 'ArrayPattern':
-      for (const element of pattern.elements) {
+      for (const element of pattern.elements ?? []) {
         patternIdentifiers(element, out)
       }
       break
@@ -183,8 +272,8 @@ function patternIdentifiers(pattern: any, out: any[] = []): any[] {
   return out
 }
 
-function lookup(start: any, name: string): any {
-  let previous: any
+function lookup(start: Scope | undefined, name: string): Binding | undefined {
+  let previous: Scope | undefined
   for (let scope = start; scope; previous = scope, scope = scope.parent) {
     const binding = scope.bindings.get(name)
     if (binding) {
@@ -192,60 +281,66 @@ function lookup(start: any, name: string): any {
         return binding
       }
     } else if (name === 'arguments' && scope.ownsArguments) {
-      return
+      return undefined
     }
+  }
+  return undefined
+}
+
+function childScope(parent: Scope, options: Omit<Scope, 'parent' | 'bindings'> = {}): Scope {
+  return {
+    parent,
+    bindings: new Map<string, Binding>(),
+    ...options,
   }
 }
 
-function crawl(program: any, tree: any): { bindingOf: (identifier: any) => any } {
+function declareBinding(scope: Scope, name: string, declaration: AstNode, kind: string): void {
+  const existing = scope.bindings.get(name)
+  if (existing) {
+    existing.violations.push(declaration)
+  } else {
+    scope.bindings.set(name, { kind, declaration, references: [], violations: [] })
+  }
+}
+
+function crawl(
+  program: AstNode,
+  tree: TreeState,
+): { bindingOf: (identifier: AstNode) => Binding | undefined } {
   const { parents, removed, unexported, localDeclarators } = tree
-  const scopes = new Map<any, any>()
-  const references: [string, any, any][] = []
-  const violations: [string, any, any][] = []
+  const scopes = new Map<AstNode, Scope>()
+  const references: Array<[string, Scope, AstNode]> = []
+  const violations: Array<[string, Scope, AstNode]> = []
 
-  function childScope(parent: any, options: any = {}): any {
-    return {
-      parent,
-      bindings: new Map<string, any>(),
-      ...options,
-    }
-  }
-
-  function declare(scope: any, name: string, declaration: any, kind: string): void {
-    const existing = scope.bindings.get(name)
-    if (existing) {
-      existing.violations.push(declaration)
-    } else {
-      scope.bindings.set(name, { kind, declaration, references: [], violations: [] })
-    }
-  }
-
-  function declareExportReferences(node: any, scope: any): void {
+  function declareExportReferences(node: AstNode, scope: Scope): void {
     const declaration = node.declaration
     if (!declaration || unexported.has(node)) {
       return
     }
     if (isNamedDeclaration(declaration)) {
-      if (declaration.id) {
+      if (declaration.id?.name) {
         references.push([declaration.id.name, scope, node])
       }
     } else if (declaration.type === 'VariableDeclaration') {
-      for (const declarator of declaration.declarations) {
+      for (const declarator of declaration.declarations ?? []) {
         if (removed.has(declarator) || localDeclarators.has(declarator)) {
           continue
         }
         for (const id of patternIdentifiers(declarator.id)) {
-          references.push([id.name, scope, node])
+          if (id.name) {
+            references.push([id.name, scope, node])
+          }
         }
       }
     }
   }
 
-  function visitChildren(node: any, scope: any): void {
+  function visitChildren(node: AstNode, scope: Scope): void {
     forEachChild(node, (child) => visit(child, scope))
   }
 
-  function visit(node: any, scope: any): void {
+  function visit(node: AstNode, scope: Scope): void {
     if (removed.has(node)) {
       return
     }
@@ -253,19 +348,25 @@ function crawl(program: any, tree: any): { bindingOf: (identifier: any) => any }
       case 'TSTypeAnnotation':
         return
       case 'TSImportEqualsDeclaration':
-        declare(scope, node.id.name, node, 'declared')
-        visit(node.moduleReference, scope)
+        if (node.id?.name) {
+          declareBinding(scope, node.id.name, node, 'declared')
+        }
+        if (node.moduleReference) {
+          visit(node.moduleReference, scope)
+        }
         return
       case 'Identifier':
-      case 'JSXIdentifier':
-        if (isReference(node, parents.get(node), parents.get(parents.get(node)))) {
+      case 'JSXIdentifier': {
+        const parent = parents.get(node)
+        if (node.name && isReference(node, parent, parent ? parents.get(parent) : undefined)) {
           references.push([node.name, scope, node])
         }
         break
+      }
       case 'ImportDeclaration':
-        for (const specifier of node.specifiers) {
-          if (!removed.has(specifier)) {
-            declare(scope, specifier.local.name, specifier, 'declared')
+        for (const specifier of node.specifiers ?? []) {
+          if (!removed.has(specifier) && specifier.local?.name) {
+            declareBinding(scope, specifier.local.name, specifier, 'declared')
           }
         }
         return
@@ -280,12 +381,14 @@ function crawl(program: any, tree: any): { bindingOf: (identifier: any) => any }
             target = target.parent
           }
         }
-        for (const declarator of node.declarations) {
+        for (const declarator of node.declarations ?? []) {
           if (removed.has(declarator)) {
             continue
           }
           for (const id of patternIdentifiers(declarator.id)) {
-            declare(target, id.name, declarator, 'declared')
+            if (id.name) {
+              declareBinding(target, id.name, declarator, 'declared')
+            }
           }
         }
         break
@@ -293,26 +396,29 @@ function crawl(program: any, tree: any): { bindingOf: (identifier: any) => any }
       case 'FunctionDeclaration':
       case 'FunctionExpression':
       case 'ArrowFunctionExpression': {
-        if (node.type === 'FunctionDeclaration' && node.id) {
-          declare(scope, node.id.name, node, 'declared')
+        if (node.type === 'FunctionDeclaration' && node.id?.name) {
+          declareBinding(scope, node.id.name, node, 'declared')
         }
         const inner = childScope(scope, {
           hoists: true,
           ownsArguments: node.type !== 'ArrowFunctionExpression',
         })
         scopes.set(node, inner)
-        if (node.type === 'FunctionExpression' && node.id) {
-          declare(inner, node.id.name, node, 'local')
+        if (node.type === 'FunctionExpression' && node.id?.name) {
+          declareBinding(inner, node.id.name, node, 'local')
         }
-        const params = childScope(inner, { isParams: true })
-        for (const param of node.params) {
+        const paramsScope = childScope(inner, { isParams: true })
+        const nodeParams = node.params ?? []
+        for (const param of nodeParams) {
           for (const id of patternIdentifiers(param)) {
-            declare(inner, id.name, param, 'param')
+            if (id.name) {
+              declareBinding(inner, id.name, param, 'param')
+            }
           }
-          visit(param, params)
+          visit(param, paramsScope)
         }
         forEachChild(node, (child) => {
-          if (node.params.includes(child)) {
+          if (nodeParams.includes(child)) {
             return
           }
           if (child === node.body && child.type === 'BlockStatement') {
@@ -326,13 +432,13 @@ function crawl(program: any, tree: any): { bindingOf: (identifier: any) => any }
       }
       case 'ClassDeclaration':
       case 'ClassExpression': {
-        if (node.type === 'ClassDeclaration' && node.id && !node.declare) {
-          declare(scope, node.id.name, node, 'declared')
+        if (node.type === 'ClassDeclaration' && node.id?.name && !node.declare) {
+          declareBinding(scope, node.id.name, node, 'declared')
         }
         const inner = childScope(scope)
         scopes.set(node, inner)
-        if (node.type === 'ClassExpression' && node.id) {
-          declare(inner, node.id.name, node, 'local')
+        if (node.type === 'ClassExpression' && node.id?.name) {
+          declareBinding(inner, node.id.name, node, 'local')
         }
         visitChildren(node, inner)
         return
@@ -341,13 +447,17 @@ function crawl(program: any, tree: any): { bindingOf: (identifier: any) => any }
         const inner = childScope(scope)
         scopes.set(node, inner)
         for (const id of patternIdentifiers(node.param)) {
-          declare(inner, id.name, node, 'declared')
+          if (id.name) {
+            declareBinding(inner, id.name, node, 'declared')
+          }
         }
         if (node.param) {
           visit(node.param, inner)
         }
-        scopes.set(node.body, inner)
-        visitChildren(node.body, inner)
+        if (isAstNode(node.body)) {
+          scopes.set(node.body, inner)
+          visitChildren(node.body, inner)
+        }
         return
       }
       case 'StaticBlock':
@@ -358,10 +468,12 @@ function crawl(program: any, tree: any): { bindingOf: (identifier: any) => any }
         return
       }
       case 'SwitchStatement': {
-        visit(node.discriminant, scope)
+        if (node.discriminant) {
+          visit(node.discriminant, scope)
+        }
         const inner = childScope(scope)
         scopes.set(node, inner)
-        for (const switchCase of node.cases) {
+        for (const switchCase of node.cases ?? []) {
           visit(switchCase, inner)
         }
         return
@@ -376,7 +488,9 @@ function crawl(program: any, tree: any): { bindingOf: (identifier: any) => any }
         scopes.set(node, inner)
         if (node.left && node.left.type !== 'VariableDeclaration') {
           for (const id of patternIdentifiers(node.left)) {
-            violations.push([id.name, inner, node])
+            if (id.name) {
+              violations.push([id.name, inner, node])
+            }
           }
         }
         visitChildren(node, inner)
@@ -384,16 +498,22 @@ function crawl(program: any, tree: any): { bindingOf: (identifier: any) => any }
       }
       case 'AssignmentExpression':
         for (const id of patternIdentifiers(node.left)) {
-          violations.push([id.name, scope, node])
+          if (id.name) {
+            violations.push([id.name, scope, node])
+          }
         }
         break
       case 'UpdateExpression':
-        if (node.argument.type === 'Identifier') {
+        if (node.argument?.type === 'Identifier' && node.argument.name) {
           violations.push([node.argument.name, scope, node])
         }
         break
       case 'UnaryExpression':
-        if (node.operator === 'delete' && node.argument.type === 'Identifier') {
+        if (
+          node.operator === 'delete' &&
+          node.argument?.type === 'Identifier' &&
+          node.argument.name
+        ) {
           violations.push([node.argument.name, scope, node])
         }
         break
@@ -401,7 +521,7 @@ function crawl(program: any, tree: any): { bindingOf: (identifier: any) => any }
     visitChildren(node, scope)
   }
 
-  const root = { bindings: new Map<string, any>(), hoists: true }
+  const root: Scope = { bindings: new Map<string, Binding>(), hoists: true }
   scopes.set(program, root)
   visitChildren(program, root)
 
@@ -412,23 +532,26 @@ function crawl(program: any, tree: any): { bindingOf: (identifier: any) => any }
     lookup(scope, name)?.violations.push(node)
   }
 
-  function bindingOf(identifier: any): any {
+  function bindingOf(identifier: AstNode): Binding | undefined {
     let node = parents.get(identifier)
-    if (isNamedDeclaration(node)) {
+    if (node && isNamedDeclaration(node)) {
       node = parents.get(node)
     }
     while (node && !scopes.has(node)) {
       node = parents.get(node)
     }
-    return node && lookup(scopes.get(node), identifier.name)
+    if (!node || !identifier.name) {
+      return undefined
+    }
+    return lookup(scopes.get(node), identifier.name)
   }
 
   return { bindingOf }
 }
 
-function isTypeOnly(reference: any, tree: any): boolean {
+function isTypeOnly(reference: AstNode, tree: TreeState): boolean {
   const { parents, localDeclarators } = tree
-  for (let node = reference; node; node = parents.get(node)) {
+  for (let node: AstNode | undefined = reference; node; node = parents.get(node)) {
     if (TYPE_ONLY_ANCESTORS.has(node.type)) {
       return true
     }
@@ -436,7 +559,7 @@ function isTypeOnly(reference: any, tree: any): boolean {
       return true
     }
     if (node.type === 'ExportNamedDeclaration' && node.exportKind === 'type') {
-      if (!node.declaration?.declarations?.some((d: any) => localDeclarators.has(d))) {
+      if (!node.declaration?.declarations?.some((d) => localDeclarators.has(d))) {
         return true
       }
     }
@@ -444,7 +567,7 @@ function isTypeOnly(reference: any, tree: any): boolean {
   return false
 }
 
-function isInside(node: any, ancestor: any, parents: Map<any, any>): boolean {
+function isInside(node: AstNode, ancestor: AstNode, parents: Map<AstNode, AstNode>): boolean {
   for (let parent = parents.get(node); parent; parent = parents.get(parent)) {
     if (parent === ancestor) {
       return true
@@ -453,31 +576,35 @@ function isInside(node: any, ancestor: any, parents: Map<any, any>): boolean {
   return false
 }
 
-function isBindingReferenced(binding: any, tree: any, includeTypes: boolean): boolean {
+function isBindingReferenced(
+  binding: Binding | undefined,
+  tree: TreeState,
+  includeTypes: boolean,
+): boolean {
   if (!binding) {
     return false
   }
   const references = binding.violations.concat(
     includeTypes
       ? binding.references
-      : binding.references.filter((reference: any) => !isTypeOnly(reference, tree)),
+      : binding.references.filter((reference) => !isTypeOnly(reference, tree)),
   )
   if (!references.length) {
     return false
   }
   if (binding.declaration.type === 'FunctionDeclaration') {
-    return !references.every((ref: any) => isInside(ref, binding.declaration, tree.parents))
+    return !references.every((ref) => isInside(ref, binding.declaration, tree.parents))
   }
   return true
 }
 
-function boundIdentifier(node: any, parents: Map<any, any>): any {
+function boundIdentifier(node: AstNode, parents: Map<AstNode, AstNode>): AstNode | null {
   const parent = parents.get(node)
-  if (parent.type === 'VariableDeclarator') {
-    return parent.id.type === 'Identifier' ? parent.id : null
+  if (parent?.type === 'VariableDeclarator') {
+    return parent.id?.type === 'Identifier' ? parent.id : null
   }
-  if (parent.type === 'AssignmentExpression') {
-    return parent.left.type === 'Identifier' ? parent.left : null
+  if (parent?.type === 'AssignmentExpression') {
+    return parent.left?.type === 'Identifier' ? parent.left : null
   }
   if (node.type === 'ArrowFunctionExpression') {
     return null
@@ -485,107 +612,120 @@ function boundIdentifier(node: any, parents: Map<any, any>): any {
   return node.id?.type === 'Identifier' ? node.id : null
 }
 
-function isOwnExpressionName(identifier: any, parents: Map<any, any>): boolean {
+function isOwnExpressionName(identifier: AstNode, parents: Map<AstNode, AstNode>): boolean {
   const parent = parents.get(identifier)
   return (
-    (parent.type === 'FunctionExpression' || parent.type === 'ClassExpression') &&
+    (parent?.type === 'FunctionExpression' || parent?.type === 'ClassExpression') &&
     parent.id === identifier
   )
 }
 
-function isKeptWithDeadBinding(identifier: any, parents: Map<any, any>): boolean {
+function isKeptWithDeadBinding(identifier: AstNode, parents: Map<AstNode, AstNode>): boolean {
   const parent = parents.get(identifier)
-  if (parent.type === 'AssignmentExpression') {
-    return parents.get(parent).type !== 'ExpressionStatement'
+  if (!parent) {
+    return false
   }
-  return parent.type === 'Property' && parents.get(parent).properties.at(-1).type === 'RestElement'
+  if (parent.type === 'AssignmentExpression') {
+    return parents.get(parent)?.type !== 'ExpressionStatement'
+  }
+  return (
+    parent.type === 'Property' && parents.get(parent)?.properties?.at(-1)?.type === 'RestElement'
+  )
 }
 
-function patternLocals(pattern: any): [any, any][] {
+function patternLocals(pattern: AstNode): Array<[AstNode, AstNode]> {
   if (pattern.type === 'ObjectPattern') {
-    return pattern.properties.flatMap((property: any) => {
+    return (pattern.properties ?? []).flatMap((property): Array<[AstNode, AstNode]> => {
       const local = property.type === 'Property' ? property.value : property.argument
-      return local.type === 'Identifier' ? [[property, local]] : []
+      return isAstNode(local) && local.type === 'Identifier' ? [[property, local]] : []
     })
   }
-  return pattern.elements.flatMap((element: any) => {
+  return (pattern.elements ?? []).flatMap((element): Array<[AstNode, AstNode]> => {
     if (element?.type === 'Identifier') {
       return [[element, element]]
     }
-    if (element?.type === 'RestElement' && element.argument.type === 'Identifier') {
+    if (element?.type === 'RestElement' && element.argument?.type === 'Identifier') {
       return [[element, element.argument]]
     }
     return []
   })
 }
 
-function exportedName(specifier: any): string {
-  return specifier.exported.name ?? specifier.exported.value
+function exportedName(specifier: AstNode): string {
+  const exported = specifier.exported
+  if (!exported) {
+    return ''
+  }
+  return exported.name ?? (typeof exported.value === 'string' ? exported.value : '')
 }
 
-function removeStatement(node: any, tree: any): void {
+function removeStatement(node: AstNode, tree: TreeState): void {
   tree.removed.add(node)
   const parent = tree.parents.get(node)
-  if (isExportWrapper(parent)) {
+  if (parent && isExportWrapper(parent)) {
     tree.removed.add(parent)
   }
 }
 
-function removeDeclarator(declarator: any, tree: any): boolean {
+function removeDeclarator(declarator: AstNode, tree: TreeState): boolean {
   const { parents, removed } = tree
   const declaration = parents.get(declarator)
+  if (!declaration) {
+    return false
+  }
   const owner = parents.get(declaration)
   if (
+    owner &&
     (owner.type === 'ForInStatement' || owner.type === 'ForOfStatement') &&
     owner.left === declaration
   ) {
     return false
   }
   removed.add(declarator)
-  if (declaration.declarations.every((d: any) => removed.has(d))) {
+  if ((declaration.declarations ?? []).every((d) => removed.has(d))) {
     removeStatement(declaration, tree)
   }
   return true
 }
 
+function addOwner(owners: Map<Binding, Set<AstNode>>, binding: Binding, owner: AstNode): void {
+  const nodes = owners.get(binding) ?? new Set<AstNode>()
+  nodes.add(owner)
+  owners.set(binding, nodes)
+}
+
 function removeUnreachable(
-  program: any,
-  tree: any,
-  sweepable: Set<any>,
-  candidates: Set<any>,
+  program: AstNode,
+  tree: TreeState,
+  sweepable: Set<AstNode>,
+  candidates: Set<AstNode>,
 ): void {
   const { parents, removed, unexported, localDeclarators } = tree
   const { bindingOf } = crawl(program, tree)
-  const tracked = new Map<any, Set<any>>()
-  const candidateOwners = new Map<any, Set<any>>()
-
-  function addOwner(owners: Map<any, Set<any>>, binding: any, owner: any): void {
-    const nodes = owners.get(binding) ?? new Set()
-    nodes.add(owner)
-    owners.set(binding, nodes)
-  }
+  const tracked = new Map<Binding, Set<AstNode>>()
+  const candidateOwners = new Map<Binding, Set<AstNode>>()
 
   for (const identifier of sweepable) {
     if (isOwnExpressionName(identifier, parents) || isKeptWithDeadBinding(identifier, parents)) {
       continue
     }
     const binding = bindingOf(identifier)
-    if (!binding) {
+    const owner = parents.get(identifier)
+    if (!binding || !owner) {
       continue
     }
-    const owner = parents.get(identifier)
     addOwner(tracked, binding, owner)
     const isRemovableHelper =
       isNamedDeclaration(owner) ||
       (owner.type === 'VariableDeclarator' &&
-        owner.init &&
-        (isFunctionLike(owner.init) || isClassLike(owner.init)))
+        Boolean(owner.init) &&
+        (isFunctionLike(owner.init as AstNode) || isClassLike(owner.init as AstNode)))
     if (candidates.has(identifier) || isRemovableHelper) {
       addOwner(candidateOwners, binding, owner)
     }
   }
 
-  const isInsideExport = (owner: any): boolean => {
+  const isInsideExport = (owner: AstNode): boolean => {
     if (localDeclarators.has(owner)) {
       return false
     }
@@ -600,9 +740,9 @@ function removeUnreachable(
     return false
   }
 
-  const ownerBindings = new Map<any, any>()
-  const dependencies = new Map<any, Set<any>>()
-  const live = new Set<any>()
+  const ownerBindings = new Map<AstNode, Binding>()
+  const dependencies = new Map<Binding, Set<Binding>>()
+  const live = new Set<Binding>()
 
   for (const [binding, owners] of tracked) {
     dependencies.set(binding, new Set())
@@ -616,10 +756,10 @@ function removeUnreachable(
 
   for (const target of tracked.keys()) {
     const references = target.violations.concat(
-      target.references.filter((reference: any) => !isTypeOnly(reference, tree)),
+      target.references.filter((reference) => !isTypeOnly(reference, tree)),
     )
     for (const reference of references) {
-      let node = reference
+      let node: AstNode | undefined = reference
       let deferred = false
       while (node && !ownerBindings.has(node)) {
         if (isFunctionLike(node)) {
@@ -628,9 +768,11 @@ function removeUnreachable(
         node = parents.get(node)
       }
       const ownName =
-        node && (reference === node || reference === node.id || reference === node.left)
-      if (node && (deferred || ownName || isFunctionLike(node))) {
-        dependencies.get(ownerBindings.get(node))?.add(target)
+        node !== undefined &&
+        (reference === node || reference === node.id || reference === node.left)
+      const ownerBinding = node ? ownerBindings.get(node) : undefined
+      if (node && ownerBinding && (deferred || ownName || isFunctionLike(node))) {
+        dependencies.get(ownerBinding)?.add(target)
       } else {
         live.add(target)
       }
@@ -639,7 +781,11 @@ function removeUnreachable(
 
   const pending = [...live]
   while (pending.length) {
-    for (const dependency of dependencies.get(pending.pop()) ?? []) {
+    const current = pending.pop()
+    if (!current) {
+      continue
+    }
+    for (const dependency of dependencies.get(current) ?? []) {
       if (live.has(dependency)) {
         continue
       }
@@ -653,11 +799,11 @@ function removeUnreachable(
     return
   }
 
-  function removeDeadDeclarators(node: any): void {
+  function removeDeadDeclarators(node: AstNode): void {
     if (removed.has(node)) {
       return
     }
-    if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier') {
+    if (node.type === 'VariableDeclarator' && node.id?.type === 'Identifier') {
       const binding = bindingOf(node.id)
       if (binding && dead.has(binding)) {
         removeDeclarator(node, tree)
@@ -676,12 +822,20 @@ function removeUnreachable(
   }
 }
 
-function sweepObjectPattern(declarator: any, isDead: (id: any) => boolean, tree: any): boolean {
+function sweepObjectPattern(
+  declarator: AstNode,
+  isDead: (id: AstNode) => boolean,
+  tree: TreeState,
+): boolean {
   const { removed } = tree
-  const { properties } = declarator.id
+  const pattern = declarator.id
+  if (!pattern) {
+    return false
+  }
+  const properties = pattern.properties ?? []
   const rest = properties.at(-1)
   let changed = false
-  for (const [slot, local] of patternLocals(declarator.id)) {
+  for (const [slot, local] of patternLocals(pattern)) {
     if (removed.has(slot) || !isDead(local)) {
       continue
     }
@@ -691,22 +845,30 @@ function sweepObjectPattern(declarator: any, isDead: (id: any) => boolean, tree:
     removed.add(slot)
     changed = true
   }
-  if (changed && properties.every((property: any) => removed.has(property))) {
+  if (changed && properties.every((property) => removed.has(property))) {
     removeDeclarator(declarator, tree)
   }
   return changed
 }
 
-function sweepArrayPattern(declarator: any, isDead: (id: any) => boolean, tree: any): boolean {
+function sweepArrayPattern(
+  declarator: AstNode,
+  isDead: (id: AstNode) => boolean,
+  tree: TreeState,
+): boolean {
   const { removed } = tree
+  const pattern = declarator.id
+  if (!pattern) {
+    return false
+  }
   let changed = false
-  for (const [slot, local] of patternLocals(declarator.id)) {
+  for (const [slot, local] of patternLocals(pattern)) {
     if (!removed.has(slot) && isDead(local)) {
       removed.add(slot)
       changed = true
     }
   }
-  if (changed && declarator.id.elements.every((e: any) => e && removed.has(e))) {
+  if (changed && (pattern.elements ?? []).every((e) => e && removed.has(e))) {
     removeDeclarator(declarator, tree)
   }
   return changed
@@ -728,9 +890,13 @@ function nextToken(code: string, position: number): number {
   }
 }
 
-function removeFromList(output: MagicString, items: any[], removed: Set<any>): void {
-  let previousKept: any
-  let runStart: any
+function removeFromList(
+  output: MagicString,
+  items: ReadonlyArray<AstNode>,
+  removed: Set<AstNode>,
+): void {
+  let previousKept: AstNode | undefined
+  let runStart: AstNode | undefined
   for (const item of items) {
     if (removed.has(item)) {
       runStart ??= item
@@ -742,23 +908,32 @@ function removeFromList(output: MagicString, items: any[], removed: Set<any>): v
     runStart = undefined
     previousKept = item
   }
-  if (runStart && previousKept) {
-    output.remove(previousKept.end, items.at(-1).end)
+  const last = items.at(-1)
+  if (runStart && previousKept && last) {
+    output.remove(previousKept.end, last.end)
   }
 }
 
-function renderImport(node: any, code: string, output: MagicString, removed: Set<any>): void {
-  const [first, ...rest] = node.specifiers
+function renderImport(
+  node: AstNode,
+  code: string,
+  output: MagicString,
+  removed: Set<AstNode>,
+): void {
+  const specifiers = node.specifiers ?? []
+  const [first, ...rest] = specifiers
   if (first?.type !== 'ImportDefaultSpecifier' || !rest.length) {
-    removeFromList(output, node.specifiers, removed)
+    removeFromList(output, specifiers, removed)
     return
   }
+  const lastRest = rest.at(-1)
+  const firstRest = rest[0]
   if (removed.has(first)) {
     output.remove(first.start, nextToken(code, nextToken(code, first.end) + 1))
     removeFromList(output, rest, removed)
-  } else if (rest.every((specifier: any) => removed.has(specifier))) {
-    let end = rest.at(-1).end
-    if (rest[0].type === 'ImportSpecifier') {
+  } else if (lastRest && firstRest && rest.every((specifier) => removed.has(specifier))) {
+    let end = lastRest.end
+    if (firstRest.type === 'ImportSpecifier') {
       end = nextToken(code, end)
       if (code[end] === ',') {
         end = nextToken(code, end + 1)
@@ -771,35 +946,46 @@ function renderImport(node: any, code: string, output: MagicString, removed: Set
   }
 }
 
-function renderSplitExport(node: any, output: MagicString, tree: any): void {
+function renderSplitExport(node: AstNode, output: MagicString, tree: TreeState): void {
   const { removed, localDeclarators } = tree
   const declaration = node.declaration
-  function prefix(declarator: any): string {
-    return `${localDeclarators.has(declarator) ? '' : 'export '}${declaration.declare ? 'declare ' : ''}${declaration.kind} `
+  if (!declaration) {
+    return
   }
-  const kept = declaration.declarations.filter((d: any) => !removed.has(d))
-  output.overwrite(node.start, kept[0].start, prefix(kept[0]))
-  kept.slice(1).forEach((declarator: any, index: number) => {
-    output.overwrite(kept[index].end, declarator.start, `;\n${prefix(declarator)}`)
-  })
+  const declarations = declaration.declarations ?? []
+  function prefix(declarator: AstNode): string {
+    return `${localDeclarators.has(declarator) ? '' : 'export '}${declaration?.declare ? 'declare ' : ''}${declaration?.kind ?? ''} `
+  }
+  const kept = declarations.filter((d) => !removed.has(d))
+  const firstKept = kept[0]
   const lastKept = kept.at(-1)
-  const last = declaration.declarations.at(-1)
+  const last = declarations.at(-1)
+  if (!firstKept || !lastKept || !last) {
+    return
+  }
+  output.overwrite(node.start, firstKept.start, prefix(firstKept))
+  kept.slice(1).forEach((declarator, index) => {
+    const prev = kept[index]
+    if (prev) {
+      output.overwrite(prev.end, declarator.start, `;\n${prefix(declarator)}`)
+    }
+  })
   if (lastKept !== last) {
     output.remove(lastKept.end, last.end)
   }
 }
 
-function statementStart(node: any): number {
+function statementStart(node: AstNode): number {
   const decorator = (node.declaration ?? node).decorators?.[0]
   return decorator ? Math.min(node.start, decorator.start) : node.start
 }
 
 function renderRemovedStatement(
-  node: any,
-  parent: any,
+  node: AstNode,
+  parent: AstNode,
   code: string,
   output: MagicString,
-  removed: Set<any>,
+  removed: Set<AstNode>,
 ): void {
   const siblings = Array.isArray(parent.body)
     ? parent.body
@@ -814,9 +1000,7 @@ function renderRemovedStatement(
     }
     return
   }
-  const next = siblings
-    .slice(siblings.indexOf(node) + 1)
-    .find((sibling: any) => !removed.has(sibling))
+  const next = siblings.slice(siblings.indexOf(node) + 1).find((sibling) => !removed.has(sibling))
   let end = node.end
   while (code[end] === ' ' || code[end] === '\t') {
     end++
@@ -825,28 +1009,29 @@ function renderRemovedStatement(
     end++
   }
   end = code[end] === '\n' ? end + 1 : node.end
-  if (next && /[([`+\-/*<]/.test(code[next.start])) {
+  const nextChar = next ? (code[next.start] ?? '') : ''
+  if (next && /[([`+\-/*<]/.test(nextChar)) {
     output.overwrite(statementStart(node), end, ';')
   } else {
     output.remove(statementStart(node), end)
   }
 }
 
-function render(node: any, code: string, output: MagicString, tree: any): void {
+function render(node: AstNode, code: string, output: MagicString, tree: TreeState): void {
   const { removed, unexported, localDeclarators } = tree
   let ownsRemovedChildren = false
   switch (node.type) {
     case 'ImportDeclaration':
-      if (node.specifiers.some((specifier: any) => removed.has(specifier))) {
+      if ((node.specifiers ?? []).some((specifier) => removed.has(specifier))) {
         renderImport(node, code, output, removed)
       }
       return
     case 'ExportNamedDeclaration':
       ownsRemovedChildren = true
-      removeFromList(output, node.specifiers, removed)
-      if (unexported.has(node)) {
+      removeFromList(output, node.specifiers ?? [], removed)
+      if (unexported.has(node) && node.declaration) {
         output.remove(node.start, node.declaration.start)
-      } else if (node.declaration?.declarations?.some((d: any) => localDeclarators.has(d))) {
+      } else if (node.declaration?.declarations?.some((d) => localDeclarators.has(d))) {
         renderSplitExport(node, output, tree)
         for (const declarator of node.declaration.declarations) {
           if (!removed.has(declarator)) {
@@ -857,21 +1042,21 @@ function render(node: any, code: string, output: MagicString, tree: any): void {
       }
       break
     case 'ExportDefaultDeclaration':
-      if (unexported.has(node)) {
+      if (unexported.has(node) && node.declaration) {
         output.remove(node.start, node.declaration.start)
       }
       break
     case 'VariableDeclaration':
       ownsRemovedChildren = true
-      removeFromList(output, node.declarations, removed)
+      removeFromList(output, node.declarations ?? [], removed)
       break
     case 'ObjectPattern':
       ownsRemovedChildren = true
-      removeFromList(output, node.properties, removed)
+      removeFromList(output, node.properties ?? [], removed)
       break
     case 'ArrayPattern':
       ownsRemovedChildren = true
-      for (const element of node.elements) {
+      for (const element of node.elements ?? []) {
         if (element && removed.has(element)) {
           output.remove(element.start, element.end)
         }
@@ -890,19 +1075,24 @@ function render(node: any, code: string, output: MagicString, tree: any): void {
 /**
  * Eliminates unpicked exports and their dead dependencies from a module's source.
  */
-export function pickExports(code: string, id: string, pick: string[]): { code: string; map: any } {
-  const { program, errors } = parseSync(id, code, {
-    lang: extname(id.split('?')[0]!) === '.ts' ? 'ts' : 'tsx',
+export function pickExports(
+  code: string,
+  id: string,
+  pick: Array<string>,
+): { code: string; map: ReturnType<MagicString['generateMap']> } {
+  const parsed = parseSync(id, code, {
+    lang: extname(id.split('?')[0] ?? id) === '.ts' ? 'ts' : 'tsx',
     astType: 'ts',
     sourceType: 'module',
   })
-  const error = errors[0]
+  const error = parsed.errors[0]
   if (error) {
     throw new SyntaxError(`Failed to parse ${id}:\n${error.message || String(error)}`)
   }
+  const program = parsed.program as unknown as AstNode
 
-  const parents = new Map<any, any>()
-  function link(node: any): void {
+  const parents = new Map<AstNode, AstNode>()
+  function link(node: AstNode): void {
     unwrapParentheses(node)
     forEachChild(node, (child) => {
       parents.set(child, node)
@@ -911,24 +1101,31 @@ export function pickExports(code: string, id: string, pick: string[]): { code: s
   }
   link(program)
 
-  const tree = {
+  const tree: TreeState = {
     parents,
-    removed: new Set<any>(),
-    unexported: new Set<any>(),
-    localDeclarators: new Set<any>(),
+    removed: new Set<AstNode>(),
+    unexported: new Set<AstNode>(),
+    localDeclarators: new Set<AstNode>(),
   }
   const { removed, unexported, localDeclarators } = tree
   const before = crawl(program, tree)
-  const candidates = new Set<any>()
-  const cssLocals = new Set<any>()
+  const candidates = new Set<AstNode>()
+  const cssLocals = new Set<AstNode>()
 
-  for (const node of program.body) {
+  for (const node of (program.body as Array<AstNode> | null | undefined) ?? []) {
     switch (node.type) {
       case 'ImportDeclaration':
-        if (node.source.value.endsWith('.css') && !pick.includes('$css')) {
-          if (node.specifiers.length) {
-            for (const s of node.specifiers) {
-              cssLocals.add(s.local)
+        if (
+          typeof node.source?.value === 'string' &&
+          node.source.value.endsWith('.css') &&
+          !pick.includes('$css')
+        ) {
+          const specifiers = node.specifiers ?? []
+          if (specifiers.length) {
+            for (const s of specifiers) {
+              if (s.local) {
+                cssLocals.add(s.local)
+              }
             }
           } else {
             removed.add(node)
@@ -944,8 +1141,8 @@ export function pickExports(code: string, id: string, pick: string[]): { code: s
         if (pick.includes('default')) {
           break
         }
-        const declaration: any = node.declaration
-        if (isNamedDeclaration(declaration) && declaration.id) {
+        const declaration = node.declaration
+        if (declaration && isNamedDeclaration(declaration) && declaration.id) {
           unexported.add(node)
           candidates.add(declaration.id)
         } else {
@@ -954,26 +1151,31 @@ export function pickExports(code: string, id: string, pick: string[]): { code: s
         break
       }
       case 'ExportNamedDeclaration': {
-        if (node.specifiers.length) {
-          for (const specifier of node.specifiers) {
+        const specifiers = node.specifiers ?? []
+        if (specifiers.length) {
+          for (const specifier of specifiers) {
             if (!pick.includes(exportedName(specifier))) {
               removed.add(specifier)
             }
           }
-          if (node.specifiers.every((specifier: any) => removed.has(specifier))) {
+          if (specifiers.every((specifier) => removed.has(specifier))) {
             removed.add(node)
           }
           break
         }
-        const declaration: any = node.declaration
+        const declaration = node.declaration
         if (declaration && isNamedDeclaration(declaration)) {
-          if (declaration.id && !pick.includes(declaration.id.name)) {
+          if (declaration.id?.name && !pick.includes(declaration.id.name)) {
             unexported.add(node)
             candidates.add(declaration.id)
           }
         } else if (declaration?.type === 'VariableDeclaration') {
-          for (const declarator of declaration.declarations) {
-            if (declarator.id.type === 'Identifier' && !pick.includes(declarator.id.name)) {
+          for (const declarator of declaration.declarations ?? []) {
+            if (
+              declarator.id?.type === 'Identifier' &&
+              declarator.id.name &&
+              !pick.includes(declarator.id.name)
+            ) {
               localDeclarators.add(declarator)
               candidates.add(declarator.id)
             }
@@ -985,19 +1187,19 @@ export function pickExports(code: string, id: string, pick: string[]): { code: s
   }
 
   const sweepable = new Set([...candidates, ...cssLocals])
-  function markIfReferenced(identifier: any): void {
+  function markIfReferenced(identifier: AstNode): void {
     if (isBindingReferenced(before.bindingOf(identifier), tree, true)) {
       sweepable.add(identifier)
     }
   }
-  function collect(node: any): void {
+  function collect(node: AstNode): void {
     if (removed.has(node)) {
       return
     }
     if (node.type === 'VariableDeclarator') {
-      if (node.id.type === 'Identifier') {
+      if (node.id?.type === 'Identifier') {
         markIfReferenced(node.id)
-      } else if (node.id.type === 'ObjectPattern' || node.id.type === 'ArrayPattern') {
+      } else if (node.id?.type === 'ObjectPattern' || node.id?.type === 'ArrayPattern') {
         for (const [, local] of patternLocals(node.id)) {
           markIfReferenced(local)
         }
@@ -1019,31 +1221,31 @@ export function pickExports(code: string, id: string, pick: string[]): { code: s
   do {
     changed = false
     const { bindingOf } = crawl(program, tree)
-    const isDead = (identifier: any): boolean =>
+    const isDead = (identifier: AstNode): boolean =>
       sweepable.has(identifier) && !isBindingReferenced(bindingOf(identifier), tree, false)
-    const sweep = (node: any): void => {
+    const sweep = (node: AstNode): void => {
       if (removed.has(node)) {
         return
       }
       if (node.type === 'VariableDeclarator') {
-        if (node.id.type === 'Identifier') {
+        if (node.id?.type === 'Identifier') {
           if (isDead(node.id) && removeDeclarator(node, tree)) {
             changed = true
           }
-        } else if (node.id.type === 'ObjectPattern') {
+        } else if (node.id?.type === 'ObjectPattern') {
           changed = sweepObjectPattern(node, isDead, tree) || changed
-        } else if (node.id.type === 'ArrayPattern') {
+        } else if (node.id?.type === 'ArrayPattern') {
           changed = sweepArrayPattern(node, isDead, tree) || changed
         }
       } else if (isFunctionLike(node) || isClassLike(node)) {
         const identifier = boundIdentifier(node, parents)
         if (identifier && !isOwnExpressionName(identifier, parents) && isDead(identifier)) {
           const parent = parents.get(node)
-          if (parent.type === 'VariableDeclarator') {
+          if (parent?.type === 'VariableDeclarator') {
             changed = removeDeclarator(parent, tree) || changed
-          } else if (parent.type === 'AssignmentExpression') {
+          } else if (parent?.type === 'AssignmentExpression') {
             const statement = parents.get(parent)
-            if (statement.type === 'ExpressionStatement') {
+            if (statement?.type === 'ExpressionStatement') {
               removeStatement(statement, tree)
               changed = true
             }
@@ -1053,13 +1255,14 @@ export function pickExports(code: string, id: string, pick: string[]): { code: s
           }
         }
       } else if (node.type === 'ImportDeclaration') {
-        for (const specifier of node.specifiers) {
-          if (!removed.has(specifier) && isDead(specifier.local)) {
+        const specifiers = node.specifiers ?? []
+        for (const specifier of specifiers) {
+          if (!removed.has(specifier) && specifier.local && isDead(specifier.local)) {
             removed.add(specifier)
             changed = true
           }
         }
-        if (node.specifiers.length && node.specifiers.every((s: any) => removed.has(s))) {
+        if (specifiers.length && specifiers.every((s) => removed.has(s))) {
           removed.add(node)
         }
         return
@@ -1083,7 +1286,7 @@ export function pickExports(code: string, id: string, pick: string[]): { code: s
  * Builds the module id used to import a subset of a route file's exports.
  * Appends `?pick=...&lang.<ext>` query so other plugins matching extensions still trigger.
  */
-export function toPickId(src: string, pick: string[]): string {
+export function toPickId(src: string, pick: Array<string>): string {
   const query = pick.map((p) => `pick=${p}`).join('&')
   const ext = extname(src).slice(1)
   return PICKABLE_EXTENSIONS.has(ext) ? `${src}?${query}&lang.${ext}` : `${src}?${query}`
@@ -1098,7 +1301,7 @@ const DRIVE_LETTER_RE = /^[a-z]:/i
 export function sanitizeChunkFileName(name: string): string {
   const stripped = name.replace(PICK_CHUNK_NAME_RE, '')
   const driveLetter = DRIVE_LETTER_RE.exec(stripped)?.[0] ?? ''
-  return driveLetter + stripped.slice(driveLetter.length).replace(INVALID_CHAR_RE, '_')
+  return driveLetter + stripped.slice(driveLetter.length).replaceAll(INVALID_CHAR_RE, '_')
 }
 
 export function treeShake(): Plugin {

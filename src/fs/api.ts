@@ -71,7 +71,7 @@ function containsHTTP(route: FileRouteHandlers): boolean {
  * Builds a matcher over the flat manifest's handler-carrying entries using a radix3 tree.
  */
 export const createAPIMatcher = (
-  routes: readonly FileRouteHandlers[],
+  routes: ReadonlyArray<FileRouteHandlers>,
 ): ((path: string, method: string) => APIMatch | undefined) => {
   const router = createRouter<{ route: FileRouteHandlers }>({
     routes: routes.reduce<Record<string, { route: FileRouteHandlers }>>((memo, route) => {
@@ -79,7 +79,7 @@ export const createAPIMatcher = (
         return memo
       }
       const path = stripRouteGroups(route.path)
-        .replace(/\*([^/]*)/g, (_, m: string) => `**:${m}`)
+        .replaceAll(/\*([^/]*)/g, (_, m: string) => `**:${m}`)
         .split('/')
         .map((s) => (s.startsWith(':') || s.startsWith('*') ? s : encodeURIComponent(s)))
         .join('/')
@@ -134,7 +134,10 @@ export const stripPathBase = (path: string, base: string): string => {
 const RequestContext = Symbol.for('solid.RequestContext')
 
 function getScopedEvent(): APIEvent {
-  const event = (globalThis as any)[RequestContext]?.getStore()
+  const store = (
+    globalThis as Record<symbol, { getStore?: () => APIEvent | undefined } | undefined>
+  )[RequestContext]
+  const event = store?.getStore?.()
   if (!event) {
     throw new Error(
       'API route dispatched outside a request-event scope. Pass the request event ' +
@@ -159,7 +162,7 @@ function toResponse(result: unknown): Response {
  * Fetch-style middleware serving the manifest's API routes.
  */
 export const createAPIHandler = (
-  routes: readonly FileRouteHandlers[],
+  routes: ReadonlyArray<FileRouteHandlers>,
   options: APIHandlerOptions = {},
 ): ((
   input: Request | { request: Request },
@@ -179,7 +182,9 @@ export const createAPIHandler = (
     if (typeof fn !== 'function') {
       return next()
     }
-    const event = options.getEvent?.() ?? ('request' in input ? (input as any) : getScopedEvent())
+    const event =
+      options.getEvent?.() ??
+      ('request' in input ? (input as unknown as APIEvent) : getScopedEvent())
     event.params = matched.params || {}
     const result = await fn(event)
     if (result !== undefined) {

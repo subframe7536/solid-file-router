@@ -7,9 +7,10 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { VID_EXTRACT, VID_MDX_ROUTE } from '../src/const'
 import { createMdxPlugin } from '../src/mdx/plugin'
+import type { MdxOptions } from '../src/mdx/router'
 import { CompositeFileSystemRouter, DefaultFileSystemRouter, fileRouter } from '../src/plugin'
 
-function flattenPlugins(option: unknown): Plugin[] {
+function flattenPlugins(option: unknown): Array<Plugin> {
   if (Array.isArray(option)) {
     return option.flatMap(flattenPlugins)
   }
@@ -82,7 +83,7 @@ describe('fileRouter SSR configEnvironment', () => {
   })
 })
 
-describe('CompositeFileSystemRouter and multi-dir pagesDir', () => {
+describe('compositeFileSystemRouter and multi-dir pagesDir', () => {
   it('scans multiple directories via glob arrays and delegates to owning child router', async () => {
     const root = await createTempDir()
     try {
@@ -170,7 +171,7 @@ describe('CompositeFileSystemRouter and multi-dir pagesDir', () => {
   })
 })
 
-describe('MDX plugin caching and MdxLoadContext', () => {
+describe('mDX plugin caching and MdxLoadContext', () => {
   it('deduplicates compilation across $$route load and component transform and resolves path/routePath', async () => {
     const root = await createTempDir()
     try {
@@ -179,7 +180,7 @@ describe('MDX plugin caching and MdxLoadContext', () => {
       const source = '---\ntitle: Docs\n---\n\n# Hello\n'
       await writeFile(mdxFile, source)
 
-      const extendLoad = vi.fn((_doc, ctx) => ({
+      const extendLoad = vi.fn<NonNullable<MdxOptions['extendLoad']>>((_doc, ctx) => ({
         routeConfig: { info: { path: ctx.path, routePath: ctx.routePath } as any },
       }))
 
@@ -205,7 +206,7 @@ describe('MDX plugin caching and MdxLoadContext', () => {
       expect(extendLoad.mock.calls[0]![1]).toEqual({
         path: 'docs/index',
         routePath: '/docs',
-        sourcePath: mdxFile.replace(/\\/g, '/'),
+        sourcePath: mdxFile.replaceAll('\\', '/'),
       })
       expect(routeCode).toContain('export const route')
       expect(routeCode).not.toContain('export default')

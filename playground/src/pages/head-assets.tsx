@@ -1,3 +1,5 @@
+import type { JSX } from '@solidjs/web'
+
 import { HeadStylesheetStatus } from '../components/head-stylesheet-status'
 
 export const route = {
@@ -8,7 +10,7 @@ export const route = {
   },
 }
 
-export default (): any => (
+export default (): JSX.Element => (
   <main style={{ padding: '20px', 'font-family': 'system-ui, sans-serif' }}>
     <h1>Head Assets A</h1>
     <p>This route supplies metadata while the shared stylesheet remains loaded.</p>

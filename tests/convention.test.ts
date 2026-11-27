@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { DefaultFileSystemRouter, routePathFromFile } from '../src/convention'
 
 describe('routePathFromFile', () => {
-  const cases: [file: string, path: string | undefined][] = [
+  const cases: Array<[file: string, path: string | undefined]> = [
     ['/_app', '/(app)'],
     ['/_layout', '/(app)'],
     ['/index', '/(app)/'],
@@ -40,7 +40,7 @@ describe('routePathFromFile', () => {
   })
 })
 
-describe('DefaultFileSystemRouter', () => {
+describe('defaultFileSystemRouter', () => {
   const router = new DefaultFileSystemRouter({
     dir: 'src/pages',
     extensions: ['tsx'],

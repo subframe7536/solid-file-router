@@ -42,8 +42,8 @@ describe('adaptFileRoutes', () => {
     const { routes } = adaptFileRoutes(tree() as any)
     const app = routes[0]!
     expect(app.component).not.toBe(tree()[0].component)
-    const index = (app.children as any[])[0]
-    const blog = (app.children as any[])[2]
+    const index = (app.children as Array<any>)[0]
+    const blog = (app.children as Array<any>)[2]
     const post = blog.children[0]
     // every component is wrapped (boundaries inherited from ancestors)
     for (const entry of [index, blog, post]) {
@@ -63,7 +63,7 @@ describe('adaptFileRoutes', () => {
 
   it('keeps draft routes during development', () => {
     const { routes } = adaptFileRoutes(tree() as any)
-    const draft = (routes[0]!.children as any[]).find((r) => r.path === '/draft')
+    const draft = (routes[0]!.children as Array<any>).find((r) => r.path === '/draft')
     expect(draft).toBeDefined()
   })
 

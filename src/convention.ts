@@ -12,8 +12,8 @@ const REG_SPLAT = /\[\.{3}([\w-]+)\]/g
  * Creates a matcher over glob patterns using picomatch.
  * Used internally for ignore lists.
  */
-export function createGlobMatcher(globs: readonly string[]): (src: string) => boolean {
-  return globs.length === 0 ? () => false : picomatch(globs as string[])
+export function createGlobMatcher(globs: ReadonlyArray<string>): (src: string) => boolean {
+  return globs.length === 0 ? () => false : picomatch(globs as Array<string>)
 }
 
 /**
@@ -35,9 +35,8 @@ export function routePathFromFile(routeFile: string): string | undefined {
     return '/(app)'
   }
   const last = parts.length - 1
-  const segments: string[] = []
-  for (let i = 0; i <= last; i++) {
-    const raw = parts[i]!
+  const segments: Array<string> = []
+  for (const [i, raw] of parts.entries()) {
     if (raw.startsWith('_') && (raw !== '_layout' || i !== last)) {
       return undefined
     }
@@ -60,7 +59,7 @@ export function routePathFromFile(routeFile: string): string | undefined {
       segments.push(raw)
       continue
     }
-    const transformed = raw.replace(REG_SPLAT, '*$1').replace(REG_PARAM, ':$1')
+    const transformed = raw.replaceAll(REG_SPLAT, '*$1').replaceAll(REG_PARAM, ':$1')
     for (const part of transformed.split('.')) {
       if (!part || part === 'index' || part === '_layout' || REG_GROUP.test(part)) {
         continue
@@ -92,7 +91,7 @@ export interface DefaultFileSystemRouterConfig extends PageFileSystemRouterConfi
    * a `_`-prefixed segment are already skipped by the filename convention —
    * use `ignore` for everything else.
    */
-  ignore?: readonly string[]
+  ignore?: ReadonlyArray<string>
 }
 
 /**

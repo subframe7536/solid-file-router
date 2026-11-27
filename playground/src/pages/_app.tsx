@@ -15,11 +15,12 @@ export default definePage((props) => {
   )
 })
 
-function Catch(props: { error: any; reset: () => void }): JSX.Element {
+function Catch(props: { error: unknown; reset: () => void }): JSX.Element {
   console.error(props)
+  const message = props.error instanceof Error ? props.error.message : String(props.error)
   return (
     <div>
-      <code>{props.error.message}</code>
+      <code>{message}</code>
       <div>Caught at _app error boundary</div>
       <button onClick={() => props.reset()}>reset</button>
     </div>

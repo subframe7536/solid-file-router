@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { runPrerender } from 'prerender-crawler'
 import type { PrerenderOptions } from 'prerender-crawler'
 import { normalizePath } from 'vite'
-import type { Plugin } from 'vite'
+import type { Connect, Plugin } from 'vite'
 
 import { logger } from './const'
 import { staticPathsOf } from './route'
@@ -13,8 +13,8 @@ import { staticPathsOf } from './route'
 export { staticPathsOf }
 
 export type PrerenderRoutesSource =
-  | readonly string[]
-  | ((routes: readonly string[]) => readonly string[] | Promise<readonly string[]>)
+  | ReadonlyArray<string>
+  | ((routes: ReadonlyArray<string>) => ReadonlyArray<string> | Promise<ReadonlyArray<string>>)
 
 /**
  * SSG configuration: the seed source and server entry are this package's own
@@ -99,7 +99,7 @@ async function resolveHandler(options: SsgOptions, outDir: string): Promise<Requ
 
 interface PreviewRequest {
   url?: string
-  headers: Record<string, string | string[] | undefined>
+  headers: Record<string, string | Array<string> | undefined>
 }
 
 interface PreviewResponse {
@@ -145,7 +145,7 @@ export function createPreviewFallbackMiddleware(
  */
 export function createSsgPlugin(
   options: SsgOptions | false | undefined,
-  getRoutes?: () => readonly string[],
+  getRoutes?: () => ReadonlyArray<string>,
 ): Plugin {
   const enable = options ? (options.enable ?? true) : false
   let root = ''
@@ -224,7 +224,9 @@ export function createSsgPlugin(
       }
       // Register pre-internal so the fallback wins over vite's own SPA
       // fallback — an SSG preview must serve prerendered files and real 404s.
-      server.middlewares.use(createPreviewFallbackMiddleware(outDir) as any)
+      server.middlewares.use(
+        createPreviewFallbackMiddleware(outDir) as unknown as Connect.NextHandleFunction,
+      )
     },
   }
 }

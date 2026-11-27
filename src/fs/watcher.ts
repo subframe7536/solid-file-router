@@ -1,8 +1,8 @@
-import type { Plugin, ViteDevServer } from 'vite'
+import type { EnvironmentModuleNode, Plugin, ViteDevServer } from 'vite'
 
 import type { BaseFileSystemRouter } from './router'
 
-export function debounce<T extends (...args: any[]) => void>(
+export function debounce<T extends (...args: Array<never>) => void>(
   fn: T,
   delay: number,
 ): (...args: Parameters<T>) => void {
@@ -13,7 +13,7 @@ export function debounce<T extends (...args: any[]) => void>(
   }
 }
 
-function setupWatcher(watcher: any, routes: BaseFileSystemRouter): void {
+function setupWatcher(watcher: ViteDevServer['watcher'], routes: BaseFileSystemRouter): void {
   watcher.on('unlink', (path: string) => routes.removeRoute(path))
   watcher.on('add', (path: string) => routes.addRoute(path))
   watcher.on('change', (path: string) => routes.updateRoute(path))
@@ -26,17 +26,17 @@ function createRoutesReloader(
   moduleId: string,
   onReload?: () => Promise<void> | void,
 ): (() => void) | undefined {
-  const devEnv = (server.environments as Record<string, any>)[environment]
+  const devEnv = server.environments[environment]
   if (!devEnv?.moduleGraph) {
     return
   }
 
-  const invalidateModule = debounce((mod: any) => {
+  const invalidateModule = debounce((mod: EnvironmentModuleNode) => {
     devEnv.moduleGraph.invalidateModule(mod)
   }, 0)
 
-  const reloadModule = debounce((mod: any) => {
-    devEnv.reloadModule(mod)
+  const reloadModule = debounce((mod: EnvironmentModuleNode) => {
+    void devEnv.reloadModule(mod)
   }, 200)
 
   return routes.on('reload', function handleRoutesReload(evt) {

@@ -5,4 +5,7 @@ import { createFileRouter } from 'solid-file-router'
 
 const Router = createFileRouter()
 
-render(() => <Router>{(props) => <>{props.children}</>}</Router>, document.getElementById('root')!)
+const root = document.getElementById('root')
+if (root) {
+  render(() => <Router>{(props) => <>{props.children}</>}</Router>, root)
+}

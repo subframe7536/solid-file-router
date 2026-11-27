@@ -34,7 +34,7 @@ export interface FileRouterOptions {
 
 export interface FileRouter extends ReturnType<typeof createRouter> {
   /** The adapted route-definition tree passed to `createRouter`. */
-  fileRoutes: RouteEntry[]
+  fileRoutes: Array<RouteEntry>
   /** Collected route `info` keyed by group-stripped path. */
   routeInfo: Record<string, RouteInfo>
   /** Collected route `metadata` keyed by group-stripped path. */
@@ -47,7 +47,7 @@ let activeRouteData: RouteMetaCollection | undefined
 let defaultRouteData: RouteMetaCollection | undefined
 
 function getDefaultRouteData(): RouteMetaCollection {
-  return (defaultRouteData ??= collectRouteMeta(fileRoutes(pageRoutes) as RouteEntry[]))
+  return (defaultRouteData ??= collectRouteMeta(fileRoutes(pageRoutes) as Array<RouteEntry>))
 }
 
 /**
@@ -85,7 +85,7 @@ export function useRouteMetadata(): Readonly<Record<string, RouteMetadata>> {
 /** Creates the application router instance from the generated route manifest. */
 export function createFileRouter(options?: FileRouterOptions): FileRouter {
   const entries = options?.routes ?? pageRoutes
-  const adapted = adaptFileRoutes(fileRoutes(entries) as RouteEntry[])
+  const adapted = adaptFileRoutes(fileRoutes(entries) as Array<RouteEntry>)
   const routeData: RouteMetaCollection = {
     routeInfo: adapted.routeInfo,
     routeMetadata: adapted.routeMetadata,
@@ -106,7 +106,7 @@ export function createFileRouter(options?: FileRouterOptions): FileRouter {
   }) as FileRouter
 }
 
-let staticPages: string[] | undefined
+let staticPages: Array<string> | undefined
 
 /**
  * Tells a prerender crawl which pages exist: the manifest's static routes
@@ -125,7 +125,7 @@ let staticPages: string[] | undefined
  * ```
  */
 export function announceRoutes(
-  extraPaths: readonly string[] = [],
+  extraPaths: ReadonlyArray<string> = [],
   options: { header?: string } = {},
 ): boolean {
   const event = getRequestEvent()

@@ -25,7 +25,7 @@ describe('getPrerenderAssetFileName', () => {
 
 describe('normalizeRoutePath', () => {
   it('rejects non-slash paths', () => {
-    expect(() => normalizeRoutePath('about')).toThrow()
+    expect(() => normalizeRoutePath('about')).toThrow(/must start with \//)
   })
   it('strips trailing slashes except root', () => {
     expect(normalizeRoutePath('/a/')).toBe('/a')
@@ -59,7 +59,7 @@ describe('createPreviewFallbackMiddleware', () => {
 
       const middleware = createPreviewFallbackMiddleware(dir)
       const headers: Record<string, string> = {}
-      let statusCode = 200
+      const statusCode = 200
       let body = ''
       let nextCalled = false
 

@@ -192,8 +192,8 @@ importers:
         specifier: ^2.0.0
         version: 2.0.0(solid-js@2.0.0)
       '@subf/config':
-        specifier: ^0.5.0
-        version: 0.5.0(defu@6.1.7)(oxfmt@0.79.0)(oxlint@1.94.0)
+        specifier: ^0.7.0
+        version: 0.7.0
       '@types/node':
         specifier: ^26.6.6
         version: 26.6.6
@@ -889,16 +889,12 @@ packages:
     peerDependencies:
       solid-js: ^2.0.0
 
-  '@subf/config@0.5.0':
-    resolution: {integrity: sha512-GBk01mfu7BmakMgTlAm2zAX4ilOFX3Br0QdYO6wAxDVjaY1uGhcVpHXxRcHhKh+gry89yPASqqrBB7zGdAtk7Q==}
+  '@subf/config@0.7.0':
+    resolution: {integrity: sha512-scHgoT7+F9db8JmXBA5xpTlj0vOtrtsJyYdnN3cOp83gPed4A7C/oH6B1+a9T9hjHLGZ5R+xPeY1O2AzihNr1w==}
     hasBin: true
-    peerDependencies:
-      defu: ^6.1.7
-      oxfmt: ^0
-      oxlint: ^1
 
-  '@subf/oxlint-plugin@0.3.0':
-    resolution: {integrity: sha512-4pzxdeDxY1O03loTqK98bLzOW9ltK3Ex+jKFctNZtB9P7Mg/dSBN+nejSkiTNax24sEaJBrF6oUzXRv2Ra3JDg==}
+  '@subf/oxlint-plugin@0.4.1':
+    resolution: {integrity: sha512-XVahEKTxnY7k2A71pSspJor534VGcyE3n1tO7qOsQc68JfsLac72PWWEc+dbqe4/yA7SOwp6aRhy2lEO/rEjRg==}
 
   '@tsrs/darwin-arm64@0.25.0-ts7.1.0-beta':
     resolution: {integrity: sha512-+pYoQ+AqpdUolO4kJBQlQmwxJOoc5INuusw/2AZnR4frfnyVGza+gEn0br8Z0LOk7nklQuILuMKH93BU3hpHvA==}
@@ -1475,6 +1471,9 @@ packages:
     resolution: {integrity: sha512-8Mx+uNKKER2bA4AdtedkqRbwUCIJFr2nJckXRe5yrDqzePqwLP7VNcctN8/XdmDSbF7mS+jJKIszlL+vbam1VA==}
     engines: {node: '>=22.19.0'}
 
+  validate-html-nesting@1.2.4:
+    resolution: {integrity: sha512-doQi7e8EJ2OWneSG1aZpJluS6A49aZM0+EICXWKm1i6WvqTLmq0tpUcImc4KTWG50mORO0C4YDBtOCSYvElftw==}
+
   verkit@0.4.1:
     resolution: {integrity: sha512-mMVzj0TXExtVdlDEq+Mzp0eyOuyznNpFobNM3uAqe3HVm/Ps2c+u17BligMkZjZCA6EiXpoon8iRTer3iu40SQ==}
     engines: {node: '>=18.12.0'}
@@ -2026,14 +2025,14 @@ snapshots:
       seroval-plugins: 1.8.0(seroval@1.8.1)
       solid-js: 2.0.0
 
-  '@subf/config@0.5.0(defu@6.1.7)(oxfmt@0.79.0)(oxlint@1.94.0)':
+  '@subf/config@0.7.0':
     dependencies:
-      '@subf/oxlint-plugin': 0.3.0
-      defu: 6.1.7
-      oxfmt: 0.79.0
-      oxlint: 1.94.0
+      '@subf/oxlint-plugin': 0.4.1
 
-  '@subf/oxlint-plugin@0.3.0': {}
+  '@subf/oxlint-plugin@0.4.1':
+    dependencies:
+      parse5: 8.1.1
+      validate-html-nesting: 1.2.4
 
   '@tsrs/darwin-arm64@0.25.0-ts7.1.0-beta':
     optional: true
@@ -2562,6 +2561,8 @@ snapshots:
   undici-types@8.9.0: {}
 
   undici@8.12.4: {}
+
+  validate-html-nesting@1.2.4: {}
 
   verkit@0.4.1: {}
 

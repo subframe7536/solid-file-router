@@ -103,7 +103,7 @@ function entryType(
 }
 
 function tupleType(
-  entries: readonly (RouteManifestEntry | RouteTreeEntry)[],
+  entries: ReadonlyArray<RouteManifestEntry | RouteTreeEntry>,
   indent: string,
   nested: boolean,
   from: string,
@@ -121,8 +121,8 @@ function tupleType(
 
 export function serializeTypes(
   moduleId: string,
-  routes: readonly RouteManifestEntry[],
-  pageRoutes: readonly RouteTreeEntry[],
+  routes: ReadonlyArray<RouteManifestEntry>,
+  pageRoutes: ReadonlyArray<RouteTreeEntry>,
   from: string,
   codeSplitting = true,
 ): string {

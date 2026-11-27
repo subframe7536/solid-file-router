@@ -65,7 +65,7 @@
     "@solidjs/router": "^2.0.0",
     "@solidjs/vite-plugin": "^3.0.1",
     "@solidjs/web": "^2.0.0",
-    "@subf/config": "^0.5.0",
+    "@subf/config": "^0.7.0",
     "@types/node": "^26.6.6",
     "@types/picomatch": "^4.0.3",
     "bumpp": "^12.3.0",

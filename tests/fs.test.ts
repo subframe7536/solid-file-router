@@ -18,7 +18,7 @@ import {
 
 describe('normalizePath and cleanPath', () => {
   it('normalizes backslashes to posix', () => {
-    expect(normalizePath('a\\b\\c')).toBe('a/b/c')
+    expect(normalizePath(String.raw`a\b\c`)).toBe('a/b/c')
   })
 
   it('cleans path prefix and extension', () => {
@@ -182,7 +182,7 @@ describe('standard routePathFromFile', () => {
   })
 })
 
-describe('BaseFileSystemRouter with tinyglobby', () => {
+describe('baseFileSystemRouter with tinyglobby', () => {
   it('scans routes using tinyglobby', async () => {
     const router = new BaseFileSystemRouter({
       dir: 'playground/src/pages',
@@ -219,7 +219,7 @@ describe('incremental route updates', () => {
       toRoute: () => ({ path: '/a', page: true, $component: { src: '/x/a.tsx', pick: ['d'] } }),
     })
     await router.updateRoute('/x/a.tsx')
-    const events: string[] = []
+    const events: Array<string> = []
     router.on('reload', (evt) => events.push(evt.detail.type))
     const version = router.version
     await router.updateRoute('/x/a.tsx')
@@ -234,7 +234,7 @@ describe('incremental route updates', () => {
       toRoute: () => ({ path: '/a', page: true, extra: flag }),
     })
     await router.updateRoute('/x/a.tsx')
-    const events: string[] = []
+    const events: Array<string> = []
     router.on('reload', (evt) => events.push(evt.detail.type))
     flag = true
     await router.updateRoute('/x/a.tsx')
@@ -248,7 +248,7 @@ describe('incremental route updates', () => {
       toRoute: () => ({ path, page: true }),
     })
     await router.updateRoute('/x/a.tsx')
-    const events: string[] = []
+    const events: Array<string> = []
     router.on('reload', (evt) => events.push(evt.detail.type))
     path = '/b'
     await router.updateRoute('/x/a.tsx')

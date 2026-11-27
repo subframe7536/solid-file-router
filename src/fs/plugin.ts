@@ -8,7 +8,13 @@ import { normalizePath } from './router'
 import type { BaseFileSystemRouter } from './router'
 import { buildRouteTree, stripRouteGroups } from './tree'
 import { sanitizeChunkFileName, toPickId, treeShake } from './tree-shake'
-import type { EagerRouteMatcher, FileRoutesOptions, ModuleRef, RouteManifestEntry } from './types'
+import type {
+  EagerRouteMatcher,
+  FileRoutesOptions,
+  ModuleRef,
+  RouteManifestEntry,
+  RouteTreeEntry,
+} from './types'
 import { serializeTypes } from './types-gen'
 import { debounce, fileSystemWatcher } from './watcher'
 
@@ -27,8 +33,8 @@ const toModuleId = (route: RouteManifestEntry, ref: ModuleRef, serverConsumer: b
     ? ref.src
     : toPickId(ref.src, ref.pick)
 
-function stripHandlerRefs(routes: readonly RouteManifestEntry[]): RouteManifestEntry[] {
-  const stripped: RouteManifestEntry[] = []
+function stripHandlerRefs(routes: ReadonlyArray<RouteManifestEntry>): Array<RouteManifestEntry> {
+  const stripped: Array<RouteManifestEntry> = []
   for (const route of routes) {
     const handlerKeys = Object.keys(route).filter((key) => HANDLER_REF.test(key))
     if (!handlerKeys.length) {
@@ -126,11 +132,11 @@ function createEagerMatcher(
 }
 
 function applyEager(
-  routes: readonly RouteManifestEntry[],
+  routes: ReadonlyArray<RouteManifestEntry>,
   isEager?: (route: RouteManifestEntry) => boolean,
-): RouteManifestEntry[] {
+): Array<RouteManifestEntry> {
   if (!isEager) {
-    return routes as RouteManifestEntry[]
+    return routes as Array<RouteManifestEntry>
   }
   return routes.map((route) => {
     if (!route.$component || route.$component.eager || !isEager(route)) {
@@ -146,7 +152,7 @@ function applyEager(
 /**
  * Vite delivery plugin that serializes the neutral route manifest into virtual modules.
  */
-export function fileRoutes(options: FileRoutesOptions = {}): PluginOption[] {
+export function fileRoutes(options: FileRoutesOptions = {}): Array<PluginOption> {
   const virtualId = options.moduleId ?? DEFAULT_MODULE_ID
   const codeSplitting = options.codeSplitting !== false
   const isEager = createEagerMatcher(options.eager)
@@ -188,7 +194,7 @@ export function fileRoutes(options: FileRoutesOptions = {}): PluginOption[] {
 
     let previous: string | undefined
     try {
-      previous = readFileSync(file, 'utf-8')
+      previous = readFileSync(file, 'utf8')
     } catch {}
     if (previous === contents) {
       return
@@ -251,7 +257,7 @@ export function fileRoutes(options: FileRoutesOptions = {}): PluginOption[] {
           isEager,
         )
 
-        const input: string[] = []
+        const input: Array<string> = []
         for (const route of routes) {
           for (const [key, ref] of Object.entries(route)) {
             const moduleRef = ref as ModuleRef | undefined
@@ -338,14 +344,14 @@ export function fileRoutes(options: FileRoutesOptions = {}): PluginOption[] {
         const tree = buildRouteTree(
           routes
             .map((route, index) => ({ path: route.path, page: route.page, index }))
-            .filter((stub) => stub.page) as any,
+            .filter((stub) => stub.page),
         )
 
-        const serializeTree = (nodes: any[]): string =>
+        const serializeTree = (nodes: Array<RouteTreeEntry>): string =>
           `[${nodes
             .map((node) => {
               const fields = [
-                `...route${node.index}`,
+                `...route${String(node.index)}`,
                 `id: ${JSON.stringify(node.id)}`,
                 `path: ${JSON.stringify(node.path)}`,
               ]

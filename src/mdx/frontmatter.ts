@@ -40,7 +40,7 @@ function parseMatchFilters(value: unknown): NonNullable<RouteConfig['matchFilter
     throw new Error('[solid-file-router] frontmatter.matchFilters must be an object')
   }
 
-  const filters: Record<string, RegExp | readonly string[]> = {}
+  const filters: Record<string, RegExp | ReadonlyArray<string>> = {}
   for (const [key, filter] of Object.entries(value)) {
     if (typeof filter === 'string') {
       const literal = filter.match(/^\/(.*)\/([dgimsuvy]*)$/s)

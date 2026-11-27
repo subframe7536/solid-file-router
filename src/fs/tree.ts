@@ -2,7 +2,7 @@ import type { RouteManifestEntry, RouteTreeEntry } from './types'
 
 /** Removes `(group)` segments from a route path: `/(app)/home` → `/home`. */
 export function stripRouteGroups(path: string): string {
-  const stripped = path.replace(/\([^)/]+\)/g, '').replace(/\/+/g, '/')
+  const stripped = path.replaceAll(/\([^)/]+\)/g, '').replaceAll(/\/+/g, '/')
   return stripped.length > 0 ? stripped : '/'
 }
 
@@ -12,8 +12,8 @@ export function stripRouteGroups(path: string): string {
  * Children carry their id relative to the parent (`/(app)/blog` under
  * `/(app)` has id `/blog`).
  */
-export function buildRouteTree(entries: readonly RouteManifestEntry[]): RouteTreeEntry[] {
-  const tree: RouteTreeEntry[] = []
+export function buildRouteTree(entries: ReadonlyArray<RouteManifestEntry>): Array<RouteTreeEntry> {
+  const tree: Array<RouteTreeEntry> = []
   const nodes = new Map<string, RouteTreeEntry>()
   const sorted = [...entries].sort(
     (a, b) => a.path.length - b.path.length || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0),

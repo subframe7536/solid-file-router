@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { parseMdxFrontmatter } from '../src/mdx/frontmatter'
 
-describe('MDX frontmatter', () => {
+describe('mDX frontmatter', () => {
   it('parses YAML values into frontmatter and route configuration', async () => {
     const result = await parseMdxFrontmatter({
       kind: 'yaml',

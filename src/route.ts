@@ -53,7 +53,7 @@ const REG_DYNAMIC_SEGMENT = /[:*]/
  * (`:param`/`*splat`) paths dropped. Used for SSG seeding and for
  * `announceRoutes`.
  */
-export function staticPathsOf(manifestPaths: readonly string[]): string[] {
+export function staticPathsOf(manifestPaths: ReadonlyArray<string>): Array<string> {
   const paths = new Set<string>()
   for (const manifestPath of manifestPaths) {
     const path = stripRouteGroups(manifestPath)
@@ -115,10 +115,10 @@ export function definePage<T = unknown>(
 }
 
 export type RouteEntry = {
-  path?: string | string[]
-  component?: Component<any>
-  children?: readonly RouteEntry[] | RouteEntry
-  loadingComponent?: Component<any>
+  path?: string | Array<string>
+  component?: Component<RouteSectionProps>
+  children?: ReadonlyArray<RouteEntry> | RouteEntry
+  loadingComponent?: Component<RouteSectionProps>
   errorComponent?: Component<ErrorComponentProps>
   inherit?: SfrRouteConfig['inherit']
   metadata?: RouteMetadata
@@ -127,7 +127,7 @@ export type RouteEntry = {
 }
 
 interface InheritContext {
-  loading?: Component<any>
+  loading?: Component<RouteSectionProps>
   error?: Component<ErrorComponentProps>
 }
 
@@ -141,8 +141,8 @@ function inheritAllowed(inherit: SfrRouteConfig['inherit'], key: 'loading' | 'er
   return true
 }
 
-function metadataToHeadTags(metadata: RouteMetadata): HeadTag[] {
-  const tags: HeadTag[] = []
+function metadataToHeadTags(metadata: RouteMetadata): Array<HeadTag> {
+  const tags: Array<HeadTag> = []
   if (metadata.title !== undefined) {
     tags.push({ tag: 'title', key: 'title', props: { children: metadata.title } })
   }
@@ -188,11 +188,11 @@ const DevError: Component<ErrorComponentProps> = (props) => {
 }
 
 function wrapRouteComponent(
-  Comp: Component<any>,
+  Comp: Component<RouteSectionProps>,
   metadata: RouteMetadata | undefined,
-  loading: Component<any> | undefined,
+  loading: Component<RouteSectionProps> | undefined,
   error: Component<ErrorComponentProps> | undefined,
-): Component<any> {
+): Component<RouteSectionProps> {
   const ErrorComp = error ?? DevError
   const headTags = metadata ? metadataToHeadTags(metadata) : undefined
 
@@ -225,7 +225,7 @@ function wrapRouteComponent(
 }
 
 interface AdaptResult {
-  routes: RouteEntry[]
+  routes: Array<RouteEntry>
   routeInfo: Record<string, RouteInfo>
   routeMetadata: Record<string, RouteMetadata>
 }
@@ -239,7 +239,7 @@ export interface RouteMetaCollection {
  * Collects `routeInfo` and `routeMetadata` from a route-definition tree
  * without wrapping components or creating a router instance.
  */
-export function collectRouteMeta(entries: readonly RouteEntry[]): RouteMetaCollection {
+export function collectRouteMeta(entries: ReadonlyArray<RouteEntry>): RouteMetaCollection {
   const routeInfo: Record<string, RouteInfo> = {}
   const routeMetadata: Record<string, RouteMetadata> = {}
 
@@ -277,7 +277,7 @@ export function collectRouteMeta(entries: readonly RouteEntry[]): RouteMetaColle
  * tree: inherited loading/error boundaries, `useHead` metadata and
  * production draft filtering.
  */
-export function adaptFileRoutes(entries: readonly RouteEntry[]): AdaptResult {
+export function adaptFileRoutes(entries: ReadonlyArray<RouteEntry>): AdaptResult {
   const routeInfo: Record<string, RouteInfo> = {}
   const routeMetadata: Record<string, RouteMetadata> = {}
 

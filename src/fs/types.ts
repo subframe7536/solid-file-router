@@ -4,7 +4,7 @@ export interface ModuleRef {
   /** Absolute path of the source module. */
   src: string
   /** The named exports (or `"default"`) this ref selects from the module. */
-  pick: string[]
+  pick: Array<string>
   /** Deliver eagerly even under code splitting. */
   eager?: boolean
 }
@@ -31,14 +31,14 @@ export interface RouteManifestEntry {
 export interface RouteTreeEntry extends RouteManifestEntry {
   /** The manifest path this node was nested under, group segments included. */
   id: string
-  children?: RouteTreeEntry[]
+  children?: Array<RouteTreeEntry>
 }
 
 export interface FileSystemRouterConfig {
   /** Route directory to scan. Relative paths are resolved against cwd or vite root. */
   dir: string
   /** File extensions (without the dot) that participate in routing. */
-  extensions: string[]
+  extensions: Array<string>
   /** Pluggable filename convention mapping route file to pattern path. */
   toPath?: (routeFile: string, config: FileSystemRouterConfig) => string | undefined
   /** Pluggable module convention mapping source file to manifest entry. */
@@ -49,13 +49,13 @@ export interface PageFileSystemRouterConfig extends FileSystemRouterConfig {
   /** Emit `$component` refs for pages. Defaults to `true`. */
   components?: boolean
   /** Treat these uppercase exports as request handlers. Defaults to `false`. */
-  httpMethods?: boolean | readonly string[]
+  httpMethods?: boolean | ReadonlyArray<string>
   /** Recognize server-function pages (`"use server"`). Defaults to `false`. */
   serverComponents?: boolean
 }
 
 export type EagerRouteMatcher =
-  | readonly string[]
+  | ReadonlyArray<string>
   | ((route: Readonly<RouteManifestEntry>) => boolean)
 
 export interface FileRoutesOptions extends Pick<
@@ -65,7 +65,7 @@ export interface FileRoutesOptions extends Pick<
   /** Route directory, relative to the Vite root. Defaults to `src/routes`. */
   dir?: string
   /** File extensions that participate in routing. Defaults to js/jsx/ts/tsx. */
-  extensions?: string[]
+  extensions?: Array<string>
   /** Custom file-system router. */
   router?: BaseFileSystemRouter
   /** Per-environment file-system routers, keyed by Vite environment name. */
@@ -73,7 +73,7 @@ export interface FileRoutesOptions extends Pick<
   /** The id the route manifest is served from. Defaults to `virtual:file-routes`. */
   moduleId?: string
   /** Vite environments whose build should take every route module as an entry. */
-  buildInputs?: string | string[]
+  buildInputs?: string | Array<string>
   /** Code-split routes into dynamic imports. Defaults to `true`. */
   codeSplitting?: boolean
   /**
@@ -84,7 +84,7 @@ export interface FileRoutesOptions extends Pick<
    */
   eager?: EagerRouteMatcher
   /** Packages to exclude from dependency optimization. */
-  optimizeDepsExclude?: string[]
+  optimizeDepsExclude?: Array<string>
   /** Write declaration for the virtual module. */
   types?: boolean | string
 }

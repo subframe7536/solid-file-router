@@ -20,19 +20,35 @@ export interface StaticExportEntry {
 }
 
 export interface RouteModuleAnalysis {
-  exports: StaticExportEntry[]
+  exports: Array<StaticExportEntry>
   defaultDirective?: string
 }
 
-function defaultDirectiveOf(body: any[]): string | undefined {
-  let fn = body.find((node) => node.type === 'ExportDefaultDeclaration')?.declaration
-  if (fn?.type === 'Identifier') {
+interface AstStatementLike {
+  type: string
+  id?: { name?: string } | null
+  declaration?: AstFunctionLike | { type: string; name?: string } | null
+  declarations?: Array<{ id?: { name?: string } | null; init?: AstFunctionLike | null }>
+}
+
+interface AstFunctionLike {
+  type: string
+  body?: {
+    body?: Array<{ type: string; directive?: string }>
+  } | null
+}
+
+function defaultDirectiveOf(body: ReadonlyArray<AstStatementLike>): string | undefined {
+  let fn: AstFunctionLike | { type: string; name?: string } | null | undefined = body.find(
+    (node) => node.type === 'ExportDefaultDeclaration',
+  )?.declaration
+  if (fn?.type === 'Identifier' && 'name' in fn) {
     const name = fn.name
     fn = undefined
     for (const node of body) {
       if (node.type === 'FunctionDeclaration' && node.id?.name === name) {
-        fn = node
-      } else if (node.type === 'VariableDeclaration') {
+        fn = node as AstFunctionLike
+      } else if (node.type === 'VariableDeclaration' && node.declarations) {
         for (const d of node.declarations) {
           if (d.id?.name === name) {
             fn = d.init
@@ -44,24 +60,26 @@ function defaultDirectiveOf(body: any[]): string | undefined {
   if (!fn || !/Function(Declaration|Expression)$/.test(fn.type)) {
     return undefined
   }
-  const first = fn.body?.body?.[0]
+  const first = (fn as AstFunctionLike).body?.body?.[0]
   return first?.type === 'ExpressionStatement' ? first.directive : undefined
 }
 
 /** Analyze a route module's static exports and directives using Vite's parseSync. */
 export function analyzeRouteModule(src: string): RouteModuleAnalysis {
-  const source = readFileSync(src, 'utf-8')
+  const source = readFileSync(src, 'utf8')
   const result = parseSync(src, source, { lang: 'tsx' })
   const error = result.errors[0]
   if (error) {
     throw new SyntaxError(`Failed to parse ${src}:\n${error.message || String(error)}`)
   }
-  const exports = (result.module?.staticExports ?? []).flatMap(({ entries }: any) =>
-    entries.filter((entry: any) => !entry.isType && entry.exportName.kind !== 'None'),
+  const exports = (result.module?.staticExports ?? []).flatMap(({ entries }) =>
+    entries.filter((entry) => !entry.isType && entry.exportName.kind !== 'None'),
   )
   return {
     exports,
-    defaultDirective: defaultDirectiveOf(result.program.body),
+    defaultDirective: defaultDirectiveOf(
+      result.program.body as unknown as ReadonlyArray<AstStatementLike>,
+    ),
   }
 }
 
@@ -93,7 +111,7 @@ export function routePathFromFile(routeFile: string): string {
   const routePath = routeFile
     .slice(1)
     .replace(/(^|\/)((?:\([^/()]*\))*)index$/, '$1$2')
-    .replace(/\[([^/]+)\]/g, (_, m: string) => {
+    .replaceAll(/\[([^/]+)\]/g, (_, m: string) => {
       if (m.length > 3 && m.startsWith('...')) {
         return `*${m.slice(3)}`
       }
@@ -107,7 +125,7 @@ export function routePathFromFile(routeFile: string): string {
 
 export const HTTP_METHODS = ['HEAD', 'GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'] as const
 
-function httpMethodsOf(config: PageFileSystemRouterConfig): readonly string[] {
+function httpMethodsOf(config: PageFileSystemRouterConfig): ReadonlyArray<string> {
   if (!config.httpMethods) {
     return []
   }
@@ -116,8 +134,8 @@ function httpMethodsOf(config: PageFileSystemRouterConfig): readonly string[] {
 
 function createHandlerRefs(
   src: string,
-  exports: string[],
-  methods: readonly string[],
+  exports: Array<string>,
+  methods: ReadonlyArray<string>,
 ): Record<string, ModuleRef> {
   const handlers: Record<string, ModuleRef> = {}
   for (const method of methods) {

@@ -13,7 +13,7 @@ import type {
 
 /** Normalize a file path to posix separators. */
 export function normalizePath(path: string): string {
-  return path.replace(/\\/g, '/')
+  return path.replaceAll('\\', '/')
 }
 
 /** Strips the route dir prefix and the file extension from a source path. */
@@ -28,13 +28,13 @@ export function cleanPath(src: string, config: FileSystemRouterConfig): string {
  * as files are added, changed, and removed.
  */
 export class BaseFileSystemRouter extends EventTarget {
-  routes: RouteManifestEntry[] = []
+  routes: Array<RouteManifestEntry> = []
   /** Bumped on every dispatched reload; consumers use it to skip stale work. */
   version = 0
   private sources = new Map<string, string>()
   config: FileSystemRouterConfig
   private routePaths = new Map<string, string>()
-  private buildRoutesPromise?: Promise<RouteManifestEntry[]>
+  private buildRoutesPromise?: Promise<Array<RouteManifestEntry>>
   private matcher?: (src: string) => boolean
 
   constructor(config: FileSystemRouterConfig) {
@@ -42,7 +42,7 @@ export class BaseFileSystemRouter extends EventTarget {
     this.config = { ...config, dir: normalizePath(resolve(config.dir)) }
   }
 
-  glob(): string | string[] {
+  glob(): string | Array<string> {
     const ext = this.config.extensions
     const suffix = ext.length === 1 ? `.${ext[0]}` : `.{${ext.join(',')}}`
     return posix.join(convertPathToPattern(this.config.dir), `**/*${suffix}`)
@@ -127,8 +127,8 @@ export class BaseFileSystemRouter extends EventTarget {
       if (!updated || !isDeepStrictEqual(previous, route)) {
         this.reload(route.path, updated ? 'update' : 'add')
       }
-    } catch (e) {
-      console.error(e)
+    } catch (error) {
+      console.error(error)
     }
   }
 
@@ -167,7 +167,7 @@ export class BaseFileSystemRouter extends EventTarget {
     return () => this.removeEventListener(type, listener)
   }
 
-  async buildRoutes(): Promise<RouteManifestEntry[]> {
+  async buildRoutes(): Promise<Array<RouteManifestEntry>> {
     const pattern = this.glob()
     const patterns = Array.isArray(pattern) ? pattern : [pattern]
     const files = new Set<string>()
@@ -176,13 +176,16 @@ export class BaseFileSystemRouter extends EventTarget {
         files.add(src)
       }
     }
-    for (const src of [...files].sort()) {
-      await this.addRoute(src)
-    }
+    await [...files]
+      .sort()
+      .reduce<Promise<void>>(
+        (chain, src) => chain.then(() => this.addRoute(src)),
+        Promise.resolve(),
+      )
     return this.routes
   }
 
-  async getRoutes(): Promise<RouteManifestEntry[]> {
+  async getRoutes(): Promise<Array<RouteManifestEntry>> {
     return (this.buildRoutesPromise ??= this.buildRoutes())
   }
 }
@@ -192,14 +195,14 @@ export class BaseFileSystemRouter extends EventTarget {
  * manifest mapping delegate to the first child router that owns each file.
  */
 export class CompositeFileSystemRouter extends BaseFileSystemRouter {
-  readonly children: readonly BaseFileSystemRouter[]
+  readonly children: ReadonlyArray<BaseFileSystemRouter>
 
-  constructor(children: readonly BaseFileSystemRouter[]) {
+  constructor(children: ReadonlyArray<BaseFileSystemRouter>) {
     super({ dir: '.', extensions: [] })
     this.children = children
   }
 
-  override glob(): string[] {
+  override glob(): Array<string> {
     return this.children.flatMap((child) => {
       const pattern = child.glob()
       return Array.isArray(pattern) ? pattern : [pattern]

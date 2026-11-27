@@ -11,6 +11,10 @@ import type { CompiledMdxRouteData, MdxLoadContext, MdxOptions } from './router'
 
 const REG_MARKDOWN_MODULE_ID = /\.(?:md|mdx)(?:\?.*)?$/i
 
+function stripQuery(id: string): string {
+  return id.split('?')[0] ?? id
+}
+
 /** Prefix of virtual `$$route` modules emitted for `.md`/`.mdx` routes. */
 export const MDX_ROUTE_MODULE_PREFIX = VID_MDX_ROUTE
 
@@ -81,7 +85,7 @@ export function createMdxPlugin<TData = unknown>(
       if (!options) {
         return
       }
-      const src = routeSources.get(id.split('?')[0]!)
+      const src = routeSources.get(stripQuery(id))
       if (src === undefined) {
         return
       }
@@ -96,7 +100,7 @@ export function createMdxPlugin<TData = unknown>(
         if (!options) {
           return
         }
-        const sourcePath = fullId.split('?')[0]!
+        const sourcePath = stripQuery(fullId)
         const compiled = await compileCached(code, sourcePath)
         return renderMdxComponentModule(compiled).code
       },

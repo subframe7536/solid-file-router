@@ -13,11 +13,11 @@ export type Promisable<T> = T | Promise<T>
 
 /** FNV-1a hash for stable route import names. */
 export function hashString(value: string): string {
-  let hash = 2166136261
+  let hash = 2_166_136_261
 
   for (let index = 0; index < value.length; index++) {
     hash ^= value.codePointAt(index) ?? 0
-    hash = Math.imul(hash, 16777619)
+    hash = Math.imul(hash, 16_777_619)
   }
 
   return (hash >>> 0).toString(36)

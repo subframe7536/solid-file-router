@@ -31,12 +31,12 @@ export interface PagesDirConfig {
   /** Route directory, resolved against the Vite root when relative. */
   dir: string
   /** Override file extensions scanned in this directory. */
-  extensions?: string[]
+  extensions?: Array<string>
   /** Override ignore globs for this directory. Defaults to top-level `ignore`. */
-  ignore?: readonly string[]
+  ignore?: ReadonlyArray<string>
 }
 
-export type PagesDirOption = string | PagesDirConfig | readonly (string | PagesDirConfig)[]
+export type PagesDirOption = string | PagesDirConfig | ReadonlyArray<string | PagesDirConfig>
 
 export interface FileRouterPluginOption<TData = unknown> {
   /**
@@ -56,7 +56,7 @@ export interface FileRouterPluginOption<TData = unknown> {
    * Ignored when `router` is given.
    * @default []
    */
-  ignore?: readonly string[]
+  ignore?: ReadonlyArray<string>
   /**
    * The output file path for generated route types.
    * @default 'src/routes.d.ts'
@@ -92,7 +92,7 @@ export interface FileRouterPluginOption<TData = unknown> {
   router?: BaseFileSystemRouter
 }
 
-function normalizePagesDirs(pagesDir: PagesDirOption | undefined): PagesDirConfig[] {
+function normalizePagesDirs(pagesDir: PagesDirOption | undefined): Array<PagesDirConfig> {
   if (pagesDir === undefined) {
     return [{ dir: 'src/pages' }]
   }
@@ -112,7 +112,7 @@ function normalizeRoutePath(manifestPath: string): string {
  */
 export function fileRouter<TData = unknown>(
   options: FileRouterPluginOption<TData> = {},
-): PluginOption[] {
+): Array<PluginOption> {
   const mdx = options.mdx === true ? {} : options.mdx || false
   const ssg = options.ssg === true ? {} : options.ssg || false
   const ssgEnabled = ssg !== false && ssg.enable !== false
@@ -133,7 +133,9 @@ export function fileRouter<TData = unknown>(
       managedRouters.push({ router: child, dir: entry.dir })
       return child
     })
-    router = children.length === 1 ? children[0]! : new CompositeFileSystemRouter(children)
+    const [firstChild] = children
+    router =
+      children.length === 1 && firstChild ? firstChild : new CompositeFileSystemRouter(children)
   }
 
   return [
