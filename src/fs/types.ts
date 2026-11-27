@@ -54,6 +54,10 @@ export interface PageFileSystemRouterConfig extends FileSystemRouterConfig {
   serverComponents?: boolean
 }
 
+export type EagerRouteMatcher =
+  | readonly string[]
+  | ((route: Readonly<RouteManifestEntry>) => boolean)
+
 export interface FileRoutesOptions extends Pick<
   PageFileSystemRouterConfig,
   'components' | 'httpMethods' | 'serverComponents' | 'toPath' | 'toRoute'
@@ -72,6 +76,13 @@ export interface FileRoutesOptions extends Pick<
   buildInputs?: string | string[]
   /** Code-split routes into dynamic imports. Defaults to `true`. */
   codeSplitting?: boolean
+  /**
+   * Routes whose `$component` should be imported eagerly even when code
+   * splitting is enabled. Accepts route paths (manifest paths such as
+   * `'/(app)'` or group-stripped paths such as `'/'`, `'/about'`) or a
+   * predicate over each manifest entry.
+   */
+  eager?: EagerRouteMatcher
   /** Packages to exclude from dependency optimization. */
   optimizeDepsExclude?: string[]
   /** Write declaration for the virtual module. */

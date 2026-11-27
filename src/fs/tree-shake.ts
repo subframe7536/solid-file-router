@@ -573,9 +573,15 @@ function removeUnreachable(
     if (!binding) {
       continue
     }
-    addOwner(tracked, binding, parents.get(identifier))
-    if (candidates.has(identifier)) {
-      addOwner(candidateOwners, binding, parents.get(identifier))
+    const owner = parents.get(identifier)
+    addOwner(tracked, binding, owner)
+    const isRemovableHelper =
+      isNamedDeclaration(owner) ||
+      (owner.type === 'VariableDeclarator' &&
+        owner.init &&
+        (isFunctionLike(owner.init) || isClassLike(owner.init)))
+    if (candidates.has(identifier) || isRemovableHelper) {
+      addOwner(candidateOwners, binding, owner)
     }
   }
 
@@ -1002,7 +1008,7 @@ export function pickExports(code: string, id: string, pick: string[]): { code: s
         markIfReferenced(identifier)
       }
     } else if (node.type.startsWith('Import') && node.local) {
-      markIfReferenced(node.local)
+      sweepable.add(node.local)
     }
     forEachChild(node, collect)
   }

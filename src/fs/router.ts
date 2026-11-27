@@ -42,7 +42,7 @@ export class BaseFileSystemRouter extends EventTarget {
     this.config = { ...config, dir: normalizePath(resolve(config.dir)) }
   }
 
-  glob(): string {
+  glob(): string | string[] {
     const ext = this.config.extensions
     const suffix = ext.length === 1 ? `.${ext[0]}` : `.{${ext.join(',')}}`
     return posix.join(convertPathToPattern(this.config.dir), `**/*${suffix}`)
@@ -51,6 +51,19 @@ export class BaseFileSystemRouter extends EventTarget {
   isRoute(src: string): boolean {
     this.matcher ??= picomatch(this.glob())
     return this.matcher(src)
+  }
+
+  /**
+   * Returns the source path relative to this router's directory with its
+   * extension stripped, or `undefined` if `src` is outside the directory.
+   */
+  relativePath(src: string): string | undefined {
+    const normalized = normalizePath(src)
+    const prefix = this.config.dir.endsWith('/') ? this.config.dir : `${this.config.dir}/`
+    if (!normalized.startsWith(prefix)) {
+      return undefined
+    }
+    return cleanPath(normalized, this.config).replace(/^\/+/, '')
   }
 
   toPath(src: string): string | undefined {
@@ -155,7 +168,15 @@ export class BaseFileSystemRouter extends EventTarget {
   }
 
   async buildRoutes(): Promise<RouteManifestEntry[]> {
-    for (const src of globSync(this.glob(), { absolute: true }).sort()) {
+    const pattern = this.glob()
+    const patterns = Array.isArray(pattern) ? pattern : [pattern]
+    const files = new Set<string>()
+    for (const p of patterns) {
+      for (const src of globSync(p, { absolute: true })) {
+        files.add(src)
+      }
+    }
+    for (const src of [...files].sort()) {
       await this.addRoute(src)
     }
     return this.routes
@@ -163,5 +184,44 @@ export class BaseFileSystemRouter extends EventTarget {
 
   async getRoutes(): Promise<RouteManifestEntry[]> {
     return (this.buildRoutesPromise ??= this.buildRoutes())
+  }
+}
+
+/**
+ * Combines multiple file-system routers into one. File events, scanning, and
+ * manifest mapping delegate to the first child router that owns each file.
+ */
+export class CompositeFileSystemRouter extends BaseFileSystemRouter {
+  readonly children: readonly BaseFileSystemRouter[]
+
+  constructor(children: readonly BaseFileSystemRouter[]) {
+    super({ dir: '.', extensions: [] })
+    this.children = children
+  }
+
+  override glob(): string[] {
+    return this.children.flatMap((child) => {
+      const pattern = child.glob()
+      return Array.isArray(pattern) ? pattern : [pattern]
+    })
+  }
+
+  override isRoute(src: string): boolean {
+    return this.children.some((child) => child.isRoute(src))
+  }
+
+  override toPath(src: string): string | undefined {
+    return this.children.find((child) => child.isRoute(src))?.toPath(src)
+  }
+
+  override toRoute(src: string): RouteManifestEntry | undefined {
+    return this.children.find((child) => child.isRoute(src))?.toRoute(src)
+  }
+
+  override relativePath(src: string): string | undefined {
+    const owner =
+      this.children.find((child) => child.isRoute(src)) ??
+      this.children.find((child) => child.relativePath(src) !== undefined)
+    return owner?.relativePath(src)
   }
 }

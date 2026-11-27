@@ -143,6 +143,33 @@ export default function Page() { return null; }
     expect(result.code).not.toContain('./style.css')
     expect(result.code).toContain('function Page')
   })
+
+  it('removes unused imports and imports only used by mutually recursive dead helpers', () => {
+    const code = `
+import Unused from './unused';
+import Preview from './preview.tsx';
+
+function helperA() {
+  return helperB();
+}
+function helperB() {
+  return helperA() || Preview;
+}
+
+export const route = { info: { title: 'Doc' } };
+
+export default function Page() {
+  return helperA();
+}
+`
+    const result = pickExports(code, 'page.tsx', ['route'])
+    expect(result.code).toContain('export const route')
+    expect(result.code).not.toContain('./unused')
+    expect(result.code).not.toContain('./preview.tsx')
+    expect(result.code).not.toContain('helperA')
+    expect(result.code).not.toContain('helperB')
+    expect(result.code).not.toContain('function Page')
+  })
 })
 
 describe('standard routePathFromFile', () => {

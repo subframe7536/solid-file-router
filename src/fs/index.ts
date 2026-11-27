@@ -24,10 +24,11 @@ export {
   flagsId,
   resolvedFlagsId,
 } from './plugin'
-export { BaseFileSystemRouter, cleanPath, normalizePath } from './router'
+export { BaseFileSystemRouter, cleanPath, CompositeFileSystemRouter, normalizePath } from './router'
 export { pickExports, sanitizeChunkFileName, toPickId, treeShake } from './tree-shake'
 export { buildRouteTree, stripRouteGroups } from './tree'
 export type {
+  EagerRouteMatcher,
   FileRoutesOptions,
   FileSystemRouterConfig,
   ModuleRef,

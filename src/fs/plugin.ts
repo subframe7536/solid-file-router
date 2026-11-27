@@ -6,9 +6,9 @@ import type { PluginOption } from 'vite'
 import { PageFileSystemRouter } from './convention'
 import { normalizePath } from './router'
 import type { BaseFileSystemRouter } from './router'
-import { buildRouteTree } from './tree'
+import { buildRouteTree, stripRouteGroups } from './tree'
 import { sanitizeChunkFileName, toPickId, treeShake } from './tree-shake'
-import type { FileRoutesOptions, ModuleRef, RouteManifestEntry } from './types'
+import type { EagerRouteMatcher, FileRoutesOptions, ModuleRef, RouteManifestEntry } from './types'
 import { serializeTypes } from './types-gen'
 import { debounce, fileSystemWatcher } from './watcher'
 
@@ -104,12 +104,52 @@ function jsCode(): {
   }
 }
 
+function normalizeRouteForMatch(path: string): string {
+  const stripped = stripRouteGroups(path)
+  return stripped.length > 1 ? stripped.replace(/\/+$/, '') || '/' : stripped
+}
+
+function createEagerMatcher(
+  eager?: EagerRouteMatcher,
+): ((route: RouteManifestEntry) => boolean) | undefined {
+  if (!eager) {
+    return undefined
+  }
+  if (typeof eager === 'function') {
+    return eager
+  }
+  const patterns = new Set(eager)
+  if (!patterns.size) {
+    return undefined
+  }
+  return (route) => patterns.has(route.path) || patterns.has(normalizeRouteForMatch(route.path))
+}
+
+function applyEager(
+  routes: readonly RouteManifestEntry[],
+  isEager?: (route: RouteManifestEntry) => boolean,
+): RouteManifestEntry[] {
+  if (!isEager) {
+    return routes as RouteManifestEntry[]
+  }
+  return routes.map((route) => {
+    if (!route.$component || route.$component.eager || !isEager(route)) {
+      return route
+    }
+    return {
+      ...route,
+      $component: { ...route.$component, eager: true },
+    }
+  })
+}
+
 /**
  * Vite delivery plugin that serializes the neutral route manifest into virtual modules.
  */
 export function fileRoutes(options: FileRoutesOptions = {}): PluginOption[] {
   const virtualId = options.moduleId ?? DEFAULT_MODULE_ID
   const codeSplitting = options.codeSplitting !== false
+  const isEager = createEagerMatcher(options.eager)
   const buildInputs = options.buildInputs
     ? Array.isArray(options.buildInputs)
       ? options.buildInputs
@@ -131,7 +171,7 @@ export function fileRoutes(options: FileRoutesOptions = {}): PluginOption[] {
       return
     }
     const file = resolve(root, options.types === true ? 'src/routes.d.ts' : options.types)
-    const routes = (await router.getRoutes()) ?? []
+    const routes = applyEager((await router.getRoutes()) ?? [], isEager)
     // The manifest hasn't changed since the last serialization — skip the
     // O(routes) type generation entirely.
     if (router.version === writtenTypesVersion) {
@@ -204,10 +244,12 @@ export function fileRoutes(options: FileRoutesOptions = {}): PluginOption[] {
           return
         }
         const serverConsumer = isServerConsumer(name, _config.consumer)
-        const routes =
+        const routes = applyEager(
           options.routers?.[name] || serverConsumer
             ? await router.getRoutes()
-            : stripHandlerRefs(await router.getRoutes())
+            : stripHandlerRefs(await router.getRoutes()),
+          isEager,
+        )
 
         const input: string[] = []
         for (const route of routes) {
@@ -247,7 +289,7 @@ export function fileRoutes(options: FileRoutesOptions = {}): PluginOption[] {
         const js = jsCode()
         const environmentName = this.environment.name
         const router = getRouter(environmentName)
-        let routes = (router ? await router.getRoutes() : []) ?? []
+        let routes = applyEager((router ? await router.getRoutes() : []) ?? [], isEager)
         const serverConsumer = isServerConsumer(environmentName, this.environment.config.consumer)
 
         if (!options.routers?.[environmentName] && !serverConsumer) {
